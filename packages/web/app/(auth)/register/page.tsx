@@ -36,7 +36,7 @@ export default function RegisterPage() {
   const onSubmit = async (values: FormValues) => {
     try {
       const data = await api.post<AuthResponse>('/auth/register', values)
-      setAuth(data.token, data.user)
+      setAuth(data.token, data.refreshToken, data.user)
       toast.success('注册成功，已自动登录')
       router.push('/community')
     } catch (e) {

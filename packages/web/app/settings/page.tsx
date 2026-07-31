@@ -33,7 +33,10 @@ export default function SettingsPage() {
       api.put<UserType>('/users/me', data),
     onSuccess: (updatedUser) => {
       setUser(updatedUser)
-      queryClient.setQueryData(['user', user?.username], updatedUser)
+      // 用户主页缓存的是 PublicUser（含 postCount/followerCount 等），
+      // 与此处返回的 User 类型不同，应 invalidate 让其重新拉取，而非写入错误类型
+      queryClient.invalidateQueries({ queryKey: ['user', user?.username] })
+      queryClient.invalidateQueries({ queryKey: ['user-posts', user?.username] })
       toast.success('资料已更新')
       router.refresh()
     },

@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../db.js'
-import { signToken } from '../lib/jwt.js'
+import { signToken, signRefreshToken, verifyRefreshToken } from '../lib/jwt.js'
 import { mapUser } from '../lib/mappers.js'
 import { authMiddleware } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
@@ -19,6 +19,10 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email('邮箱格式不正确'),
   password: z.string().min(1, '请输入密码'),
+})
+
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, '缺少 refreshToken'),
 })
 
 // 注册
@@ -38,8 +42,12 @@ auth.post('/register', async (c) => {
   // bcrypt cost factor 12，兼顾安全与性能（现代推荐值）
   const hashed = await bcrypt.hash(password, 12)
   const user = await prisma.user.create({ data: { username, email, password: hashed } })
-  const token = signToken({ userId: user.id, username: user.username })
-  const data: AuthResponse = { user: mapUser(user), token }
+  const payload = { userId: user.id, username: user.username }
+  const data: AuthResponse = {
+    user: mapUser(user),
+    token: signToken(payload),
+    refreshToken: signRefreshToken(payload),
+  }
   return c.json(data, 201)
 })
 
@@ -61,9 +69,39 @@ auth.post('/login', async (c) => {
     return c.json({ error: '邮箱或密码错误' }, 401)
   }
 
-  const token = signToken({ userId: user.id, username: user.username })
-  const data: AuthResponse = { user: mapUser(user), token }
+  const payload = { userId: user.id, username: user.username }
+  const data: AuthResponse = {
+    user: mapUser(user),
+    token: signToken(payload),
+    refreshToken: signRefreshToken(payload),
+  }
   return c.json(data)
+})
+
+// 刷新 access token
+// POST /api/auth/refresh
+auth.post('/refresh', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = refreshSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
+  }
+
+  const payload = verifyRefreshToken(parsed.data.refreshToken)
+  if (!payload) {
+    return c.json({ error: 'refreshToken 无效或已过期' }, 401)
+  }
+
+  // 确认用户仍然存在
+  const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { id: true, username: true } })
+  if (!user) {
+    return c.json({ error: '用户不存在' }, 404)
+  }
+
+  return c.json({
+    token: signToken({ userId: user.id, username: user.username }),
+    refreshToken: signRefreshToken({ userId: user.id, username: user.username }),
+  })
 })
 
 // 获取当前登录用户

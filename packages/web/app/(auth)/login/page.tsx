@@ -36,7 +36,7 @@ export default function LoginPage() {
   const onSubmit = async (values: FormValues) => {
     try {
       const data = await api.post<AuthResponse>('/auth/login', values)
-      setAuth(data.token, data.user)
+      setAuth(data.token, data.refreshToken, data.user)
       toast.success('欢迎回来')
       // 支持 redirect 参数：登录后跳回原页面
       const redirect = searchParams.get('redirect')

@@ -56,6 +56,7 @@ export interface Comment {
 export interface AuthResponse {
   user: User
   token: string
+  refreshToken: string
 }
 
 export interface Paginated<T> {
