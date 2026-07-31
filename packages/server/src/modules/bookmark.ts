@@ -49,16 +49,9 @@ bookmark.delete('/posts/:id/bookmark', authMiddleware, async (c) => {
     return c.json({ error: '帖子不存在' }, 404)
   }
 
-  const already = await prisma.bookmark.findUnique({
-    where: { postId_userId: { postId: id, userId } },
-  })
-  if (!already) {
-    const count = await prisma.bookmark.count({ where: { postId: id } })
-    return c.json({ ok: true, bookmarked: false, bookmarkCount: count })
-  }
-
-  await prisma.bookmark.delete({
-    where: { postId_userId: { postId: id, userId } },
+  // 用 deleteMany 代替 delete：并发下零匹配不报 P2025
+  await prisma.bookmark.deleteMany({
+    where: { postId: id, userId },
   })
   const count = await prisma.bookmark.count({ where: { postId: id } })
   return c.json({ ok: true, bookmarked: false, bookmarkCount: count })
@@ -68,8 +61,8 @@ bookmark.delete('/posts/:id/bookmark', authMiddleware, async (c) => {
 // GET /api/bookmarks
 bookmark.get('/bookmarks', authMiddleware, async (c) => {
   const userId = c.get('user').userId
-  const page = Math.max(1, Number(c.req.query('page')) || 1)
-  const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize')) || 20))
+  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
 
   const [rows, total] = await Promise.all([
     prisma.post.findMany({

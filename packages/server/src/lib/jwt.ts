@@ -30,7 +30,7 @@ export function signRefreshToken(payload: AuthUser): string {
 // 验证 access token，失败返回 null
 export function verifyToken(token: string): AuthUser | null {
   try {
-    const payload = jwt.verify(token, SECRET) as AuthUser & { type?: string }
+    const payload = jwt.verify(token, SECRET, { algorithms: ['HS256'] }) as AuthUser & { type?: string }
     // refresh token 不能当作 access token 使用
     if (payload.type === 'refresh') return null
     return { userId: payload.userId, username: payload.username }
@@ -42,7 +42,7 @@ export function verifyToken(token: string): AuthUser | null {
 // 验证 refresh token，失败返回 null
 export function verifyRefreshToken(token: string): AuthUser | null {
   try {
-    const payload = jwt.verify(token, SECRET) as AuthUser & { type?: string }
+    const payload = jwt.verify(token, SECRET, { algorithms: ['HS256'] }) as AuthUser & { type?: string }
     if (payload.type !== 'refresh') return null
     return { userId: payload.userId, username: payload.username }
   } catch {

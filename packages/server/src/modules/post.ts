@@ -18,7 +18,7 @@ const createSchema = z.object({
   title: z.string().min(1, '标题不能为空').max(100, '标题最多 100 字'),
   content: z.string().min(1, '内容不能为空').max(20000, '内容过长'),
   channel: channelEnum.optional(),
-  tags: z.array(z.string().max(20)).max(5, '最多 5 个标签').optional(),
+  tags: z.array(z.string().trim().max(20)).max(5, '最多 5 个标签').optional(),
 })
 
 const updateSchema = z.object({
@@ -30,22 +30,22 @@ const updateSchema = z.object({
 post.use('/', optionalAuthMiddleware)
 post.get('/', async (c) => {
   const channel = c.req.query('channel') || 'general'
-  const page = Math.max(1, Number(c.req.query('page')) || 1)
-  const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize')) || 20))
+  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
   const sort = c.req.query('sort') || 'latest'
   const q = c.req.query('q') || ''
   const tag = c.req.query('tag') || ''
   const currentUserId = getCurrentUserId(c)
 
   const where: Prisma.PostWhereInput = {}
-  if (channel && channel !== 'all') {
-    where.channel = channel
-  }
+  // 有搜索关键词时跨频道搜索，否则按频道过滤
   if (q) {
     where.OR = [
-      { title: { contains: q } },
-      { content: { contains: q } },
+      { title: { contains: q, mode: 'insensitive' } },
+      { content: { contains: q, mode: 'insensitive' } },
     ]
+  } else if (channel && channel !== 'all') {
+    where.channel = channel
   }
   if (tag) {
     where.tags = {
@@ -66,11 +66,12 @@ post.get('/', async (c) => {
   let total: number = 0
 
   if (sort === 'hot') {
-    // 热排序：先拉全量，内存排序后分页（社区帖子量级可控时简单可靠）
+    // 热排序：先拉全量（加上限避免内存溢出），内存排序后分页
     const allRows = await prisma.post.findMany({
       where,
       include,
       orderBy: { createdAt: 'desc' }, // 先按时间拉，保证稳定
+      take: 500,
     })
     // 加权排序：likeCount * 2 + commentCount * 3
     allRows.sort((a, b) => {
@@ -117,13 +118,23 @@ post.get('/', async (c) => {
   return c.json(result)
 })
 
-// 帖子详情（浏览量 +1，事务）
+// 帖子详情（浏览量 +1）
 post.use('/:id', optionalAuthMiddleware)
 post.get('/:id', async (c) => {
   const id = c.req.param('id') as string
   const currentUserId = getCurrentUserId(c)
 
-  // 先查存在再更新浏览量，避免帖子不存在时 update 抛 P2025 导致 500
+  // 用 updateMany 代替 findUnique + update 事务：如果帖子不存在返回 count=0 则 404，
+  // 否则再 findUnique 获取完整数据，避免先查再更新的事务开销
+  const updateResult = await prisma.post.updateMany({
+    where: { id },
+    data: { viewCount: { increment: 1 } },
+  })
+
+  if (updateResult.count === 0) {
+    return c.json({ error: '帖子不存在' }, 404)
+  }
+
   const p = await prisma.post.findUnique({
     where: { id },
     include: { author: true, tags: { include: { tag: true } }, _count: { select: { comments: true } } },
@@ -132,12 +143,6 @@ post.get('/:id', async (c) => {
   if (!p) {
     return c.json({ error: '帖子不存在' }, 404)
   }
-
-  // 浏览量 +1（已确认帖子存在，不会抛错）
-  await prisma.post.update({
-    where: { id },
-    data: { viewCount: { increment: 1 } },
-  })
 
   const liked = currentUserId
     ? !!(await prisma.postLike.findUnique({
@@ -178,7 +183,8 @@ post.post('/', authMiddleware, async (c) => {
     })
 
     if (tags && tags.length > 0) {
-      const tagNames = [...new Set(tags)]
+      // 过滤空字符串 + 统一转小写 + 去重
+      const tagNames = [...new Set(tags.filter((t) => t.length > 0).map((t) => t.toLowerCase()))]
       for (const tagName of tagNames) {
         const tag = await tx.tag.upsert({
           where: { name: tagName },
@@ -316,15 +322,21 @@ post.delete('/:id/like', authMiddleware, async (c) => {
     return c.json({ error: '帖子不存在' }, 404)
   }
 
-  const already = await prisma.postLike.findUnique({ where: { postId_userId: { postId: id, userId } } })
-  if (!already) {
+  // 用 deleteMany 代替 delete：并发下零匹配不报 P2025，根据 count 决定是否减计数
+  const result = await prisma.postLike.deleteMany({
+    where: { postId: id, userId },
+  })
+
+  if (result.count === 0) {
+    // 并发下已被删除或本就未点赞，幂等返回当前计数
     const p = await prisma.post.findUnique({ where: { id }, select: { likeCount: true } })
     return c.json({ ok: true, liked: false, likeCount: p!.likeCount })
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.postLike.delete({ where: { postId_userId: { postId: id, userId } } })
-    return tx.post.update({ where: { id }, data: { likeCount: { decrement: 1 } }, select: { likeCount: true } })
+  const updated = await prisma.post.update({
+    where: { id },
+    data: { likeCount: { decrement: 1 } },
+    select: { likeCount: true },
   })
   return c.json({ ok: true, liked: false, likeCount: updated.likeCount })
 })

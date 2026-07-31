@@ -56,6 +56,12 @@ export function CommentForm({
       <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault()
+            submit()
+          }
+        }}
         rows={3}
         placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论…'}
       />

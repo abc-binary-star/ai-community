@@ -27,8 +27,8 @@ function mapNotification(
 // GET /api/notifications
 notification.get('/notifications', authMiddleware, async (c) => {
   const userId = c.get('user').userId
-  const page = Math.max(1, Number(c.req.query('page')) || 1)
-  const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize')) || 20))
+  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
 
   const [rows, total] = await Promise.all([
     prisma.notification.findMany({

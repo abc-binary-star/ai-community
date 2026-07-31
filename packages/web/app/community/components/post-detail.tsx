@@ -41,6 +41,7 @@ export function PostDetailView({ id }: { id: string }) {
     try {
       await api.del(`/posts/${id}`)
       toast.success('已删除')
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
       router.push('/community')
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '删除失败')
@@ -60,6 +61,14 @@ export function PostDetailView({ id }: { id: string }) {
     queryClient.setQueryData(['post', id], (old: Post | undefined) => {
       if (!old) return old
       return { ...old, bookmarked }
+    })
+    refreshPostLists()
+  }
+
+  const handleLikeChanged = ({ liked, likeCount }: { liked: boolean; likeCount: number }) => {
+    queryClient.setQueryData(['post', id], (old: Post | undefined) => {
+      if (!old) return old
+      return { ...old, liked, likeCount }
     })
     refreshPostLists()
   }
@@ -139,7 +148,7 @@ export function PostDetailView({ id }: { id: string }) {
               likeCount={post.likeCount}
               liked={post.liked}
               size="md"
-              onChanged={refreshPostLists}
+              onChanged={handleLikeChanged}
             />
             <BookmarkButton
               id={post.id}

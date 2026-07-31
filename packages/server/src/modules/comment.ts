@@ -6,7 +6,7 @@ import { createNotification } from '../lib/notification.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
-import type { Comment } from 'shared'
+import type { Comment, Paginated } from 'shared'
 
 const comment = new Hono<AppEnv>()
 
@@ -43,37 +43,54 @@ function markLiked(nodes: Comment[], likedSet: Set<string>): void {
   }
 }
 
-// 获取帖子的评论列表（树形）
+// 获取帖子的评论列表（树形，分页根评论）
 // GET /api/posts/:id/comments
 comment.use('/posts/:id/comments', optionalAuthMiddleware)
 comment.get('/posts/:id/comments', async (c) => {
   const postId = c.req.param('id') as string
   const currentUserId = getCurrentUserId(c)
+  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+
   const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } })
   if (!post) {
     return c.json({ error: '帖子不存在' }, 404)
   }
 
-  // 一次性查出该帖全部评论，在内存里组装成树
-  const rows = await prisma.comment.findMany({
-    where: { postId },
+  // 根评论总数
+  const total = await prisma.comment.count({ where: { postId, parentId: null } })
+
+  // 分页加载根评论
+  const rootRows = await prisma.comment.findMany({
+    where: { postId, parentId: null },
+    include: { author: true },
+    orderBy: { createdAt: 'asc' },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  })
+
+  // 全量加载回复（因为要组装树）
+  const replyRows = await prisma.comment.findMany({
+    where: { postId, parentId: { not: null } },
     include: { author: true },
     orderBy: { createdAt: 'asc' },
   })
 
+  const allRows = [...rootRows, ...replyRows]
   const nodes = new Map<string, Comment>()
-  for (const r of rows) {
+  for (const r of allRows) {
     nodes.set(r.id, { ...mapComment(r), replies: [] })
   }
 
   const roots: Comment[] = []
-  for (const r of rows) {
+  for (const r of allRows) {
     const node = nodes.get(r.id)!
     if (r.parentId && nodes.has(r.parentId)) {
       nodes.get(r.parentId)!.replies.push(node)
-    } else {
+    } else if (!r.parentId) {
       roots.push(node)
     }
+    // parentId 不为 null 但父评论不在当前页 -> 跳过（属于其他页的根评论的回复）
   }
   // 根评论按时间倒序
   roots.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -83,7 +100,14 @@ comment.get('/posts/:id/comments', async (c) => {
   const likedSet = await getLikedCommentIds(allIds, currentUserId)
   markLiked(roots, likedSet)
 
-  return c.json({ items: roots })
+  const result: Paginated<Comment> = {
+    items: roots,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize) || 0,
+  }
+  return c.json(result)
 })
 
 // 创建评论或回复
@@ -206,15 +230,20 @@ comment.delete('/comments/:id/like', authMiddleware, async (c) => {
     return c.json({ error: '评论不存在' }, 404)
   }
 
-  const already = await prisma.commentLike.findUnique({ where: { commentId_userId: { commentId: id, userId } } })
-  if (!already) {
+  // 用 deleteMany 代替 delete：并发下零匹配不报 P2025，根据 count 决定是否减计数
+  const result = await prisma.commentLike.deleteMany({
+    where: { commentId: id, userId },
+  })
+
+  if (result.count === 0) {
     const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
     return c.json({ ok: true, liked: false, likeCount: c2!.likeCount })
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.commentLike.delete({ where: { commentId_userId: { commentId: id, userId } } })
-    return tx.comment.update({ where: { id }, data: { likeCount: { decrement: 1 } }, select: { likeCount: true } })
+  const updated = await prisma.comment.update({
+    where: { id },
+    data: { likeCount: { decrement: 1 } },
+    select: { likeCount: true },
   })
   return c.json({ ok: true, liked: false, likeCount: updated.likeCount })
 })

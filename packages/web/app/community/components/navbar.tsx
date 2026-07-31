@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuthStore } from '@/lib/store'
+import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { NotificationBell } from './notification-bell'
@@ -24,6 +25,7 @@ function NavbarInner() {
   const searchParams = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
+  const hydrated = useHydrated()
   const activeChannel = searchParams.get('channel') || 'general'
 
   const handleLogout = () => {
@@ -64,7 +66,9 @@ function NavbarInner() {
         </div>
 
         <div className="flex items-center gap-2">
-          {user ? (
+          {!hydrated ? (
+            <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+          ) : user ? (
             <>
               <Button asChild size="sm" className="hidden sm:inline-flex">
                 <Link href="/community/post/new">

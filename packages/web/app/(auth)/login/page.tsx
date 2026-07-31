@@ -38,9 +38,10 @@ export default function LoginPage() {
       const data = await api.post<AuthResponse>('/auth/login', values)
       setAuth(data.token, data.refreshToken, data.user)
       toast.success('欢迎回来')
-      // 支持 redirect 参数：登录后跳回原页面
+      // 支持 redirect 参数：登录后跳回原页面（校验防止开放重定向）
       const redirect = searchParams.get('redirect')
-      router.push(redirect || '/community')
+      const safeRedirect = redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/community'
+      router.push(safeRedirect)
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '登录失败，请重试')
     }

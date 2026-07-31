@@ -28,7 +28,7 @@ export interface Post {
   content: string
   channel: string
   authorId: string
-  author: User
+  author: PublicUser
   commentCount: number
   likeCount: number
   viewCount: number
@@ -44,7 +44,7 @@ export interface Comment {
   content: string
   postId: string
   authorId: string
-  author: User
+  author: PublicUser
   parentId: string | null
   replies: Comment[]
   likeCount: number

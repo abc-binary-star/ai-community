@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { Navbar } from '@/app/community/components/navbar'
 import { getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { User as UserType } from 'shared'
@@ -48,6 +49,7 @@ export default function SettingsPage() {
   if (!token || !user) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
+        <Navbar />
         <div className="container flex-1 py-8">
           <div className="mx-auto max-w-md py-20 text-center">
             <p className="text-muted-foreground">请先登录</p>
@@ -67,6 +69,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <Navbar />
       <div className="container flex-1 py-8">
         <div className="mx-auto max-w-2xl space-y-6">
           <div className="flex items-center gap-2">

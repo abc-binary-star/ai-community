@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -20,12 +20,14 @@ const schema = z.object({
   title: z.string().min(1, '请输入标题').max(100, '标题最多 100 字'),
   content: z.string().min(1, '请输入内容').max(20000, '内容过长'),
   channel: z.string(),
+  tags: z.array(z.string().trim().min(1).max(20)).max(5).optional(),
 })
 type FormValues = z.infer<typeof schema>
 
 export default function NewPostPage() {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
+  const [tagsInput, setTagsInput] = useState('')
   const {
     register,
     handleSubmit,
@@ -37,18 +39,23 @@ export default function NewPostPage() {
     defaultValues: { channel: 'general' },
   })
 
-  // 登录态前置检查：未登录跳 /login（需求 9.1）
+  // 登录态前置检查：未登录跳 /login（携带 redirect 以便登录后回到发帖页）
   useEffect(() => {
     if (!token) {
-      router.replace('/login')
+      router.replace(`/login?redirect=${encodeURIComponent('/community/post/new')}`)
     }
   }, [token, router])
 
   const selectedChannel = watch('channel')
 
   const onSubmit = async (values: FormValues) => {
+    const tags = tagsInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 5)
     try {
-      const post = await api.post<Post>('/posts', values)
+      const post = await api.post<Post>('/posts', { ...values, tags: tags.length > 0 ? tags : undefined })
       toast.success('发布成功')
       router.push(`/community/post/${post.id}`)
     } catch (e) {
@@ -104,6 +111,16 @@ export default function NewPostPage() {
               <Label htmlFor="content">内容</Label>
               <Textarea id="content" rows={10} placeholder="分享你的想法（支持纯文本）" {...register('content')} />
               {errors.content && <p className="text-xs text-destructive">{errors.content.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tags">标签</Label>
+              <Input
+                id="tags"
+                placeholder="用逗号分隔，最多 5 个标签"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">用英文逗号分隔多个标签，例如：AI, 前端, 开源</p>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => router.back()}>

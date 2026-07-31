@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { Navbar } from '@/app/community/components/navbar'
 import { PostCard } from '@/app/community/components/post-card'
 import { type Paginated, type Post } from 'shared'
 
@@ -23,6 +24,7 @@ export default function BookmarksPage() {
   if (!token || !user) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
+        <Navbar />
         <div className="container flex-1 py-8">
           <div className="mx-auto max-w-md py-20 text-center">
             <Bookmark className="mx-auto mb-3 size-10 text-muted-foreground" />
@@ -38,6 +40,7 @@ export default function BookmarksPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <Navbar />
       <div className="container flex-1 py-8">
         <div className="mx-auto max-w-3xl space-y-6">
           <div className="flex items-center gap-2">

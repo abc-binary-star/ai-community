@@ -12,7 +12,7 @@ const user = new Hono<AppEnv>()
 const updateSchema = z.object({
   displayName: z.string().max(30).nullable().optional(),
   bio: z.string().max(500).nullable().optional(),
-  avatar: z.string().nullable().optional(),
+  avatar: z.string().url('头像必须是有效的 URL').nullable().optional(),
 })
 
 // 查看用户主页（公开）
@@ -47,8 +47,8 @@ user.get('/:username', async (c) => {
 user.use('/:username/posts', optionalAuthMiddleware)
 user.get('/:username/posts', async (c) => {
   const username = c.req.param('username') as string
-  const page = Math.max(1, Number(c.req.query('page')) || 1)
-  const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize')) || 20))
+  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
+  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
   const currentUserId = getCurrentUserId(c)
 
   const u = await prisma.user.findUnique({ where: { username }, select: { id: true } })

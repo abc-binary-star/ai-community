@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -38,6 +38,7 @@ export function NotificationBell() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
+  const [isOpen, setIsOpen] = useState(false)
 
   const unreadQuery = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -49,7 +50,7 @@ export function NotificationBell() {
   const notificationsQuery = useQuery({
     queryKey: ['notifications-latest'],
     queryFn: () => api.get<Paginated<Notification>>('/notifications?page=1&pageSize=5'),
-    enabled: !!token,
+    enabled: !!token && isOpen,
   })
 
   const markAllRead = async () => {
@@ -70,7 +71,7 @@ export function NotificationBell() {
   if (!token) return null
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" aria-label="通知">
           <Bell className="size-5" />

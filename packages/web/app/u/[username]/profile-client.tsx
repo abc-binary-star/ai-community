@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, Settings, UserPlus, UserCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -16,10 +16,12 @@ import { type Paginated, type Post, type PublicUser } from 'shared'
 import { PostCard } from '@/app/community/components/post-card'
 
 export function ProfileClient({ username }: { username: string }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
-  const [postPage, setPostPage] = useState(1)
+  const postPage = Math.max(1, Number(searchParams.get('page')) || 1)
 
   const userQuery = useQuery({
     queryKey: ['user', username],
@@ -81,6 +83,12 @@ export function ProfileClient({ username }: { username: string }) {
 
   const user = userQuery.data
   const isSelf = !!currentUser && currentUser.id === user.id
+
+  const goPage = (n: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('page', String(n))
+    router.push(`/u/${encodeURIComponent(username)}?${params.toString()}`)
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -182,14 +190,14 @@ export function ProfileClient({ username }: { username: string }) {
 
         {postsQuery.data && postsQuery.data.totalPages > 1 && (
           <div className="flex items-center justify-center gap-3 pt-2">
-            <Button variant="outline" size="sm" disabled={postPage <= 1} onClick={() => setPostPage((p) => Math.max(1, p - 1))}>
+            <Button variant="outline" size="sm" disabled={postPage <= 1} onClick={() => goPage(postPage - 1)}>
               <ChevronLeft />
               上一页
             </Button>
             <span className="text-sm text-muted-foreground">
               第 {postPage} / {postsQuery.data.totalPages} 页
             </span>
-            <Button variant="outline" size="sm" disabled={postPage >= postsQuery.data.totalPages} onClick={() => setPostPage((p) => p + 1)}>
+            <Button variant="outline" size="sm" disabled={postPage >= postsQuery.data.totalPages} onClick={() => goPage(postPage + 1)}>
               下一页
               <ChevronRight />
             </Button>
