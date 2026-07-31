@@ -1,0 +1,6 @@
+packages:
+  # TypeScript 工作区
+  - "packages/web"
+  - "packages/server"
+  - "packages/shared"
+  # Python 包通过各自 pyproject.toml 管理，不纳入 pnpm 工作区
