@@ -2,15 +2,15 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
-// 小号衬线标签：像杂志栏目名，去圆角填色，改为细边框 + 字距
+// 蓝色系标签：浅蓝底 + 蓝字
 const badgeVariants = cva(
-  'inline-flex items-center border border-border px-2 py-0.5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors',
+  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
   {
     variants: {
       variant: {
-        default: 'border-primary/30 text-primary',
-        secondary: 'border-border text-secondary-foreground',
-        outline: 'border-border text-foreground',
+        default: 'border-transparent bg-primary/10 text-primary',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground',
+        outline: 'border-border text-muted-foreground',
       },
     },
     defaultVariants: { variant: 'default' },

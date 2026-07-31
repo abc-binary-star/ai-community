@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,56 +44,51 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <p className="font-sans text-xs uppercase tracking-[0.3em] text-muted-foreground">§ 登录</p>
-        <h1 className="font-display text-4xl leading-tight">欢迎回来。</h1>
-        <p className="font-serif text-sm italic text-muted-foreground">继续你的兴趣探索</p>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="space-y-1.5">
-          <Label htmlFor="email" className="font-sans text-xs uppercase tracking-wider text-muted-foreground">
-            邮箱
-          </Label>
-          <Input id="email" type="email" placeholder="you@example.com" {...register('email')} />
-          {errors.email && <p className="font-serif text-xs text-destructive">{errors.email.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="font-sans text-xs uppercase tracking-wider text-muted-foreground">
-            密码
-          </Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPwd ? 'text' : 'password'}
-              placeholder="请输入密码"
-              className="pr-10"
-              {...register('password')}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPwd((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label={showPwd ? '隐藏密码' : '显示密码'}
-            >
-              {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
+    <Card className="w-full max-w-md animate-slide-up">
+      <CardHeader className="space-y-2 text-center">
+        <CardTitle className="text-2xl">欢迎回来</CardTitle>
+        <CardDescription>登录 Commons，继续你的兴趣探索</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">邮箱</Label>
+            <Input id="email" type="email" placeholder="you@example.com" {...register('email')} />
+            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
           </div>
-          {errors.password && <p className="font-serif text-xs text-destructive">{errors.password.message}</p>}
-        </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="animate-spin" />}
-          登录
-        </Button>
-      </form>
-
-      <p className="text-center font-serif text-sm text-muted-foreground">
-        还没有账号？{' '}
-        <Link href="/register" className="font-sans font-medium text-primary underline-offset-4 hover:underline">
-          立即注册
-        </Link>
-      </p>
-    </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">密码</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPwd ? 'text' : 'password'}
+                placeholder="请输入密码"
+                className="pr-10"
+                {...register('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPwd ? '隐藏密码' : '显示密码'}
+              >
+                {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+          </div>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="animate-spin" />}
+            登录
+          </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            还没有账号？{' '}
+            <Link href="/register" className="font-medium text-primary hover:underline">
+              立即注册
+            </Link>
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

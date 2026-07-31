@@ -1,0 +1,185 @@
+import { Hono } from 'hono'
+import { z } from 'zod'
+import { prisma } from '../db.js'
+import { mapComment } from '../lib/mappers.js'
+import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
+import type { AppEnv } from '../types.js'
+import type { Comment } from 'shared'
+
+const comment = new Hono<AppEnv>()
+
+const createSchema = z.object({
+  content: z.string().min(1, '评论内容不能为空').max(5000, '评论内容过长'),
+  parentId: z.string().cuid().optional(),
+})
+
+// 批量查询当前用户对一组评论的点赞状态
+async function getLikedCommentIds(commentIds: string[], userId?: string): Promise<Set<string>> {
+  if (!userId || commentIds.length === 0) return new Set()
+  const rows = await prisma.commentLike.findMany({
+    where: { commentId: { in: commentIds }, userId },
+    select: { commentId: true },
+  })
+  return new Set(rows.map((r) => r.commentId))
+}
+
+// 收集一棵评论树里所有评论的 id（递归）
+function collectIds(nodes: Comment[]): string[] {
+  const ids: string[] = []
+  for (const n of nodes) {
+    ids.push(n.id)
+    if (n.replies.length > 0) ids.push(...collectIds(n.replies))
+  }
+  return ids
+}
+
+// 给一棵评论树批量打上 liked 标记
+function markLiked(nodes: Comment[], likedSet: Set<string>): void {
+  for (const n of nodes) {
+    n.liked = likedSet.has(n.id)
+    if (n.replies.length > 0) markLiked(n.replies, likedSet)
+  }
+}
+
+// 获取帖子的评论列表（树形）
+// GET /api/posts/:id/comments
+comment.use('/posts/:id/comments', optionalAuthMiddleware)
+comment.get('/posts/:id/comments', async (c) => {
+  const postId = c.req.param('id') as string
+  const currentUserId = getCurrentUserId(c)
+  const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } })
+  if (!post) {
+    return c.json({ error: '帖子不存在' }, 404)
+  }
+
+  // 一次性查出该帖全部评论，在内存里组装成树
+  const rows = await prisma.comment.findMany({
+    where: { postId },
+    include: { author: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const nodes = new Map<string, Comment>()
+  for (const r of rows) {
+    nodes.set(r.id, { ...mapComment(r), replies: [] })
+  }
+
+  const roots: Comment[] = []
+  for (const r of rows) {
+    const node = nodes.get(r.id)!
+    if (r.parentId && nodes.has(r.parentId)) {
+      nodes.get(r.parentId)!.replies.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  // 根评论按时间倒序
+  roots.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
+  // 批量查询当前用户的点赞状态并打标
+  const allIds = collectIds(roots)
+  const likedSet = await getLikedCommentIds(allIds, currentUserId)
+  markLiked(roots, likedSet)
+
+  return c.json({ items: roots })
+})
+
+// 创建评论或回复
+// POST /api/posts/:id/comments
+comment.post('/posts/:id/comments', authMiddleware, async (c) => {
+  const postId = c.req.param('id') as string
+  const userId = c.get('user').userId
+  const body = await c.req.json().catch(() => null)
+  const parsed = createSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
+  }
+  const { content, parentId } = parsed.data
+
+  const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } })
+  if (!post) {
+    return c.json({ error: '帖子不存在' }, 404)
+  }
+
+  // 若指定父评论，校验其属于同一帖子
+  if (parentId) {
+    const parent = await prisma.comment.findUnique({ where: { id: parentId }, select: { postId: true } })
+    if (!parent || parent.postId !== postId) {
+      return c.json({ error: '父评论不存在或不属于该帖子' }, 400)
+    }
+  }
+
+  const created = await prisma.comment.create({
+    data: { content, postId, authorId: userId, parentId: parentId ?? null },
+    include: { author: true },
+  })
+  return c.json({ ...mapComment(created), liked: false }, 201)
+})
+
+// 删除评论（仅作者；级联删除其回复和点赞）
+// DELETE /api/comments/:id
+comment.delete('/comments/:id', authMiddleware, async (c) => {
+  const id = c.req.param('id') as string
+  const userId = c.get('user').userId
+
+  const existing = await prisma.comment.findUnique({ where: { id }, select: { authorId: true } })
+  if (!existing) {
+    return c.json({ error: '评论不存在' }, 404)
+  }
+  if (existing.authorId !== userId) {
+    return c.json({ error: '无权删除他人的评论' }, 403)
+  }
+
+  await prisma.comment.delete({ where: { id } })
+  return c.json({ ok: true })
+})
+
+// 点赞评论
+// POST /api/comments/:id/like
+comment.post('/comments/:id/like', authMiddleware, async (c) => {
+  const id = c.req.param('id') as string
+  const userId = c.get('user').userId
+
+  const existing = await prisma.comment.findUnique({ where: { id }, select: { id: true } })
+  if (!existing) {
+    return c.json({ error: '评论不存在' }, 404)
+  }
+
+  const already = await prisma.commentLike.findUnique({ where: { commentId_userId: { commentId: id, userId } } })
+  if (already) {
+    const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
+    return c.json({ ok: true, liked: true, likeCount: c2!.likeCount })
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.commentLike.create({ data: { commentId: id, userId } })
+    return tx.comment.update({ where: { id }, data: { likeCount: { increment: 1 } }, select: { likeCount: true } })
+  })
+  return c.json({ ok: true, liked: true, likeCount: updated.likeCount }, 201)
+})
+
+// 取消点赞评论
+// DELETE /api/comments/:id/like
+comment.delete('/comments/:id/like', authMiddleware, async (c) => {
+  const id = c.req.param('id') as string
+  const userId = c.get('user').userId
+
+  const existing = await prisma.comment.findUnique({ where: { id }, select: { id: true } })
+  if (!existing) {
+    return c.json({ error: '评论不存在' }, 404)
+  }
+
+  const already = await prisma.commentLike.findUnique({ where: { commentId_userId: { commentId: id, userId } } })
+  if (!already) {
+    const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
+    return c.json({ ok: true, liked: false, likeCount: c2!.likeCount })
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.commentLike.delete({ where: { commentId_userId: { commentId: id, userId } } })
+    return tx.comment.update({ where: { id }, data: { likeCount: { decrement: 1 } }, select: { likeCount: true } })
+  })
+  return c.json({ ok: true, liked: false, likeCount: updated.likeCount })
+})
+
+export default comment

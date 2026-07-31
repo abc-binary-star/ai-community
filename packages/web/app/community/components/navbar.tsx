@@ -1,9 +1,9 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronDown, LogOut, PenLine } from 'lucide-react'
+import { Bookmark, ChevronDown, LogOut, PenLine, Settings } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +17,7 @@ import {
 import { useAuthStore } from '@/lib/store'
 import { getInitials } from '@/lib/utils'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
+import { NotificationBell } from './notification-bell'
 
 function NavbarInner() {
   const router = useRouter()
@@ -31,42 +32,41 @@ function NavbarInner() {
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
       <div className="container flex h-16 items-center justify-between gap-6">
         <div className="flex items-center gap-8">
-          {/* 刊名：§ 符号 + 衬线 Commons，替代紫色方块 logo */}
-          <Link href="/community" className="flex items-baseline gap-1.5">
-            <span className="font-display text-xl text-primary">§</span>
-            <span className="font-display text-xl tracking-tight">Commons</span>
+          {/* 品牌：蓝色圆角方块 logo */}
+          <Link href="/community" className="flex items-center gap-2 font-semibold">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              C
+            </span>
+            <span className="text-base">Commons</span>
           </Link>
-          {/* 频道：文字 tab，下划线高亮 */}
-          <nav className="hidden items-center gap-5 md:flex">
+          {/* 频道 tab */}
+          <nav className="hidden items-center gap-1 md:flex">
             {CHANNELS.map((ch) => {
               const active = activeChannel === ch
               return (
                 <Link
                   key={ch}
                   href={`/community?channel=${encodeURIComponent(ch)}`}
-                  className={`relative font-sans text-sm transition-colors ${
-                    active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
                 >
                   {CHANNEL_LABELS[ch] || ch}
-                  <span
-                    className={`absolute -bottom-[22px] left-0 h-px bg-primary transition-all ${
-                      active ? 'w-full' : 'w-0'
-                    }`}
-                  />
                 </Link>
               )
             })}
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {user ? (
             <>
-              <Button asChild variant="link" size="sm" className="hidden sm:inline-flex">
+              <Button asChild size="sm" className="hidden sm:inline-flex">
                 <Link href="/community/post/new">
                   <PenLine />
                   发帖
@@ -77,20 +77,43 @@ function NavbarInner() {
                   <PenLine />
                 </Link>
               </Button>
+              <Button asChild variant="ghost" size="icon" aria-label="收藏">
+                <Link href="/bookmarks">
+                  <Bookmark />
+                </Link>
+              </Button>
+              <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="flex items-center gap-2 py-1 transition-colors hover:opacity-70">
-                    <Avatar className="size-8 rounded-full">
-                      <AvatarFallback className="rounded-full font-sans text-xs">{getInitials(user.username)}</AvatarFallback>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-full p-1 pr-2 transition-colors hover:bg-accent"
+                  >
+                    <Avatar className="size-8">
+                      <AvatarFallback className="bg-primary/10 text-xs text-primary">{getInitials(user.username)}</AvatarFallback>
                     </Avatar>
-                    <span className="hidden font-sans text-sm sm:inline">{user.username}</span>
-                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                    <span className="hidden text-sm font-medium sm:inline">{user.username}</span>
+                    <ChevronDown className="size-4 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel className="truncate font-serif italic">已登录：{user.username}</DropdownMenuLabel>
+                  <DropdownMenuLabel className="truncate">已登录：{user.username}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="font-sans">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/u/${encodeURIComponent(user.username)}`}>
+                      <Avatar className="size-4">
+                        <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
+                      </Avatar>
+                      我的主页
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">
+                      <Settings />
+                      设置
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>
                     <LogOut />
                     退出登录
                   </DropdownMenuItem>
@@ -98,14 +121,14 @@ function NavbarInner() {
               </DropdownMenu>
             </>
           ) : (
-            <div className="flex items-center gap-2">
-              <Button asChild variant="link" size="sm">
+            <>
+              <Button asChild variant="ghost" size="sm">
                 <Link href="/login">登录</Link>
               </Button>
-              <Button asChild variant="outline" size="sm">
+              <Button asChild size="sm">
                 <Link href="/register">注册</Link>
               </Button>
-            </div>
+            </>
           )}
         </div>
       </div>

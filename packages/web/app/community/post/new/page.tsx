@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,7 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
+import { useAuthStore } from '@/lib/store'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
 
 const schema = z.object({
@@ -22,6 +25,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function NewPostPage() {
   const router = useRouter()
+  const token = useAuthStore((s) => s.token)
   const {
     register,
     handleSubmit,
@@ -32,6 +36,13 @@ export default function NewPostPage() {
     resolver: zodResolver(schema),
     defaultValues: { channel: 'general' },
   })
+
+  // 登录态前置检查：未登录跳 /login（需求 9.1）
+  useEffect(() => {
+    if (!token) {
+      router.replace('/login')
+    }
+  }, [token, router])
 
   const selectedChannel = watch('channel')
 
@@ -45,68 +56,67 @@ export default function NewPostPage() {
     }
   }
 
+  // 未登录时不渲染表单，避免用户填完才被拒
+  if (!token) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-8 border-b border-border pb-4">
-        <p className="font-sans text-xs uppercase tracking-[0.3em] text-muted-foreground">§ 投稿</p>
-        <h1 className="mt-1 font-display text-4xl leading-none">写下你的想法。</h1>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <div className="space-y-2">
-          <Label className="font-sans text-xs uppercase tracking-wider text-muted-foreground">标题</Label>
-          <Input
-            placeholder="一句话概括你的想法"
-            className="h-12 font-display text-xl"
-            {...register('title')}
-          />
-          {errors.title && <p className="font-serif text-xs text-destructive">{errors.title.message}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <Label className="font-sans text-xs uppercase tracking-wider text-muted-foreground">频道</Label>
-          <div className="flex flex-wrap gap-2">
-            {CHANNELS.map((ch) => {
-              const active = selectedChannel === ch
-              return (
-                <button
-                  key={ch}
-                  type="button"
-                  onClick={() => setValue('channel', ch, { shouldValidate: true })}
-                  className={`border px-3 py-1.5 font-sans text-sm transition-colors ${
-                    active
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
-                  }`}
-                >
-                  {CHANNEL_LABELS[ch] || ch}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="font-sans text-xs uppercase tracking-wider text-muted-foreground">内容</Label>
-          <Textarea
-            rows={14}
-            placeholder="分享你的想法（支持纯文本）…"
-            className="min-h-[280px]"
-            {...register('content')}
-          />
-          {errors.content && <p className="font-serif text-xs text-destructive">{errors.content.message}</p>}
-        </div>
-
-        <div className="flex justify-end gap-3 border-t border-border pt-6">
-          <Button type="button" variant="link" onClick={() => router.back()}>
-            取消
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="animate-spin" />}
-            发布
-          </Button>
-        </div>
-      </form>
+      <Card>
+        <CardHeader>
+          <CardTitle>发布新帖</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">标题</Label>
+              <Input id="title" placeholder="一句话概括你的想法" {...register('title')} />
+              {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>频道</Label>
+              <div className="flex flex-wrap gap-2">
+                {CHANNELS.map((ch) => {
+                  const active = selectedChannel === ch
+                  return (
+                    <button
+                      key={ch}
+                      type="button"
+                      onClick={() => setValue('channel', ch, { shouldValidate: true })}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        active
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                      }`}
+                    >
+                      {CHANNEL_LABELS[ch] || ch}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="content">内容</Label>
+              <Textarea id="content" rows={10} placeholder="分享你的想法（支持纯文本）" {...register('content')} />
+              {errors.content && <p className="text-xs text-destructive">{errors.content.message}</p>}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => router.back()}>
+                取消
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="animate-spin" />}
+                发布
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -12,10 +12,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position="top-center"
       toastOptions={{
         classNames: {
-          // 纸色底、细边框、无阴影、衬线描述
           toast:
-            'group toast group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:rounded-sm group-[.toaster]:font-sans',
-          description: 'group-[.toast]:font-serif group-[.toast]:text-muted-foreground',
+            'group toast group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-card-hover group-[.toaster]:rounded-xl',
+          description: 'group-[.toast]:text-muted-foreground',
         },
       }}
       {...props}

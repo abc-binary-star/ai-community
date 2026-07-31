@@ -1,7 +1,6 @@
 import type { Comment } from 'shared'
 import { CommentItem } from './comment-item'
 
-// 评论树：渲染根评论，每条自递归渲染 replies
 export function CommentTree({
   comments,
   currentUserId,
@@ -14,11 +13,12 @@ export function CommentTree({
   onDeleted: () => void
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {comments.map((c) => (
         <CommentItem
           key={c.id}
           comment={c}
+          depth={0}
           currentUserId={currentUserId}
           onReply={onReply}
           onDeleted={onDeleted}

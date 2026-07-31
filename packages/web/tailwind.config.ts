@@ -8,7 +8,7 @@ const config: Config = {
     container: {
       center: true,
       padding: '1.5rem',
-      screens: { '2xl': '1080px' },
+      screens: { '2xl': '1120px' },
     },
     extend: {
       colors: {
@@ -16,7 +16,6 @@ const config: Config = {
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         background: 'hsl(var(--background))',
-        surface: 'hsl(var(--surface))',
         foreground: 'hsl(var(--foreground))',
         primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
         secondary: { DEFAULT: 'hsl(var(--secondary))', foreground: 'hsl(var(--secondary-foreground))' },
@@ -28,24 +27,24 @@ const config: Config = {
       },
       borderRadius: {
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 1px)',
-        sm: '2px',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        // display：标题/品牌（Fraunces 衬线，有性格）
-        display: ['var(--font-display)', 'Songti SC', 'STSong', 'serif'],
-        // serif：正文阅读（Newsreader，长文舒适）
-        serif: ['var(--font-serif)', 'Songti SC', 'STSong', 'serif'],
-        // sans：UI 元素（IBM Plex Sans，几何人文无衬线）
+        // Plus Jakarta Sans：几何人文无衬线，清爽现代有亲和力
         sans: ['var(--font-sans)', 'PingFang SC', 'Hiragino Sans GB', 'system-ui', 'sans-serif'],
       },
       keyframes: {
         'fade-in': { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
-        'slide-in': { from: { opacity: '0', transform: 'translateX(-8px)' }, to: { opacity: '1', transform: 'translateX(0)' } },
+        'slide-up': { from: { opacity: '0', transform: 'translateY(12px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
       },
       animation: {
-        'fade-in': 'fade-in 0.4s ease-out',
-        'slide-in': 'slide-in 0.3s ease-out',
+        'fade-in': 'fade-in 0.3s ease-out',
+        'slide-up': 'slide-up 0.4s ease-out',
+      },
+      boxShadow: {
+        card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
+        'card-hover': '0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 6px -2px rgb(15 23 42 / 0.06)',
       },
     },
   },

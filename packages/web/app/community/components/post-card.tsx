@@ -1,41 +1,60 @@
 import Link from 'next/link'
-import { MessageCircle } from 'lucide-react'
-import { formatRelativeTime, truncate } from '@/lib/utils'
+import { Eye, MessageCircle } from 'lucide-react'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { formatRelativeTime, getInitials, truncate } from '@/lib/utils'
 import { CHANNEL_LABELS, type Post } from 'shared'
+import { LikeButton } from './like-button'
+import { BookmarkButton } from './bookmark-button'
+import { TagBadge } from './tag-badge'
 
-// 报纸式条目：左列元信息（作者/时间），右列标题+预览+评论数
-// 细横线分隔，hover 只改标题颜色，无位移无阴影
 export function PostCard({ post }: { post: Post }) {
   return (
-    <Link href={`/community/post/${post.id}`} className="block border-t border-border py-5 first:border-t-0 group">
-      <div className="flex gap-6">
-        {/* 左列：元信息 */}
-        <div className="hidden w-28 shrink-0 flex-col gap-1 sm:flex">
-          <span className="font-sans text-sm font-medium text-foreground">{post.author.username}</span>
-          <span className="font-serif text-xs italic text-muted-foreground">{formatRelativeTime(post.createdAt)}</span>
-        </div>
-        {/* 右列：内容 */}
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-3">
-            {/* 移动端显示作者，桌面隐藏（已在左列） */}
-            <span className="font-sans text-sm font-medium text-foreground sm:hidden">{post.author.username}</span>
-            <span className="font-serif text-xs italic text-muted-foreground sm:hidden">
-              · {formatRelativeTime(post.createdAt)}
-            </span>
-            <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-primary/80">
-              {CHANNEL_LABELS[post.channel] || post.channel}
-            </span>
+    <Link href={`/community/post/${post.id}`} className="block">
+      <Card className="transition-all hover:-translate-y-0.5 hover:shadow-card-hover">
+        <div className="flex flex-col gap-3 p-5">
+          <div className="flex items-center justify-between gap-2">
+            <Badge>{CHANNEL_LABELS[post.channel] || post.channel}</Badge>
+            <span className="text-xs text-muted-foreground">{formatRelativeTime(post.createdAt)}</span>
           </div>
-          <h3 className="font-display text-xl leading-snug text-foreground transition-colors group-hover:text-primary">
-            {post.title}
-          </h3>
-          <p className="line-clamp-2 font-serif text-[15px] leading-7 text-muted-foreground">{truncate(post.content, 160)}</p>
-          <div className="flex items-center gap-1.5 pt-1 font-sans text-xs text-muted-foreground">
-            <MessageCircle className="size-3.5" />
-            {post.commentCount} 条评论
+          <h3 className="text-lg font-semibold leading-snug">{post.title}</h3>
+          <p className="line-clamp-2 text-sm text-muted-foreground">{truncate(post.content, 160)}</p>
+
+          {post.tags && post.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {post.tags.map((tag) => (
+                <TagBadge key={tag} name={tag} size="sm" />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <Avatar className="size-6">
+                <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(post.author.username)}</AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">{post.author.username}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Eye className="size-3.5" />
+                {post.viewCount}
+              </span>
+              <div onClick={(e) => e.preventDefault()} className="inline-flex">
+                <BookmarkButton id={post.id} bookmarked={post.bookmarked} />
+              </div>
+              <div onClick={(e) => e.preventDefault()} className="inline-flex">
+                <LikeButton target="post" id={post.id} likeCount={post.likeCount} liked={post.liked} />
+              </div>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MessageCircle className="size-3.5" />
+                {post.commentCount}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
     </Link>
   )
 }

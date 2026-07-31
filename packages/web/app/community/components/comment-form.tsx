@@ -8,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import type { Comment } from 'shared'
 
-// 评论输入：底部下划线输入框；回复时显示「回复 @xxx」+ 取消
 export function CommentForm({
   postId,
   replyTo,
@@ -40,14 +39,14 @@ export function CommentForm({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {replyTo && (
-        <div className="flex items-center justify-between border-l-2 border-primary/40 bg-surface px-3 py-2">
-          <span className="font-serif text-sm italic text-accent-foreground">回复 @{replyTo.author.username}</span>
+        <div className="flex items-center justify-between rounded-lg bg-accent px-3 py-2 text-sm">
+          <span className="text-accent-foreground">回复 @{replyTo.author.username}</span>
           <button
             type="button"
             onClick={onCancelReply}
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground"
             aria-label="取消回复"
           >
             <X className="size-4" />
@@ -59,12 +58,11 @@ export function CommentForm({
         onChange={(e) => setContent(e.target.value)}
         rows={3}
         placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论…'}
-        className="min-h-[80px]"
       />
       <div className="flex justify-end">
         <Button onClick={submit} disabled={submitting || !content.trim()}>
           {submitting && <Loader2 className="animate-spin" />}
-          {replyTo ? '回复' : '发表评论'}
+          {replyTo ? '回复' : '评论'}
         </Button>
       </div>
     </div>

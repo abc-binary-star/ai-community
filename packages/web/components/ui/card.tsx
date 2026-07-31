@@ -1,10 +1,10 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-// 弱化卡片：去阴影，仅细边框 + 纸色底，更扁更安静
+// 白底卡片 + 轻阴影，清爽层次
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('rounded-sm border border-border bg-card text-card-foreground', className)} {...props} />
+    <div ref={ref} className={cn('rounded-xl border border-border bg-card text-card-foreground shadow-card', className)} {...props} />
   ),
 )
 Card.displayName = 'Card'
@@ -16,14 +16,14 @@ CardHeader.displayName = 'CardHeader'
 
 const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('font-display text-xl leading-tight tracking-tight', className)} {...props} />
+    <div ref={ref} className={cn('text-lg font-semibold leading-tight tracking-tight', className)} {...props} />
   ),
 )
 CardTitle.displayName = 'CardTitle'
 
 const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('text-sm italic text-muted-foreground', className)} {...props} />
+    <div ref={ref} className={cn('text-sm text-muted-foreground', className)} {...props} />
   ),
 )
 CardDescription.displayName = 'CardDescription'
