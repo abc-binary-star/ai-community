@@ -35,7 +35,8 @@ auth.post('/register', async (c) => {
     return c.json({ error: '用户名或邮箱已被注册' }, 409)
   }
 
-  const hashed = await bcrypt.hash(password, 10)
+  // bcrypt cost factor 12，兼顾安全与性能（现代推荐值）
+  const hashed = await bcrypt.hash(password, 12)
   const user = await prisma.user.create({ data: { username, email, password: hashed } })
   const token = signToken({ userId: user.id, username: user.username })
   const data: AuthResponse = { user: mapUser(user), token }

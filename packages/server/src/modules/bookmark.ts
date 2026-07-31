@@ -1,33 +1,12 @@
 import { Hono } from 'hono'
 import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
-import { authMiddleware, getCurrentUserId } from '../middleware/auth.js'
+import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
+import { authMiddleware } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
 
 const bookmark = new Hono<AppEnv>()
-
-async function getLikedPostIds(postIds: string[], userId?: string): Promise<Set<string>> {
-  if (!userId || postIds.length === 0) return new Set()
-  const rows = await prisma.postLike.findMany({
-    where: { postId: { in: postIds }, userId },
-    select: { postId: true },
-  })
-  return new Set(rows.map((r) => r.postId))
-}
-
-async function getBookmarkedPostIds(postIds: string[], userId?: string): Promise<Set<string>> {
-  if (!userId || postIds.length === 0) return new Set()
-  const rows = await prisma.bookmark.findMany({
-    where: { postId: { in: postIds }, userId },
-    select: { postId: true },
-  })
-  return new Set(rows.map((r) => r.postId))
-}
-
-function extractTags(postTags: { tag: { name: string } }[]): string[] {
-  return postTags.map((pt) => pt.tag.name)
-}
 
 // 收藏帖子
 // POST /api/posts/:id/bookmark

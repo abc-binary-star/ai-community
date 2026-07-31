@@ -17,17 +17,19 @@ const app = new Hono<AppEnv>()
 app.use('*', logger())
 
 // CORS：生产环境从环境变量读取允许的域名（逗号分隔），开发默认 localhost
+// 注意：credentials: true 时 origin 不能为 '*'，必须返回具体域名
 const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map((s) => s.trim())
 app.use(
   '*',
   cors({
-    origin: (origin, c) => {
-      // 允许列表里的域名，或没带 Origin 的请求（如 curl 直接访问）
-      if (!origin) return c.res.headers.get('Access-Control-Allow-Origin') || '*'
-      if (corsOrigins.includes(origin)) return origin
+    origin: (origin) => {
+      // 允许列表里的域名
+      if (origin && corsOrigins.includes(origin)) return origin
+      // 没带 Origin 的请求（如 curl 直接访问、同源请求）放行但不返回具体域
+      if (!origin) return null
       // 开发环境默认放行，方便本机调试
       if (process.env.NODE_ENV !== 'production') return origin
-      return ''
+      return null
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],

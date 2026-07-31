@@ -1,7 +1,16 @@
 import jwt from 'jsonwebtoken'
 import type { AuthUser } from '../types.js'
 
-const SECRET = process.env.JWT_SECRET || 'dev-secret-change-me'
+// 生产环境必须显式配置 JWT_SECRET，缺失时直接启动失败，避免静默使用弱密钥
+// 开发环境保留默认值方便本地调试
+const SECRET = (() => {
+  const secret = process.env.JWT_SECRET
+  if (secret) return secret
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('生产环境必须配置 JWT_SECRET 环境变量（至少 32 位随机字符串）')
+  }
+  return 'dev-secret-change-me'
+})()
 const EXPIRES_IN = '7d'
 
 // 签发 JWT

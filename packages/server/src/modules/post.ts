@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
 import { createNotification } from '../lib/notification.js'
+import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
@@ -22,28 +23,6 @@ const updateSchema = z.object({
   title: z.string().min(1).max(100).optional(),
   content: z.string().min(1).max(20000).optional(),
 })
-
-async function getLikedPostIds(postIds: string[], userId?: string): Promise<Set<string>> {
-  if (!userId || postIds.length === 0) return new Set()
-  const rows = await prisma.postLike.findMany({
-    where: { postId: { in: postIds }, userId },
-    select: { postId: true },
-  })
-  return new Set(rows.map((r) => r.postId))
-}
-
-async function getBookmarkedPostIds(postIds: string[], userId?: string): Promise<Set<string>> {
-  if (!userId || postIds.length === 0) return new Set()
-  const rows = await prisma.bookmark.findMany({
-    where: { postId: { in: postIds }, userId },
-    select: { postId: true },
-  })
-  return new Set(rows.map((r) => r.postId))
-}
-
-function extractTags(postTags: { tag: { name: string } }[]): string[] {
-  return postTags.map((pt) => pt.tag.name)
-}
 
 // 帖子列表
 post.use('/', optionalAuthMiddleware)
@@ -194,7 +173,6 @@ post.post('/', authMiddleware, async (c) => {
   const created = await prisma.$transaction(async (tx) => {
     const post = await tx.post.create({
       data: { title, content, channel: channel || 'general', authorId: userId },
-      include: { author: true },
     })
 
     if (tags && tags.length > 0) {
@@ -211,21 +189,24 @@ post.post('/', authMiddleware, async (c) => {
       }
     }
 
-    return post
+    // 事务内一次性返回带 author/tags 的完整数据，避免事务外再查一次
+    return tx.post.findUnique({
+      where: { id: post.id },
+      include: { author: true, tags: { include: { tag: true } } },
+    })
   })
 
-  const createdWithTags = await prisma.post.findUnique({
-    where: { id: created.id },
-    include: { author: true, tags: { include: { tag: true } }, _count: { select: { comments: true } } },
-  })
+  if (!created) {
+    return c.json({ error: '创建失败' }, 500)
+  }
 
   return c.json(
     {
-      ...mapPost(createdWithTags!),
+      ...mapPost(created),
       commentCount: 0,
       liked: false,
       bookmarked: false,
-      tags: extractTags(createdWithTags!.tags),
+      tags: extractTags(created.tags),
     },
     201,
   )

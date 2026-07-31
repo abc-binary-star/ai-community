@@ -2,9 +2,10 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapUser, mapPublicUser, mapPost } from '../lib/mappers.js'
+import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
-import type { Paginated, Post, PublicUser } from 'shared'
+import type { Paginated, Post } from 'shared'
 
 const user = new Hono<AppEnv>()
 
@@ -13,28 +14,6 @@ const updateSchema = z.object({
   bio: z.string().max(500).nullable().optional(),
   avatar: z.string().nullable().optional(),
 })
-
-async function getLikedPostIds(postIds: string[], userId?: string): Promise<Set<string>> {
-  if (!userId || postIds.length === 0) return new Set()
-  const rows = await prisma.postLike.findMany({
-    where: { postId: { in: postIds }, userId },
-    select: { postId: true },
-  })
-  return new Set(rows.map((r) => r.postId))
-}
-
-async function getBookmarkedPostIds(postIds: string[], userId?: string): Promise<Set<string>> {
-  if (!userId || postIds.length === 0) return new Set()
-  const rows = await prisma.bookmark.findMany({
-    where: { postId: { in: postIds }, userId },
-    select: { postId: true },
-  })
-  return new Set(rows.map((r) => r.postId))
-}
-
-function extractTags(postTags: { tag: { name: string } }[]): string[] {
-  return postTags.map((pt) => pt.tag.name)
-}
 
 // 查看用户主页（公开）
 // GET /api/users/:username
