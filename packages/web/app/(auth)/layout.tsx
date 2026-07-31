@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import Link from 'next/link'
 
 // 登录/注册：清爽居中布局 + 顶部品牌
@@ -11,7 +11,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </span>
         <span className="text-lg">Commons</span>
       </Link>
-      {children}
+      <Suspense>{children}</Suspense>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapComment } from '../lib/mappers.js'
 import { createNotification } from '../lib/notification.js'
+import { isUniqueConstraintError } from '../lib/prisma-error.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Comment } from 'shared'
@@ -178,11 +179,20 @@ comment.post('/comments/:id/like', authMiddleware, async (c) => {
     return c.json({ ok: true, liked: true, likeCount: c2!.likeCount })
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.commentLike.create({ data: { commentId: id, userId } })
-    return tx.comment.update({ where: { id }, data: { likeCount: { increment: 1 } }, select: { likeCount: true } })
-  })
-  return c.json({ ok: true, liked: true, likeCount: updated.likeCount }, 201)
+  // 捕获并发下的唯一约束冲突（P2002），当作「已点赞」处理
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.commentLike.create({ data: { commentId: id, userId } })
+      return tx.comment.update({ where: { id }, data: { likeCount: { increment: 1 } }, select: { likeCount: true } })
+    })
+    return c.json({ ok: true, liked: true, likeCount: updated.likeCount }, 201)
+  } catch (e) {
+    if (isUniqueConstraintError(e)) {
+      const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
+      return c.json({ ok: true, liked: true, likeCount: c2!.likeCount })
+    }
+    throw e
+  }
 })
 
 // 取消点赞评论

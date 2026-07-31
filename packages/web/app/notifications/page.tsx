@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -32,10 +32,11 @@ export default function NotificationsPage() {
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
+  const [page, setPage] = useState(1)
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['notifications', 1],
-    queryFn: () => api.get<Paginated<Notification>>('/notifications?page=1&pageSize=20'),
+    queryKey: ['notifications', page],
+    queryFn: () => api.get<Paginated<Notification>>(`/notifications?page=${page}&pageSize=20`),
     enabled: !!token,
   })
 
@@ -166,14 +167,14 @@ export default function NotificationsPage() {
 
           {data && data.totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 pt-2">
-              <Button variant="outline" size="sm" disabled>
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                 <ChevronLeft />
                 上一页
               </Button>
               <span className="text-sm text-muted-foreground">
-                第 1 / {data.totalPages} 页
+                第 {page} / {data.totalPages} 页
               </span>
-              <Button variant="outline" size="sm" disabled>
+              <Button variant="outline" size="sm" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>
                 下一页
                 <ChevronRight />
               </Button>

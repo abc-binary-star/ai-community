@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
 import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
+import { isUniqueConstraintError } from '../lib/prisma-error.js'
 import { authMiddleware } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
@@ -27,7 +28,12 @@ bookmark.post('/posts/:id/bookmark', authMiddleware, async (c) => {
     return c.json({ ok: true, bookmarked: true, bookmarkCount: count })
   }
 
-  await prisma.bookmark.create({ data: { postId: id, userId } })
+  // 捕获并发下的唯一约束冲突（P2002），当作「已收藏」处理
+  try {
+    await prisma.bookmark.create({ data: { postId: id, userId } })
+  } catch (e) {
+    if (!isUniqueConstraintError(e)) throw e
+  }
   const count = await prisma.bookmark.count({ where: { postId: id } })
   return c.json({ ok: true, bookmarked: true, bookmarkCount: count }, 201)
 })

@@ -1,9 +1,11 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
 import { createNotification } from '../lib/notification.js'
 import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
+import { isUniqueConstraintError } from '../lib/prisma-error.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
@@ -35,7 +37,7 @@ post.get('/', async (c) => {
   const tag = c.req.query('tag') || ''
   const currentUserId = getCurrentUserId(c)
 
-  const where: any = {}
+  const where: Prisma.PostWhereInput = {}
   if (channel && channel !== 'all') {
     where.channel = channel
   }
@@ -279,20 +281,29 @@ post.post('/:id/like', authMiddleware, async (c) => {
     return c.json({ ok: true, liked: true, likeCount: p!.likeCount })
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.postLike.create({ data: { postId: id, userId } })
-    return tx.post.update({ where: { id }, data: { likeCount: { increment: 1 } }, select: { likeCount: true } })
-  })
+  // 捕获并发下的唯一约束冲突（P2002），当作「已点赞」处理
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.postLike.create({ data: { postId: id, userId } })
+      return tx.post.update({ where: { id }, data: { likeCount: { increment: 1 } }, select: { likeCount: true } })
+    })
 
-  // 通知帖子作者被点赞
-  await createNotification({
-    userId: existing.authorId,
-    type: 'like',
-    actorId: userId,
-    postId: id,
-  })
+    // 通知帖子作者被点赞
+    await createNotification({
+      userId: existing.authorId,
+      type: 'like',
+      actorId: userId,
+      postId: id,
+    })
 
-  return c.json({ ok: true, liked: true, likeCount: updated.likeCount }, 201)
+    return c.json({ ok: true, liked: true, likeCount: updated.likeCount }, 201)
+  } catch (e) {
+    if (isUniqueConstraintError(e)) {
+      const p = await prisma.post.findUnique({ where: { id }, select: { likeCount: true } })
+      return c.json({ ok: true, liked: true, likeCount: p!.likeCount })
+    }
+    throw e
+  }
 })
 
 // 取消点赞帖子

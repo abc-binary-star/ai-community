@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, Edit3, Loader2, Settings, UserPlus, UserCheck } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, Settings, UserPlus, UserCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ export function ProfileClient({ username }: { username: string }) {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
+  const [postPage, setPostPage] = useState(1)
 
   const userQuery = useQuery({
     queryKey: ['user', username],
@@ -25,9 +27,9 @@ export function ProfileClient({ username }: { username: string }) {
   })
 
   const postsQuery = useQuery({
-    queryKey: ['user-posts', username, 1],
+    queryKey: ['user-posts', username, postPage],
     queryFn: () =>
-      api.get<Paginated<Post>>(`/users/${encodeURIComponent(username)}/posts?page=1&pageSize=20`),
+      api.get<Paginated<Post>>(`/users/${encodeURIComponent(username)}/posts?page=${postPage}&pageSize=20`),
     enabled: !!userQuery.data,
   })
 
@@ -176,6 +178,22 @@ export function ProfileClient({ username }: { username: string }) {
               <p>还没有发布过帖子</p>
             </div>
           </Card>
+        )}
+
+        {postsQuery.data && postsQuery.data.totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Button variant="outline" size="sm" disabled={postPage <= 1} onClick={() => setPostPage((p) => Math.max(1, p - 1))}>
+              <ChevronLeft />
+              上一页
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              第 {postPage} / {postsQuery.data.totalPages} 页
+            </span>
+            <Button variant="outline" size="sm" disabled={postPage >= postsQuery.data.totalPages} onClick={() => setPostPage((p) => p + 1)}>
+              下一页
+              <ChevronRight />
+            </Button>
+          </div>
         )}
       </div>
     </div>

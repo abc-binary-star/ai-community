@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -24,6 +24,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [showPwd, setShowPwd] = useState(false)
   const {
@@ -37,7 +38,9 @@ export default function LoginPage() {
       const data = await api.post<AuthResponse>('/auth/login', values)
       setAuth(data.token, data.user)
       toast.success('欢迎回来')
-      router.push('/community')
+      // 支持 redirect 参数：登录后跳回原页面
+      const redirect = searchParams.get('redirect')
+      router.push(redirect || '/community')
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '登录失败，请重试')
     }
