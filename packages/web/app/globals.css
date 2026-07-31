@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Editorial Paper 主题
+   暖纸底 + 墨黑文字 + 墨绿强调，衬线为主，去 AI 化
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* 底色：暖纸（非纯白，避免冰冷） */
+    --background: 40 33% 93%;
+    /* 表面：略浅于底的卡片/输入底，保持纸感 */
+    --surface: 40 30% 96%;
+    /* 文字：偏暖的墨黑 */
+    --foreground: 30 18% 12%;
+    /* 卡片沿用纸色，不再用纯白 */
+    --card: 40 30% 96%;
+    --card-foreground: 30 18% 12%;
+    --popover: 40 30% 96%;
+    --popover-foreground: 30 18% 12%;
+
+    /* 强调：墨绿 viridian（替代紫蓝） */
+    --primary: 156 32% 27%;
+    --primary-foreground: 40 33% 96%;
+
+    /* 次要：暖灰 */
+    --secondary: 40 20% 90%;
+    --secondary-foreground: 30 15% 22%;
+    --muted: 40 18% 90%;
+    --muted-foreground: 30 8% 45%;
+
+    /* accent：极浅墨绿，用于 hover 底色 */
+    --accent: 156 20% 92%;
+    --accent-foreground: 156 32% 20%;
+
+    /* 危险：赭红 */
+    --destructive: 4 50% 45%;
+    --destructive-foreground: 40 33% 96%;
+
+    /* 分隔线：纸色加深，温润不刺眼 */
+    --border: 38 22% 84%;
+    --input: 38 22% 80%;
+    --ring: 156 32% 27%;
+
+    /* 圆角：克制，2-4px，拒绝大圆角 */
+    --radius: 0.25rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
+    /* 极淡纸纹噪点：三层 radial 叠加，营造纸的颗粒感 */
+    background-image:
+      radial-gradient(circle at 20% 30%, hsl(40 30% 90% / 0.4) 0, transparent 40%),
+      radial-gradient(circle at 80% 70%, hsl(38 25% 88% / 0.35) 0, transparent 45%),
+      radial-gradient(circle at 50% 50%, hsl(35 20% 92% / 0.3) 0, transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  /* 章节分隔线：细横线 + 居中小标签，杂志感 */
+  .editorial-rule {
+    @apply flex items-center gap-3 text-muted-foreground;
+  }
+  .editorial-rule::before,
+  .editorial-rule::after {
+    content: '';
+    @apply h-px flex-1 bg-border;
+  }
+
+  /* 下划线式输入：底部一条线，focus 加粗变绿 */
+  .input-underline {
+    @apply rounded-none border-0 border-b border-input bg-transparent px-0 py-2;
+    @apply focus-visible:ring-0 focus-visible:ring-offset-0;
+    transition: border-color 0.2s ease;
+  }
+  .input-underline:focus-visible {
+    border-bottom-color: hsl(var(--primary));
+    border-bottom-width: 2px;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 0;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* 首字下沉：用于帖子正文首段，增强阅读感 */
+  .drop-cap::first-letter {
+    @apply float-left mr-2 font-display text-5xl leading-[0.8] text-primary;
+    padding-top: 0.25rem;
+  }
+}
