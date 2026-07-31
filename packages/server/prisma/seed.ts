@@ -29,7 +29,7 @@ async function main() {
     data: {
       title: 'SRPG 关卡设计交流',
       content: '聊聊 SRPG 的关卡节奏、地形设计与数值平衡，欢迎讨论。',
-      channel: '游戏',
+      channel: 'gaming',
       authorId: bob.id,
     },
   })

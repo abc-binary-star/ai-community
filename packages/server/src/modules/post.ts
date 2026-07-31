@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
+import { createNotification } from '../lib/notification.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
@@ -141,20 +142,21 @@ post.get('/:id', async (c) => {
   const id = c.req.param('id') as string
   const currentUserId = getCurrentUserId(c)
 
-  const p = await prisma.$transaction(async (tx) => {
-    await tx.post.update({
-      where: { id },
-      data: { viewCount: { increment: 1 } },
-    })
-    return tx.post.findUnique({
-      where: { id },
-      include: { author: true, tags: { include: { tag: true } }, _count: { select: { comments: true } } },
-    })
+  // 先查存在再更新浏览量，避免帖子不存在时 update 抛 P2025 导致 500
+  const p = await prisma.post.findUnique({
+    where: { id },
+    include: { author: true, tags: { include: { tag: true } }, _count: { select: { comments: true } } },
   })
 
   if (!p) {
     return c.json({ error: '帖子不存在' }, 404)
   }
+
+  // 浏览量 +1（已确认帖子存在，不会抛错）
+  await prisma.post.update({
+    where: { id },
+    data: { viewCount: { increment: 1 } },
+  })
 
   const liked = currentUserId
     ? !!(await prisma.postLike.findUnique({
@@ -285,7 +287,7 @@ post.post('/:id/like', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
   const userId = c.get('user').userId
 
-  const existing = await prisma.post.findUnique({ where: { id }, select: { id: true } })
+  const existing = await prisma.post.findUnique({ where: { id }, select: { id: true, authorId: true } })
   if (!existing) {
     return c.json({ error: '帖子不存在' }, 404)
   }
@@ -300,6 +302,15 @@ post.post('/:id/like', authMiddleware, async (c) => {
     await tx.postLike.create({ data: { postId: id, userId } })
     return tx.post.update({ where: { id }, data: { likeCount: { increment: 1 } }, select: { likeCount: true } })
   })
+
+  // 通知帖子作者被点赞
+  await createNotification({
+    userId: existing.authorId,
+    type: 'like',
+    actorId: userId,
+    postId: id,
+  })
+
   return c.json({ ok: true, liked: true, likeCount: updated.likeCount }, 201)
 })
 

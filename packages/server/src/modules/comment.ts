@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapComment } from '../lib/mappers.js'
+import { createNotification } from '../lib/notification.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Comment } from 'shared'
@@ -96,23 +97,49 @@ comment.post('/posts/:id/comments', authMiddleware, async (c) => {
   }
   const { content, parentId } = parsed.data
 
-  const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } })
+  const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true, authorId: true } })
   if (!post) {
     return c.json({ error: '帖子不存在' }, 404)
   }
 
-  // 若指定父评论，校验其属于同一帖子
+  // 若指定父评论，校验其属于同一帖子，并取出其作者用于回复通知
+  let parentAuthorId: string | null = null
   if (parentId) {
-    const parent = await prisma.comment.findUnique({ where: { id: parentId }, select: { postId: true } })
+    const parent = await prisma.comment.findUnique({ where: { id: parentId }, select: { postId: true, authorId: true } })
     if (!parent || parent.postId !== postId) {
       return c.json({ error: '父评论不存在或不属于该帖子' }, 400)
     }
+    parentAuthorId = parent.authorId
   }
 
   const created = await prisma.comment.create({
     data: { content, postId, authorId: userId, parentId: parentId ?? null },
     include: { author: true },
   })
+
+  // 异步产生通知（不阻塞响应）：
+  // - 回复评论：通知被回复者（type=reply）
+  // - 普通评论：通知帖子作者（type=comment）
+  if (parentId && parentAuthorId) {
+    await createNotification({
+      userId: parentAuthorId,
+      type: 'reply',
+      actorId: userId,
+      postId,
+      commentId: created.id,
+      content: content.length > 50 ? content.slice(0, 50) + '…' : content,
+    })
+  } else {
+    await createNotification({
+      userId: post.authorId,
+      type: 'comment',
+      actorId: userId,
+      postId,
+      commentId: created.id,
+      content: content.length > 50 ? content.slice(0, 50) + '…' : content,
+    })
+  }
+
   return c.json({ ...mapComment(created), liked: false }, 201)
 })
 

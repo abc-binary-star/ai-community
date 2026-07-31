@@ -18,7 +18,7 @@ import { cn, formatRelativeTime } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { toast } from 'sonner'
-import type { Notification } from 'shared'
+import type { Notification, Paginated } from 'shared'
 
 const TYPE_ICON: Record<Notification['type'], ReactNode> = {
   comment: <MessageCircle className="size-4 text-sky-500" />,
@@ -48,7 +48,7 @@ export function NotificationBell() {
 
   const notificationsQuery = useQuery({
     queryKey: ['notifications-latest'],
-    queryFn: () => api.get<Notification[]>('/notifications?page=1&pageSize=5'),
+    queryFn: () => api.get<Paginated<Notification>>('/notifications?page=1&pageSize=5'),
     enabled: !!token,
   })
 
@@ -65,7 +65,7 @@ export function NotificationBell() {
   }
 
   const unreadCount = unreadQuery.data?.count ?? 0
-  const latest = notificationsQuery.data ?? []
+  const latest = notificationsQuery.data?.items ?? []
 
   if (!token) return null
 

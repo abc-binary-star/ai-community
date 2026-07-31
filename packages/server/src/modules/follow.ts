@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { prisma } from '../db.js'
 import { mapPublicUser } from '../lib/mappers.js'
+import { createNotification } from '../lib/notification.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { PublicUser } from 'shared'
@@ -29,6 +30,14 @@ follow.post('/users/:username/follow', authMiddleware, async (c) => {
   }
 
   await prisma.follow.create({ data: { followerId, followingId: target.id } })
+
+  // 通知被关注者
+  await createNotification({
+    userId: target.id,
+    type: 'follow',
+    actorId: followerId,
+  })
+
   return c.json({ ok: true, isFollowing: true }, 201)
 })
 
