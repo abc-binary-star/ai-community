@@ -120,7 +120,7 @@ export default function NewPostPage() {
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">用英文逗号分隔多个标签，例如：AI, 前端, 开源</p>
+              <p className="text-xs text-muted-foreground">用英文逗号分隔，不需要加 # 号，例如：AI, 前端, 开源</p>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => router.back()}>

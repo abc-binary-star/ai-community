@@ -12,7 +12,7 @@ import { SearchBar } from './search-bar'
 import { TagBadge } from './tag-badge'
 import { CHANNEL_LABELS, type Paginated, type Post } from 'shared'
 
-const HOT_TAGS = ['AI', 'LLM', '前端', '后端', '产品', '设计', '游戏', '求职', '开源', '模型']
+const HOT_TAGS_FALLBACK = ['AI', 'LLM', '前端', '后端', '产品', '设计', '游戏', '开源']
 
 export function PostListPage({
   channel,
@@ -42,6 +42,16 @@ export function PostListPage({
     queryFn: () =>
       api.get<Paginated<Post>>(`/posts?${queryParams.toString()}&pageSize=20`),
   })
+
+  // 动态获取热门标签，fallback 到预设列表
+  const { data: tagsData } = useQuery({
+    queryKey: ['popular-tags'],
+    queryFn: () => api.get<{ items: { name: string; postCount: number }[] }>('/posts/tags/popular'),
+    staleTime: 60 * 1000,
+  })
+  const hotTags = (tagsData?.items?.length ?? 0) > 0
+    ? tagsData!.items.map((t) => t.name)
+    : HOT_TAGS_FALLBACK
 
   const totalPages = data?.totalPages ?? 0
 
@@ -76,7 +86,7 @@ export function PostListPage({
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <span className="shrink-0 text-xs font-medium text-muted-foreground">热门标签</span>
         <div className="flex gap-1.5">
-          {HOT_TAGS.map((t) => (
+          {hotTags.map((t) => (
             <TagBadge key={t} name={t} selected={tag === t} size="sm" />
           ))}
         </div>

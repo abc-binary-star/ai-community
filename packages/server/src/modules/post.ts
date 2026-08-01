@@ -183,8 +183,10 @@ post.post('/', authMiddleware, async (c) => {
     })
 
     if (tags && tags.length > 0) {
-      // 过滤空字符串 + 统一转小写 + 去重
-      const tagNames = [...new Set(tags.filter((t) => t.length > 0).map((t) => t.toLowerCase()))]
+      // 过滤空字符串 + 去掉 # 前缀 + 统一转小写 + 去重
+      const tagNames = [...new Set(
+        tags.filter((t) => t.length > 0).map((t) => t.replace(/^#+/, '').toLowerCase())
+      )]
       for (const tagName of tagNames) {
         const tag = await tx.tag.upsert({
           where: { name: tagName },
@@ -339,6 +341,24 @@ post.delete('/:id/like', authMiddleware, async (c) => {
     select: { likeCount: true },
   })
   return c.json({ ok: true, liked: false, likeCount: updated.likeCount })
+})
+
+// 热门标签（按帖子数排序）
+// GET /api/posts/tags/popular
+post.get('/tags/popular', async (c) => {
+  const tags = await prisma.tag.findMany({
+    include: {
+      _count: { select: { posts: true } },
+    },
+    orderBy: {
+      posts: { _count: 'desc' },
+    },
+    take: 20,
+  })
+  const items = tags
+    .filter((t) => t._count.posts > 0)
+    .map((t) => ({ name: t.name, postCount: t._count.posts }))
+  return c.json({ items })
 })
 
 export default post
