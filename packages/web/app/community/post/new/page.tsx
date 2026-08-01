@@ -50,7 +50,7 @@ export default function NewPostPage() {
 
   const onSubmit = async (values: FormValues) => {
     const tags = tagsInput
-      .split(',')
+      .split(/[,，\s]+/)
       .map((t) => t.trim())
       .filter(Boolean)
       .slice(0, 5)
@@ -116,11 +116,11 @@ export default function NewPostPage() {
               <Label htmlFor="tags">标签</Label>
               <Input
                 id="tags"
-                placeholder="用逗号分隔，最多 5 个标签"
+                placeholder="用逗号或空格分隔，最多 5 个标签"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">用英文逗号分隔，不需要加 # 号，例如：AI, 前端, 开源</p>
+              <p className="text-xs text-muted-foreground">用逗号或空格分隔，不需要加 # 号，例如：AI, 前端 开源</p>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => router.back()}>
