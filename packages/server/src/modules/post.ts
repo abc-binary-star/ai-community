@@ -31,7 +31,6 @@ const updateSchema = z.object({
 // 帖子列表
 post.get('/', optionalAuthMiddleware, async (c) => {
   const rawChannel = c.req.query('channel') || 'general'
-  // 校验 channel 是否在合法枚举内，非法值回退到 general
   const channel = CHANNELS.includes(rawChannel) ? rawChannel : 'general'
   const { page, pageSize } = parsePagination(c)
   const sort = c.req.query('sort') || 'latest'
@@ -337,8 +336,7 @@ post.delete('/:id/like', authMiddleware, async (c) => {
     return c.json({ ok: true, liked: false, likeCount: p?.likeCount ?? 0 })
   }
 
-  // 用 updateMany + gt:0 条件防止 likeCount 减为负数
-  const decResult = await prisma.post.updateMany({
+  await prisma.post.updateMany({
     where: { id, likeCount: { gt: 0 } },
     data: { likeCount: { decrement: 1 } },
   })
