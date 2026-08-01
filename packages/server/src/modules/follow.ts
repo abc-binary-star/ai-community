@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { mapPublicUser } from '../lib/mappers.js'
 import { createNotification } from '../lib/notification.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
+import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, PublicUser } from 'shared'
@@ -66,7 +67,7 @@ function toPublicUsers(users: UserPayload[], stats: Map<string, { postCount: num
 // POST /api/users/:username/follow
 follow.post('/users/:username/follow', authMiddleware, async (c) => {
   const username = c.req.param('username') as string
-  const followerId = c.get('user').userId
+  const followerId = c.get('user')!.userId
 
   const target = await prisma.user.findUnique({ where: { username }, select: { id: true } })
   if (!target) {
@@ -107,7 +108,7 @@ follow.post('/users/:username/follow', authMiddleware, async (c) => {
 // DELETE /api/users/:username/follow
 follow.delete('/users/:username/follow', authMiddleware, async (c) => {
   const username = c.req.param('username') as string
-  const followerId = c.get('user').userId
+  const followerId = c.get('user')!.userId
 
   const target = await prisma.user.findUnique({ where: { username }, select: { id: true } })
   if (!target) {
@@ -126,8 +127,7 @@ follow.delete('/users/:username/follow', authMiddleware, async (c) => {
 follow.get('/following/:username', optionalAuthMiddleware, async (c) => {
   const username = c.req.param('username') as string
   const currentUserId = getCurrentUserId(c)
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+  const { page, pageSize } = parsePagination(c)
 
   const u = await prisma.user.findUnique({ where: { username }, select: { id: true } })
   if (!u) {
@@ -164,8 +164,7 @@ follow.get('/following/:username', optionalAuthMiddleware, async (c) => {
 follow.get('/followers/:username', optionalAuthMiddleware, async (c) => {
   const username = c.req.param('username') as string
   const currentUserId = getCurrentUserId(c)
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+  const { page, pageSize } = parsePagination(c)
 
   const u = await prisma.user.findUnique({ where: { username }, select: { id: true } })
   if (!u) {

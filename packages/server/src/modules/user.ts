@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapUser, mapPublicUser, mapPost } from '../lib/mappers.js'
 import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
+import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
@@ -47,8 +48,7 @@ user.get('/:username', async (c) => {
 user.use('/:username/posts', optionalAuthMiddleware)
 user.get('/:username/posts', async (c) => {
   const username = c.req.param('username') as string
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+  const { page, pageSize } = parsePagination(c)
   const currentUserId = getCurrentUserId(c)
 
   const u = await prisma.user.findUnique({ where: { username }, select: { id: true } })
@@ -91,7 +91,7 @@ user.get('/:username/posts', async (c) => {
 // 更新当前用户资料（需登录）
 // PUT /api/users/me
 user.put('/me', authMiddleware, async (c) => {
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
   const body = await c.req.json().catch(() => null)
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) {

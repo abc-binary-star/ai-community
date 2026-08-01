@@ -7,6 +7,7 @@ export interface AuthUser {
 
 export type AppEnv = {
   Variables: {
-    user: AuthUser
+    // optionalAuthMiddleware 不设置 user，所以这里是可选的
+    user?: AuthUser
   }
 }

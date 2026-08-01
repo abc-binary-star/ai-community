@@ -27,8 +27,8 @@ app.use(
       if (origin && corsOrigins.includes(origin)) return origin
       // 没带 Origin 的请求（如 curl 直接访问、同源请求）放行但不返回具体域
       if (!origin) return null
-      // 开发环境默认放行，方便本机调试
-      if (process.env.NODE_ENV !== 'production') return origin
+      // 开发环境额外允许 localhost 变体（不同端口），但不反射任意 origin
+      if (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:')) return origin
       return null
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

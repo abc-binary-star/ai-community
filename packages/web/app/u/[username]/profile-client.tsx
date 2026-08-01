@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import { type Paginated, type Post, type PublicUser } from 'shared'
@@ -21,7 +22,8 @@ export function ProfileClient({ username }: { username: string }) {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
-  const postPage = Math.max(1, Number(searchParams.get('page')) || 1)
+  const hydrated = useHydrated()
+  const postPage = Math.max(1, Math.floor(Number(searchParams.get('page')) || 1))
 
   const userQuery = useQuery({
     queryKey: ['user', username],
@@ -82,7 +84,7 @@ export function ProfileClient({ username }: { username: string }) {
   }
 
   const user = userQuery.data
-  const isSelf = !!currentUser && currentUser.id === user.id
+  const isSelf = hydrated && !!currentUser && currentUser.id === user.id
 
   const goPage = (n: number) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -126,7 +128,7 @@ export function ProfileClient({ username }: { username: string }) {
                     编辑资料
                   </Link>
                 </Button>
-              ) : token ? (
+              ) : hydrated && token ? (
                 <Button
                   size="sm"
                   variant={user.isFollowing ? 'outline' : 'default'}

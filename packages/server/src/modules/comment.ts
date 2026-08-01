@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { mapComment } from '../lib/mappers.js'
 import { createNotification } from '../lib/notification.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
+import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Comment, Paginated } from 'shared'
@@ -45,12 +46,10 @@ function markLiked(nodes: Comment[], likedSet: Set<string>): void {
 
 // 获取帖子的评论列表（树形，分页根评论）
 // GET /api/posts/:id/comments
-comment.use('/posts/:id/comments', optionalAuthMiddleware)
-comment.get('/posts/:id/comments', async (c) => {
+comment.get('/posts/:id/comments', optionalAuthMiddleware, async (c) => {
   const postId = c.req.param('id') as string
   const currentUserId = getCurrentUserId(c)
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+  const { page, pageSize } = parsePagination(c)
 
   const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } })
   if (!post) {
@@ -113,7 +112,7 @@ comment.get('/posts/:id/comments', async (c) => {
 // POST /api/posts/:id/comments
 comment.post('/posts/:id/comments', authMiddleware, async (c) => {
   const postId = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
   const body = await c.req.json().catch(() => null)
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) {
@@ -171,7 +170,7 @@ comment.post('/posts/:id/comments', authMiddleware, async (c) => {
 // DELETE /api/comments/:id
 comment.delete('/comments/:id', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.comment.findUnique({ where: { id }, select: { authorId: true } })
   if (!existing) {
@@ -189,7 +188,7 @@ comment.delete('/comments/:id', authMiddleware, async (c) => {
 // POST /api/comments/:id/like
 comment.post('/comments/:id/like', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.comment.findUnique({ where: { id }, select: { id: true } })
   if (!existing) {
@@ -199,7 +198,7 @@ comment.post('/comments/:id/like', authMiddleware, async (c) => {
   const already = await prisma.commentLike.findUnique({ where: { commentId_userId: { commentId: id, userId } } })
   if (already) {
     const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
-    return c.json({ ok: true, liked: true, likeCount: c2!.likeCount })
+    return c.json({ ok: true, liked: true, likeCount: c2?.likeCount ?? 0 })
   }
 
   // 捕获并发下的唯一约束冲突（P2002），当作「已点赞」处理
@@ -212,7 +211,7 @@ comment.post('/comments/:id/like', authMiddleware, async (c) => {
   } catch (e) {
     if (isUniqueConstraintError(e)) {
       const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
-      return c.json({ ok: true, liked: true, likeCount: c2!.likeCount })
+      return c.json({ ok: true, liked: true, likeCount: c2?.likeCount ?? 0 })
     }
     throw e
   }
@@ -222,7 +221,7 @@ comment.post('/comments/:id/like', authMiddleware, async (c) => {
 // DELETE /api/comments/:id/like
 comment.delete('/comments/:id/like', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.comment.findUnique({ where: { id }, select: { id: true } })
   if (!existing) {
@@ -236,15 +235,16 @@ comment.delete('/comments/:id/like', authMiddleware, async (c) => {
 
   if (result.count === 0) {
     const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
-    return c.json({ ok: true, liked: false, likeCount: c2!.likeCount })
+    return c.json({ ok: true, liked: false, likeCount: c2?.likeCount ?? 0 })
   }
 
-  const updated = await prisma.comment.update({
-    where: { id },
+  // 用 updateMany + gt:0 条件防止 likeCount 减为负数
+  await prisma.comment.updateMany({
+    where: { id, likeCount: { gt: 0 } },
     data: { likeCount: { decrement: 1 } },
-    select: { likeCount: true },
   })
-  return c.json({ ok: true, liked: false, likeCount: updated.likeCount })
+  const c2 = await prisma.comment.findUnique({ where: { id }, select: { likeCount: true } })
+  return c.json({ ok: true, liked: false, likeCount: c2?.likeCount ?? 0 })
 })
 
 export default comment

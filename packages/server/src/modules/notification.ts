@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { prisma } from '../db.js'
+import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Notification as NotificationType, Paginated } from 'shared'
@@ -26,9 +27,8 @@ function mapNotification(
 // 获取当前用户的通知列表
 // GET /api/notifications
 notification.get('/notifications', authMiddleware, async (c) => {
-  const userId = c.get('user').userId
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+  const userId = c.get('user')!.userId
+  const { page, pageSize } = parsePagination(c)
 
   const [rows, total] = await Promise.all([
     prisma.notification.findMany({
@@ -67,7 +67,7 @@ notification.get('/notifications', authMiddleware, async (c) => {
 // 获取未读通知数量
 // GET /api/notifications/unread-count
 notification.get('/notifications/unread-count', authMiddleware, async (c) => {
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
   const count = await prisma.notification.count({
     where: { userId, read: false },
   })
@@ -78,7 +78,7 @@ notification.get('/notifications/unread-count', authMiddleware, async (c) => {
 // POST /api/notifications/:id/read
 notification.post('/notifications/:id/read', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.notification.findUnique({ where: { id }, select: { userId: true } })
   if (!existing) {
@@ -98,7 +98,7 @@ notification.post('/notifications/:id/read', authMiddleware, async (c) => {
 // 全部标记为已读
 // POST /api/notifications/read-all
 notification.post('/notifications/read-all', authMiddleware, async (c) => {
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   await prisma.notification.updateMany({
     where: { userId, read: false },

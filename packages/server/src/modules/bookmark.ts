@@ -3,6 +3,7 @@ import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
 import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
+import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import type { Paginated, Post } from 'shared'
@@ -13,7 +14,7 @@ const bookmark = new Hono<AppEnv>()
 // POST /api/posts/:id/bookmark
 bookmark.post('/posts/:id/bookmark', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.post.findUnique({ where: { id }, select: { id: true } })
   if (!existing) {
@@ -42,7 +43,7 @@ bookmark.post('/posts/:id/bookmark', authMiddleware, async (c) => {
 // DELETE /api/posts/:id/bookmark
 bookmark.delete('/posts/:id/bookmark', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.post.findUnique({ where: { id }, select: { id: true } })
   if (!existing) {
@@ -60,9 +61,8 @@ bookmark.delete('/posts/:id/bookmark', authMiddleware, async (c) => {
 // 获取当前用户的收藏列表
 // GET /api/bookmarks
 bookmark.get('/bookmarks', authMiddleware, async (c) => {
-  const userId = c.get('user').userId
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+  const userId = c.get('user')!.userId
+  const { page, pageSize } = parsePagination(c)
 
   const [rows, total] = await Promise.all([
     prisma.post.findMany({

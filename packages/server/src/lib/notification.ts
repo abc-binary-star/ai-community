@@ -26,17 +26,17 @@ export async function createNotification(input: CreateNotificationInput): Promis
   if (input.actorId && input.actorId === input.userId) return
 
   try {
-    // 对于 like 类型，检查是否已存在相同的通知（取消点赞后再点赞不应重复创建）
-    if (input.type === 'like' && input.actorId && input.postId) {
-      const existing = await prisma.notification.findFirst({
-        where: {
-          userId: input.userId,
-          actorId: input.actorId,
-          postId: input.postId,
-          type: 'like',
-        },
-        select: { id: true },
-      })
+    // 对于 like 和 follow 类型，检查是否已存在相同的通知（防重复）
+    // - like: 取消点赞后再点赞不应重复创建
+    // - follow: 取关后再关注不应重复创建
+    if ((input.type === 'like' || input.type === 'follow') && input.actorId) {
+      const where: { userId: string; actorId: string; type: string; postId?: string } = {
+        userId: input.userId,
+        actorId: input.actorId,
+        type: input.type,
+      }
+      if (input.postId) where.postId = input.postId
+      const existing = await prisma.notification.findFirst({ where, select: { id: true } })
       if (existing) return
     }
 

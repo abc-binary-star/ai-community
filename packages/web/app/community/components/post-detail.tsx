@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useHydrated } from '@/lib/use-hydrated'
 import { formatRelativeTime, getInitials } from '@/lib/utils'
 import { CHANNEL_LABELS, type Comment, type Post } from 'shared'
 import { CommentTree } from './comment-tree'
@@ -25,6 +26,7 @@ export function PostDetailView({ id }: { id: string }) {
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
+  const hydrated = useHydrated()
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
 
   const postQuery = useQuery({
@@ -93,7 +95,7 @@ export function PostDetailView({ id }: { id: string }) {
   }
 
   const post = postQuery.data
-  const isAuthor = !!user && user.id === post.author.id
+  const isAuthor = hydrated && !!user && user.id === post.author.id
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -163,7 +165,7 @@ export function PostDetailView({ id }: { id: string }) {
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">评论 {post.commentCount > 0 ? `· ${post.commentCount}` : ''}</h2>
 
-        {token ? (
+        {hydrated && token ? (
           <CommentForm
             postId={id}
             replyTo={replyTo}

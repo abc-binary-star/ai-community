@@ -17,6 +17,7 @@ import {
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useHydrated } from '@/lib/use-hydrated'
 import { toast } from 'sonner'
 import type { Notification, Paginated } from 'shared'
 
@@ -38,6 +39,7 @@ export function NotificationBell() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
+  const hydrated = useHydrated()
   const [isOpen, setIsOpen] = useState(false)
 
   const unreadQuery = useQuery({
@@ -67,7 +69,7 @@ export function NotificationBell() {
   const unreadCount = unreadQuery.data?.count ?? 0
   const latest = notificationsQuery.data?.items ?? []
 
-  if (!token) return null
+  if (!hydrated || !token) return null
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>

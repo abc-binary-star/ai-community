@@ -126,7 +126,7 @@ auth.post('/refresh', async (c) => {
 
 // 获取当前登录用户
 auth.get('/me', authMiddleware, async (c) => {
-  const user = await prisma.user.findUnique({ where: { id: c.get('user').userId } })
+  const user = await prisma.user.findUnique({ where: { id: c.get('user')!.userId } })
   if (!user) {
     return c.json({ error: '用户不存在' }, 404)
   }

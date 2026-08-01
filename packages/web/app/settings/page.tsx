@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useHydrated } from '@/lib/use-hydrated'
 import { Navbar } from '@/app/community/components/navbar'
 import { getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const token = useAuthStore((s) => s.token)
+  const hydrated = useHydrated()
 
   const [avatar, setAvatar] = useState(user?.avatar || '')
   const [displayName, setDisplayName] = useState(user?.displayName || '')
@@ -45,6 +47,19 @@ export default function SettingsPage() {
       toast.error(e.message || '保存失败')
     },
   })
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <Navbar />
+        <div className="container flex-1 py-8">
+          <div className="mx-auto max-w-md py-20 text-center">
+            <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!token || !user) {
     return (

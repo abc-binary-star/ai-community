@@ -6,8 +6,10 @@ import { mapPost } from '../lib/mappers.js'
 import { createNotification } from '../lib/notification.js'
 import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
+import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
+import { CHANNELS } from 'shared'
 import type { Paginated, Post } from 'shared'
 
 const post = new Hono<AppEnv>()
@@ -27,11 +29,11 @@ const updateSchema = z.object({
 })
 
 // 帖子列表
-post.use('/', optionalAuthMiddleware)
-post.get('/', async (c) => {
-  const channel = c.req.query('channel') || 'general'
-  const page = Math.max(1, Math.floor(Number(c.req.query('page')) || 1))
-  const pageSize = Math.min(50, Math.max(1, Math.floor(Number(c.req.query('pageSize')) || 20)))
+post.get('/', optionalAuthMiddleware, async (c) => {
+  const rawChannel = c.req.query('channel') || 'general'
+  // 校验 channel 是否在合法枚举内，非法值回退到 general
+  const channel = CHANNELS.includes(rawChannel) ? rawChannel : 'general'
+  const { page, pageSize } = parsePagination(c)
   const sort = c.req.query('sort') || 'latest'
   const q = c.req.query('q') || ''
   const tag = c.req.query('tag') || ''
@@ -120,8 +122,7 @@ post.get('/', async (c) => {
 })
 
 // 帖子详情（浏览量 +1）
-post.use('/:id', optionalAuthMiddleware)
-post.get('/:id', async (c) => {
+post.get('/:id', optionalAuthMiddleware, async (c) => {
   const id = c.req.param('id') as string
   const currentUserId = getCurrentUserId(c)
 
@@ -176,7 +177,7 @@ post.post('/', authMiddleware, async (c) => {
     return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
   }
   const { title, content, channel, tags } = parsed.data
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const created = await prisma.$transaction(async (tx) => {
     const post = await tx.post.create({
@@ -226,7 +227,7 @@ post.post('/', authMiddleware, async (c) => {
 // 更新帖子
 post.put('/:id', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
   const body = await c.req.json().catch(() => null)
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) {
@@ -260,7 +261,7 @@ post.put('/:id', authMiddleware, async (c) => {
 // 删除帖子
 post.delete('/:id', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.post.findUnique({ where: { id } })
   if (!existing) {
@@ -277,7 +278,7 @@ post.delete('/:id', authMiddleware, async (c) => {
 // 点赞帖子
 post.post('/:id/like', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.post.findUnique({ where: { id }, select: { id: true, authorId: true } })
   if (!existing) {
@@ -287,7 +288,7 @@ post.post('/:id/like', authMiddleware, async (c) => {
   const already = await prisma.postLike.findUnique({ where: { postId_userId: { postId: id, userId } } })
   if (already) {
     const p = await prisma.post.findUnique({ where: { id }, select: { likeCount: true } })
-    return c.json({ ok: true, liked: true, likeCount: p!.likeCount })
+    return c.json({ ok: true, liked: true, likeCount: p?.likeCount ?? 0 })
   }
 
   // 捕获并发下的唯一约束冲突（P2002），当作「已点赞」处理
@@ -309,7 +310,7 @@ post.post('/:id/like', authMiddleware, async (c) => {
   } catch (e) {
     if (isUniqueConstraintError(e)) {
       const p = await prisma.post.findUnique({ where: { id }, select: { likeCount: true } })
-      return c.json({ ok: true, liked: true, likeCount: p!.likeCount })
+      return c.json({ ok: true, liked: true, likeCount: p?.likeCount ?? 0 })
     }
     throw e
   }
@@ -318,7 +319,7 @@ post.post('/:id/like', authMiddleware, async (c) => {
 // 取消点赞帖子
 post.delete('/:id/like', authMiddleware, async (c) => {
   const id = c.req.param('id') as string
-  const userId = c.get('user').userId
+  const userId = c.get('user')!.userId
 
   const existing = await prisma.post.findUnique({ where: { id }, select: { id: true } })
   if (!existing) {
@@ -333,15 +334,16 @@ post.delete('/:id/like', authMiddleware, async (c) => {
   if (result.count === 0) {
     // 并发下已被删除或本就未点赞，幂等返回当前计数
     const p = await prisma.post.findUnique({ where: { id }, select: { likeCount: true } })
-    return c.json({ ok: true, liked: false, likeCount: p!.likeCount })
+    return c.json({ ok: true, liked: false, likeCount: p?.likeCount ?? 0 })
   }
 
-  const updated = await prisma.post.update({
-    where: { id },
+  // 用 updateMany + gt:0 条件防止 likeCount 减为负数
+  const decResult = await prisma.post.updateMany({
+    where: { id, likeCount: { gt: 0 } },
     data: { likeCount: { decrement: 1 } },
-    select: { likeCount: true },
   })
-  return c.json({ ok: true, liked: false, likeCount: updated.likeCount })
+  const p = await prisma.post.findUnique({ where: { id }, select: { likeCount: true } })
+  return c.json({ ok: true, liked: false, likeCount: p?.likeCount ?? 0 })
 })
 
 // 热门标签（按帖子数排序）

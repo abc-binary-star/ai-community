@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useHydrated } from '@/lib/use-hydrated'
 import { Navbar } from '@/app/community/components/navbar'
 import { PostCard } from '@/app/community/components/post-card'
 import { type Paginated, type Post } from 'shared'
@@ -14,6 +15,7 @@ import { type Paginated, type Post } from 'shared'
 export default function BookmarksPage() {
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
+  const hydrated = useHydrated()
   const queryClient = useQueryClient()
 
   const { data, isLoading, isError } = useQuery({
@@ -21,6 +23,19 @@ export default function BookmarksPage() {
     queryFn: () => api.get<Paginated<Post>>('/bookmarks'),
     enabled: !!token,
   })
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <Navbar />
+        <div className="container flex-1 py-8">
+          <div className="mx-auto max-w-md py-20 text-center">
+            <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!token || !user) {
     return (
