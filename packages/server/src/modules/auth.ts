@@ -38,8 +38,10 @@ auth.post('/register', async (c) => {
     return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
   }
   const { username, email, password } = parsed.data
+  // 邮箱归一化为小写，避免大小写不一致导致注册/登录失败
+  const normalizedEmail = email.toLowerCase()
 
-  const exist = await prisma.user.findFirst({ where: { OR: [{ email }, { username }] } })
+  const exist = await prisma.user.findFirst({ where: { OR: [{ email: normalizedEmail }, { username }] } })
   if (exist) {
     return c.json({ error: '用户名或邮箱已被注册' }, 409)
   }
@@ -50,7 +52,7 @@ auth.post('/register', async (c) => {
   // 捕获并发注册同邮箱/用户名的唯一约束冲突（P2002），返回 409
   let user
   try {
-    user = await prisma.user.create({ data: { username, email, password: hashed } })
+    user = await prisma.user.create({ data: { username, email: normalizedEmail, password: hashed } })
   } catch (e) {
     if (isUniqueConstraintError(e)) {
       return c.json({ error: '用户名或邮箱已被注册' }, 409)
@@ -74,8 +76,9 @@ auth.post('/login', async (c) => {
     return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
   }
   const { email, password } = parsed.data
+  const normalizedEmail = email.toLowerCase()
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (!user) {
     // 邮箱不存在时仍执行一次 bcrypt.compare，消除响应时间差异（防邮箱枚举）
     await bcrypt.compare(password, DUMMY_HASH)

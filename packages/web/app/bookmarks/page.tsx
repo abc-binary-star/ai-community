@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bookmark, BookOpen, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import { type Paginated, type Post } from 'shared'
 export default function BookmarksPage() {
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
+  const queryClient = useQueryClient()
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bookmarks'],
@@ -60,7 +61,7 @@ export default function BookmarksPage() {
           ) : data && data.items.length > 0 ? (
             <div className="grid gap-3">
               {data.items.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard key={post.id} post={post} onChanged={() => queryClient.invalidateQueries({ queryKey: ['bookmarks'] })} />
               ))}
             </div>
           ) : (

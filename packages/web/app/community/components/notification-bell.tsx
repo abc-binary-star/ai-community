@@ -59,7 +59,6 @@ export function NotificationBell() {
       queryClient.setQueryData(['notifications-unread-count'], { count: 0 })
       queryClient.invalidateQueries({ queryKey: ['notifications-latest'] })
       toast.success('已全部标为已读')
-      router.push('/notifications')
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '操作失败')
     }

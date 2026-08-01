@@ -45,10 +45,12 @@ export function LikeButton({ target, id, likeCount, liked, size = 'sm', onChange
     setState(next)
     try {
       const res = prev.liked
-        ? await api.del<{ liked: boolean; likeCount: number }>(path)
+        ? await api.del<{ liked: boolean; likeCount: number } | null>(path)
         : await api.post<{ liked: boolean; likeCount: number }>(path)
-      setState({ liked: res.liked, likeCount: res.likeCount })
-      onChanged?.({ liked: res.liked, likeCount: res.likeCount })
+      // 空响应（如 204）时使用乐观更新的值
+      const final = res ?? next
+      setState(final)
+      onChanged?.(final)
     } catch (e) {
       setState(prev) // 回滚
       toast.error(e instanceof ApiError ? e.message : '操作失败')

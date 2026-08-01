@@ -12,7 +12,7 @@ import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { TagBadge } from './tag-badge'
 
-export function PostCard({ post }: { post: Post }) {
+export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args: unknown[]) => void }) {
   const router = useRouter()
 
   return (
@@ -31,7 +31,7 @@ export function PostCard({ post }: { post: Post }) {
         <p className="line-clamp-2 text-sm text-muted-foreground">{truncate(post.content, 160)}</p>
 
         {post.tags && post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
             {post.tags.map((tag) => (
               <TagBadge key={tag} name={tag} size="sm" />
             ))}
@@ -51,10 +51,10 @@ export function PostCard({ post }: { post: Post }) {
               {post.viewCount}
             </span>
             <div className="inline-flex">
-              <BookmarkButton id={post.id} bookmarked={post.bookmarked} />
+              <BookmarkButton id={post.id} bookmarked={post.bookmarked} onChanged={onChanged} />
             </div>
             <div className="inline-flex">
-              <LikeButton target="post" id={post.id} likeCount={post.likeCount} liked={post.liked} />
+              <LikeButton target="post" id={post.id} likeCount={post.likeCount} liked={post.liked} onChanged={onChanged} />
             </div>
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <MessageCircle className="size-3.5" />

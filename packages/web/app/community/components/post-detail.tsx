@@ -189,6 +189,8 @@ export function PostDetailView({ id }: { id: string }) {
             <Loader2 className="animate-spin" />
             加载评论…
           </div>
+        ) : commentsQuery.isError ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">评论加载失败，请稍后重试</p>
         ) : commentsQuery.data && commentsQuery.data.items.length > 0 ? (
           <CommentTree
             comments={commentsQuery.data.items}

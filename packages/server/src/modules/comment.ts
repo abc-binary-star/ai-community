@@ -60,11 +60,11 @@ comment.get('/posts/:id/comments', async (c) => {
   // 根评论总数
   const total = await prisma.comment.count({ where: { postId, parentId: null } })
 
-  // 分页加载根评论
+  // 分页加载根评论（倒序，最新在前）
   const rootRows = await prisma.comment.findMany({
     where: { postId, parentId: null },
     include: { author: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     skip: (page - 1) * pageSize,
     take: pageSize,
   })
@@ -92,8 +92,7 @@ comment.get('/posts/:id/comments', async (c) => {
     }
     // parentId 不为 null 但父评论不在当前页 -> 跳过（属于其他页的根评论的回复）
   }
-  // 根评论按时间倒序
-  roots.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  // DB 已按 createdAt desc 返回，无需内存排序
 
   // 批量查询当前用户的点赞状态并打标
   const allIds = collectIds(roots)

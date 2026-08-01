@@ -81,7 +81,8 @@ post.get('/', async (c) => {
       // 同分按时间倒序
       return b.createdAt.getTime() - a.createdAt.getTime()
     })
-    total = allRows.length
+    // 单独 count 获取真实总数，避免被 take:500 截断导致分页元数据错误
+    total = await prisma.post.count({ where })
     const start = (page - 1) * pageSize
     rows = allRows.slice(start, start + pageSize)
   } else {
