@@ -47,14 +47,14 @@ export function TagBadge({ name, selected = false, onClick, size = 'sm', asLink 
       : `/community?tag=${encodeURIComponent(name)}`
     return (
       <a href={href} className={baseClasses} onClick={onClick}>
-        #{name}
+        {name}
       </a>
     )
   }
 
   return (
     <button type="button" className={baseClasses} onClick={handleClick}>
-      #{name}
+      {name}
     </button>
   )
 }
