@@ -26,9 +26,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
   if (input.actorId && input.actorId === input.userId) return
 
   try {
-    // 对于 like 和 follow 类型，检查是否已存在相同的通知（防重复）
-    // - like: 取消点赞后再点赞不应重复创建
-    // - follow: 取关后再关注不应重复创建
+    // 对于 like/follow 类型，检查是否已存在相同的通知（取消后再操作不应重复创建）
     if ((input.type === 'like' || input.type === 'follow') && input.actorId) {
       const where: { userId: string; actorId: string; type: string; postId?: string } = {
         userId: input.userId,

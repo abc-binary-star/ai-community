@@ -1,34 +1,19 @@
 'use client'
 
-import { Suspense, type ReactNode } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell, CheckCheck, ChevronLeft, ChevronRight, Heart, Loader2, MessageCircle, Reply, UserPlus, AtSign } from 'lucide-react'
+import { Bell, CheckCheck, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { Navbar } from '@/app/community/components/navbar'
 import { cn, formatRelativeTime } from '@/lib/utils'
+import { TYPE_ICON, TYPE_LABEL } from '@/lib/notification-meta'
 import { toast } from 'sonner'
 import type { Notification, Paginated } from 'shared'
-
-const TYPE_ICON: Record<Notification['type'], ReactNode> = {
-  comment: <MessageCircle className="size-4 text-sky-500" />,
-  like: <Heart className="size-4 text-rose-500" />,
-  follow: <UserPlus className="size-4 text-emerald-500" />,
-  reply: <Reply className="size-4 text-amber-500" />,
-  mention: <AtSign className="size-4 text-violet-500" />,
-}
-
-const TYPE_LABEL: Record<Notification['type'], string> = {
-  comment: '评论了你的帖子',
-  like: '点赞了你的帖子',
-  follow: '关注了你',
-  reply: '回复了你的评论',
-  mention: '在帖子中提及了你',
-}
 
 function NotificationsContent() {
   const router = useRouter()
