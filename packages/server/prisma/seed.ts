@@ -27,9 +27,9 @@ async function main() {
   })
   const p2 = await prisma.post.create({
     data: {
-      title: 'SRPG 关卡设计交流',
-      content: '聊聊 SRPG 的关卡节奏、地形设计与数值平衡，欢迎讨论。',
-      channel: 'gaming',
+      title: '如何用 AI 提升社区内容质量',
+      content: '聊聊 AI 在社区内容审核、标签推荐、智能问答等场景的落地实践，欢迎讨论。',
+      channel: 'tech',
       authorId: bob.id,
     },
   })
@@ -40,7 +40,7 @@ async function main() {
   await prisma.comment.create({
     data: { content: '谢谢支持～', postId: p1.id, authorId: alice.id, parentId: c1.id },
   })
-  await prisma.comment.create({ data: { content: '地形设计是关键。', postId: p2.id, authorId: alice.id } })
+  await prisma.comment.create({ data: { content: 'AI 标签推荐确实很实用。', postId: p2.id, authorId: alice.id } })
 
   console.log('✅ seed 完成')
 }
