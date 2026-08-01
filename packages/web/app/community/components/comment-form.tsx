@@ -4,9 +4,9 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import type { Comment } from 'shared'
+import { MentionTextarea } from './mention-textarea'
 
 export function CommentForm({
   postId,
@@ -53,9 +53,9 @@ export function CommentForm({
           </button>
         </div>
       )}
-      <Textarea
+      <MentionTextarea
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={setContent}
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             e.preventDefault()
@@ -63,7 +63,7 @@ export function CommentForm({
           }
         }}
         rows={3}
-        placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论…'}
+        placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论，输入 @ 提及用户…'}
       />
       <div className="flex justify-end">
         <Button onClick={submit} disabled={submitting || !content.trim()}>

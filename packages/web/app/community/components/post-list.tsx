@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Loader2, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { PostCard } from './post-card'
 import { SortTabs } from './sort-tabs'
@@ -62,37 +63,40 @@ export function PostListPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{CHANNEL_LABELS[channel] || channel}</h1>
-          <p className="text-sm text-muted-foreground">分享与讨论</p>
+    <div className="flex gap-8">
+      {/* 主栏：帖子列表 */}
+      <div className="min-w-0 flex-1 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">{CHANNEL_LABELS[channel] || channel}</h1>
+            <p className="text-sm text-muted-foreground">分享与讨论</p>
+          </div>
+          <Button asChild size="sm" className="hidden sm:inline-flex">
+            <Link href="/community/post/new">
+              <PenLine />
+              发帖
+            </Link>
+          </Button>
         </div>
-        <Button asChild size="sm">
-          <Link href="/community/post/new">
-            <PenLine />
-            发帖
-          </Link>
-        </Button>
-      </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SortTabs current={sort} />
-        <div className="w-full sm:w-64">
-          <SearchBar value={q} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <SortTabs current={sort} />
+          <div className="w-full sm:w-64">
+            <SearchBar value={q} />
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <span className="shrink-0 text-xs font-medium text-muted-foreground">热门标签</span>
-        <div className="flex gap-1.5">
-          {hotTags.map((t) => (
-            <TagBadge key={t} name={t} selected={tag === t} size="sm" />
-          ))}
+        {/* 移动端：热门标签横向滚动 */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:hidden">
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">热门标签</span>
+          <div className="flex gap-1.5">
+            {hotTags.map((t) => (
+              <TagBadge key={t} name={t} selected={tag === t} size="sm" />
+            ))}
+          </div>
         </div>
-      </div>
 
-      {isLoading ? (
+        {isLoading ? (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
           <Loader2 className="animate-spin" />
           加载中…
@@ -134,6 +138,34 @@ export function PostListPage({
           </Button>
         </div>
       )}
+      </div>
+
+      {/* 侧边栏 */}
+      <aside className="hidden w-72 shrink-0 space-y-6 lg:block">
+        <Card className="bg-primary/5">
+          <div className="space-y-3 p-5">
+            <p className="text-sm font-medium">有想法想分享？</p>
+            <p className="text-xs text-muted-foreground">发表帖子，加入社区讨论</p>
+            <Button asChild size="sm" className="w-full">
+              <Link href="/community/post/new">
+                <PenLine />
+                发布新帖
+              </Link>
+            </Button>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="space-y-3 p-5">
+            <h3 className="text-sm font-semibold">热门标签</h3>
+            <div className="flex flex-wrap gap-2">
+              {hotTags.map((t) => (
+                <TagBadge key={t} name={t} selected={tag === t} size="sm" />
+              ))}
+            </div>
+          </div>
+        </Card>
+      </aside>
     </div>
   )
 }

@@ -10,6 +10,20 @@ import type { Paginated, Post } from 'shared'
 
 const user = new Hono<AppEnv>()
 
+// 搜索用户（用于 @提及）
+// GET /api/users/search?q=xxx
+user.get('/search', authMiddleware, async (c) => {
+  const q = c.req.query('q') || ''
+  if (q.length < 1) return c.json({ items: [] })
+
+  const users = await prisma.user.findMany({
+    where: { username: { contains: q, mode: 'insensitive' } },
+    select: { id: true, username: true, avatar: true },
+    take: 10,
+  })
+  return c.json({ items: users })
+})
+
 const updateSchema = z.object({
   displayName: z.string().max(30).nullable().optional(),
   bio: z.string().max(500).nullable().optional(),

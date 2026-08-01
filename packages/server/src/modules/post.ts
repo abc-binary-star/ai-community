@@ -3,13 +3,14 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../db.js'
 import { mapPost } from '../lib/mappers.js'
-import { createNotification } from '../lib/notification.js'
+import { createNotification, createMentionNotifications } from '../lib/notification.js'
 import { getLikedPostIds, getBookmarkedPostIds, extractTags } from '../lib/post-helpers.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
 import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
 import type { AppEnv } from '../types.js'
 import { CHANNELS } from 'shared'
+import { suggestTags } from '../lib/ai-tags.js'
 import type { Paginated, Post } from 'shared'
 
 const post = new Hono<AppEnv>()
@@ -212,6 +213,9 @@ post.post('/', authMiddleware, async (c) => {
     return c.json({ error: '创建失败' }, 500)
   }
 
+  // 解析帖子内容中的 @提及，创建 mention 通知
+  await createMentionNotifications(content, userId, created.id)
+
   return c.json(
     {
       ...mapPost(created),
@@ -244,11 +248,16 @@ post.put('/:id', authMiddleware, async (c) => {
 
   const updated = await prisma.post.update({
     where: { id },
-    data: { title: parsed.data.title, content: parsed.data.content },
+    data: { title: parsed.data.title, content: parsed.data.content, edited: true },
     include: { author: true, tags: { include: { tag: true } }, _count: { select: { comments: true } } },
   })
   const liked = !!(await prisma.postLike.findUnique({ where: { postId_userId: { postId: id, userId } }, select: { id: true } }))
   const bookmarked = !!(await prisma.bookmark.findUnique({ where: { postId_userId: { postId: id, userId } }, select: { id: true } }))
+
+  // 解析编辑后内容中的 @提及
+  if (parsed.data.content) {
+    await createMentionNotifications(parsed.data.content, userId, id)
+  }
   return c.json({
     ...mapPost(updated),
     commentCount: updated._count.comments,
@@ -362,6 +371,29 @@ post.get('/tags/popular', async (c) => {
     .filter((t) => t._count.posts > 0)
     .map((t) => ({ name: t.name, postCount: t._count.posts }))
   return c.json({ items })
+})
+
+// AI 标签推荐
+// POST /api/posts/suggest-tags
+const suggestSchema = z.object({
+  title: z.string().min(1, '标题不能为空').max(200),
+  content: z.string().min(1, '内容不能为空').max(5000),
+})
+
+post.post('/suggest-tags', authMiddleware, async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = suggestSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
+  }
+
+  try {
+    const tags = await suggestTags(parsed.data.title, parsed.data.content)
+    return c.json({ tags })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'AI 服务不可用'
+    return c.json({ error: msg }, 503)
+  }
 })
 
 export default post

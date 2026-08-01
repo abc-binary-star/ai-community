@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, BellOff, CheckCheck, Loader2, MessageCircle, Heart, UserPlus, Reply } from 'lucide-react'
+import { Bell, BellOff, CheckCheck, Loader2, MessageCircle, Heart, UserPlus, Reply, AtSign } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ const TYPE_ICON: Record<Notification['type'], ReactNode> = {
   like: <Heart className="size-4 text-rose-500" />,
   follow: <UserPlus className="size-4 text-emerald-500" />,
   reply: <Reply className="size-4 text-amber-500" />,
+  mention: <AtSign className="size-4 text-violet-500" />,
 }
 
 const TYPE_LABEL: Record<Notification['type'], string> = {
@@ -33,6 +34,7 @@ const TYPE_LABEL: Record<Notification['type'], string> = {
   like: '点赞了你的帖子',
   follow: '关注了你',
   reply: '回复了你的评论',
+  mention: '在帖子中提及了你',
 }
 
 export function NotificationBell() {

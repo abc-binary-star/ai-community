@@ -19,6 +19,22 @@ export function formatRelativeTime(date: string | Date): string {
   return `${Math.floor(diff / 31536000)} 年前`
 }
 
+// 编辑时间格式化：今天显示 HH:mm，昨天显示"昨天"，更早显示"X 天前"
+export function formatEditedTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const targetStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const dayDiff = Math.round((todayStart.getTime() - targetStart.getTime()) / 86400000)
+  if (dayDiff === 0) {
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${hh}:${mm}`
+  }
+  if (dayDiff === 1) return '昨天'
+  return `${dayDiff} 天前`
+}
+
 // 取用户名首字符（用于头像 fallback）
 export function getInitials(name: string): string {
   return (name || '?').trim().slice(0, 2).toUpperCase()

@@ -6,15 +6,15 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
+import { MentionTextarea } from '@/app/community/components/mention-textarea'
 
 const schema = z.object({
   title: z.string().min(1, '请输入标题').max(100, '标题最多 100 字'),
@@ -28,18 +28,19 @@ export default function NewPostPage() {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
   const [tagsInput, setTagsInput] = useState('')
+  const [suggesting, setSuggesting] = useState(false)
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { channel: 'general' },
   })
 
-  // 登录态前置检查：未登录跳 /login（携带 redirect 以便登录后回到发帖页）
   useEffect(() => {
     if (!token) {
       router.replace(`/login?redirect=${encodeURIComponent('/community/post/new')}`)
@@ -47,6 +48,33 @@ export default function NewPostPage() {
   }, [token, router])
 
   const selectedChannel = watch('channel')
+
+  // AI 生成标签
+  const handleSuggestTags = async () => {
+    const title = getValues('title')
+    const content = getValues('content')
+    if (!title || !content) {
+      toast.error('请先填写标题和内容')
+      return
+    }
+    setSuggesting(true)
+    try {
+      const data = await api.post<{ tags: string[] }>('/posts/suggest-tags', { title, content })
+      if (data.tags.length === 0) {
+        toast.error('未能生成标签，请手动输入')
+        return
+      }
+      // 合并已有标签和 AI 标签，去重，最多 5 个
+      const existing = tagsInput.split(/[,，\s]+/).map((t) => t.trim()).filter(Boolean)
+      const merged = [...new Set([...existing, ...data.tags])].slice(0, 5)
+      setTagsInput(merged.join(', '))
+      toast.success(`AI 生成了 ${data.tags.length} 个标签`)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'AI 生成失败，请手动输入')
+    } finally {
+      setSuggesting(false)
+    }
+  }
 
   const onSubmit = async (values: FormValues) => {
     const tags = tagsInput
@@ -63,7 +91,6 @@ export default function NewPostPage() {
     }
   }
 
-  // 未登录时不渲染表单，避免用户填完才被拒
   if (!token) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -109,11 +136,30 @@ export default function NewPostPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="content">内容</Label>
-              <Textarea id="content" rows={10} placeholder="分享你的想法（支持纯文本）" {...register('content')} />
+              <MentionTextarea
+                id="content"
+                rows={10}
+                placeholder="分享你的想法，输入 @ 可以提及用户"
+                value={watch('content') || ''}
+                onChange={(val) => setValue('content', val, { shouldValidate: true })}
+              />
               {errors.content && <p className="text-xs text-destructive">{errors.content.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tags">标签</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="tags">标签</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  disabled={suggesting}
+                  onClick={handleSuggestTags}
+                >
+                  {suggesting ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                  {suggesting ? '生成中…' : 'AI 生成标签'}
+                </Button>
+              </div>
               <Input
                 id="tags"
                 placeholder="用逗号或空格分隔，最多 5 个标签"

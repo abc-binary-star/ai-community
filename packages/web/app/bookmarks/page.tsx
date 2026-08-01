@@ -58,7 +58,7 @@ export default function BookmarksPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
       <div className="container flex-1 py-8">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="mx-auto max-w-4xl space-y-6">
           <div className="flex items-center gap-2">
             <BookOpen className="size-6 text-primary" />
             <h1 className="text-2xl font-semibold">我的收藏</h1>

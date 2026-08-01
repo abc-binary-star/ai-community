@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { mapComment } from '../lib/mappers.js'
-import { createNotification } from '../lib/notification.js'
+import { createNotification, createMentionNotifications } from '../lib/notification.js'
 import { isUniqueConstraintError } from '../lib/prisma-error.js'
 import { parsePagination } from '../lib/pagination.js'
 import { authMiddleware, optionalAuthMiddleware, getCurrentUserId } from '../middleware/auth.js'
@@ -163,7 +163,45 @@ comment.post('/posts/:id/comments', authMiddleware, async (c) => {
     })
   }
 
+  // 解析评论内容中的 @提及
+  await createMentionNotifications(content, userId, postId, created.id)
+
   return c.json({ ...mapComment(created), liked: false }, 201)
+})
+
+const updateCommentSchema = z.object({
+  content: z.string().min(1, '评论内容不能为空').max(5000, '评论内容过长'),
+})
+
+// 编辑评论（仅作者）
+// PUT /api/comments/:id
+comment.put('/comments/:id', authMiddleware, async (c) => {
+  const id = c.req.param('id') as string
+  const userId = c.get('user')!.userId
+  const body = await c.req.json().catch(() => null)
+  const parsed = updateCommentSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: '输入不合法', details: parsed.error.flatten() }, 400)
+  }
+
+  const existing = await prisma.comment.findUnique({ where: { id }, select: { authorId: true, postId: true } })
+  if (!existing) {
+    return c.json({ error: '评论不存在' }, 404)
+  }
+  if (existing.authorId !== userId) {
+    return c.json({ error: '无权修改他人的评论' }, 403)
+  }
+
+  const updated = await prisma.comment.update({
+    where: { id },
+    data: { content: parsed.data.content, edited: true },
+    include: { author: true },
+  })
+
+  // 解析编辑后内容中的 @提及
+  await createMentionNotifications(parsed.data.content, userId, existing.postId, id)
+
+  return c.json({ ...mapComment(updated), liked: false })
 })
 
 // 删除评论（仅作者；级联删除其回复和点赞）

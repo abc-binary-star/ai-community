@@ -69,6 +69,7 @@ export function mapPost(p: PostWithAuthor): Post {
     viewCount: p.viewCount,
     liked: false,
     bookmarked: false,
+    edited: p.edited,
     tags: [],
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -86,6 +87,7 @@ export function mapComment(c: CommentWithAuthor): Comment {
     replies: [],
     likeCount: c.likeCount,
     liked: false,
+    edited: c.edited,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   }

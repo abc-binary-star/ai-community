@@ -8,7 +8,7 @@ const config: Config = {
     container: {
       center: true,
       padding: '1.5rem',
-      screens: { '2xl': '1120px' },
+      screens: { '2xl': '1400px' },
     },
     extend: {
       colors: {

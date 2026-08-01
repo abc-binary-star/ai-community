@@ -54,11 +54,11 @@ export function ProfileClient({ username }: { username: string }) {
       }
       return { prev }
     },
-    onError: (e: ApiError, _, context) => {
+    onError: (e: unknown, _, context) => {
       if (context?.prev) {
         queryClient.setQueryData(['user', username], context.prev)
       }
-      toast.error(e.message || '操作失败')
+      toast.error(e instanceof ApiError ? e.message : '操作失败')
     },
   })
 
@@ -93,7 +93,7 @@ export function ProfileClient({ username }: { username: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <Card>
         <div className="p-6">
           <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">

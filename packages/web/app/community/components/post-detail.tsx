@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Eye, Loader2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Eye, Loader2, Pencil, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,8 @@ import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
-import { formatRelativeTime, getInitials } from '@/lib/utils'
+import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
+import { renderContentWithMentions } from '@/lib/mention'
 import { CHANNEL_LABELS, type Comment, type Post } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
@@ -84,9 +85,13 @@ export function PostDetailView({ id }: { id: string }) {
     )
   }
   if (postQuery.isError || !postQuery.data) {
+    const err = postQuery.error
+    const errMsg = err instanceof ApiError
+      ? (err.status === 404 ? '帖子不存在' : err.message)
+      : '加载失败，请检查网络后重试'
     return (
       <div className="py-20 text-center">
-        <p className="text-muted-foreground">帖子不存在或加载失败</p>
+        <p className="text-muted-foreground">{errMsg}</p>
         <Button asChild variant="outline" className="mt-4">
           <Link href="/community">返回社区</Link>
         </Button>
@@ -98,7 +103,7 @@ export function PostDetailView({ id }: { id: string }) {
   const isAuthor = hydrated && !!user && user.id === post.author.id
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.back()}>
         <ArrowLeft />
         返回
@@ -134,15 +139,24 @@ export function PostDetailView({ id }: { id: string }) {
               <span className="text-sm font-medium">{post.author.username}</span>
             </div>
             {isAuthor && (
-              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeletePost}>
-                <Trash2 />
-                删除帖子
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => router.push(`/community/post/${id}/edit`)}>
+                  <Pencil />
+                  编辑
+                </Button>
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeletePost}>
+                  <Trash2 />
+                  删除帖子
+                </Button>
+              </div>
             )}
           </div>
           <div className="whitespace-pre-wrap break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
-            {post.content}
+            {renderContentWithMentions(post.content)}
           </div>
+          {post.edited && (
+            <p className="text-xs text-muted-foreground">已编辑于 {formatEditedTime(post.updatedAt)}</p>
+          )}
           <div className="flex items-center gap-2 border-t border-border pt-3">
             <LikeButton
               target="post"

@@ -34,6 +34,7 @@ export interface Post {
   viewCount: number
   liked: boolean
   bookmarked: boolean
+  edited: boolean
   tags: string[]
   createdAt: string
   updatedAt: string
@@ -49,6 +50,7 @@ export interface Comment {
   replies: Comment[]
   likeCount: number
   liked: boolean
+  edited: boolean
   createdAt: string
   updatedAt: string
 }
@@ -75,7 +77,7 @@ export interface Tag {
 
 export interface Notification {
   id: string
-  type: 'comment' | 'like' | 'follow' | 'reply'
+  type: 'comment' | 'like' | 'follow' | 'reply' | 'mention'
   actorId: string | null
   actorName: string | null
   postId: string | null

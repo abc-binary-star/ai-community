@@ -1,7 +1,7 @@
 import { prisma } from '../db.js'
 
 // 通知类型：与 shared 的 Notification['type'] 保持一致
-export type NotificationType = 'comment' | 'like' | 'follow' | 'reply'
+export type NotificationType = 'comment' | 'like' | 'follow' | 'reply' | 'mention'
 
 interface CreateNotificationInput {
   // 通知接收者（被动作触发的用户）
@@ -53,5 +53,45 @@ export async function createNotification(input: CreateNotificationInput): Promis
   } catch (e) {
     // 通知创建失败不应影响主流程，仅记录错误
     console.error('创建通知失败:', e)
+  }
+}
+
+// 从文本中解析 @username 提及
+// 匹配 @ 后跟 2-20 个字母、数字、下划线或中文字符
+const MENTION_REGEX = /@([a-zA-Z0-9_\u4e00-\u9fff]{2,20})/g
+
+export function parseMentions(content: string): string[] {
+  const matches = new Set<string>()
+  let match: RegExpExecArray | null
+  while ((match = MENTION_REGEX.exec(content)) !== null) {
+    matches.add(match[1])
+  }
+  return [...matches]
+}
+
+// 解析内容中的 @提及并为每个被提及的用户创建 mention 通知
+export async function createMentionNotifications(
+  content: string,
+  actorId: string,
+  postId: string,
+  commentId?: string,
+): Promise<void> {
+  const usernames = parseMentions(content)
+  if (usernames.length === 0) return
+
+  const users = await prisma.user.findMany({
+    where: { username: { in: usernames } },
+    select: { id: true },
+  })
+
+  for (const u of users) {
+    await createNotification({
+      userId: u.id,
+      type: 'mention',
+      actorId,
+      postId,
+      commentId,
+      content: content.length > 50 ? content.slice(0, 50) + '…' : content,
+    })
   }
 }

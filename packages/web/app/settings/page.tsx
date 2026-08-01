@@ -43,8 +43,8 @@ export default function SettingsPage() {
       toast.success('资料已更新')
       router.refresh()
     },
-    onError: (e: ApiError) => {
-      toast.error(e.message || '保存失败')
+    onError: (e: unknown) => {
+      toast.error(e instanceof ApiError ? e.message : '保存失败')
     },
   })
 

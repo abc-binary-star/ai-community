@@ -62,6 +62,11 @@ function redirectToLogin() {
   }
 }
 
+// 认证相关接口的 401 是"密码错误"而非"会话过期"，不应触发 refresh/redirect
+function isAuthEndpoint(path: string): boolean {
+  return path.startsWith('/auth/login') || path.startsWith('/auth/register')
+}
+
 // 统一 fetch 封装：自动带 token、401 时尝试 refresh 续命，失败再跳登录页
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const makeRequest = async (): Promise<Response> => {
@@ -73,13 +78,18 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
-    return fetch(`${BASE}${path}`, { ...options, headers })
+    try {
+      return await fetch(`${BASE}${path}`, { ...options, headers })
+    } catch {
+      // 网络错误（DNS 失败、CORS、离线等）统一转为 ApiError
+      throw new ApiError('网络连接失败，请检查网络后重试', 0)
+    }
   }
 
   let res = await makeRequest()
 
-  // 401 时尝试用 refresh token 续命，成功后重试原请求
-  if (res.status === 401) {
+  // 认证接口的 401 是"密码错误"，直接走正常错误处理
+  if (res.status === 401 && !isAuthEndpoint(path)) {
     const refreshed = await tryRefresh()
     if (refreshed) {
       res = await makeRequest()
