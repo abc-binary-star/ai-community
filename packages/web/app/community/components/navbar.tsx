@@ -3,7 +3,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Bookmark, ChevronDown, LogOut, PenLine, Settings } from 'lucide-react'
+import { Bookmark, ChevronDown, LogOut, PenLine, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -123,6 +123,14 @@ function NavbarInner() {
                       设置
                     </Link>
                   </DropdownMenuItem>
+                  {(user.role === 'admin' || user.role === 'moderator') && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/community/moderation">
+                        <ShieldCheck />
+                        内容审核
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut />
                     退出登录

@@ -53,6 +53,17 @@ type SuggestTagsReq struct {
 	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
 }
 
+type CreateReportReq struct {
+	TargetType string `json:"targetType" vd:"in($, 'post', 'comment')"`
+	TargetID   string `json:"targetId" vd:"len($)>=1 && len($)<=64"`
+	Reason     string `json:"reason" vd:"len($)>=2 && len($)<=500"`
+}
+
+type HandleReportReq struct {
+	Status string `json:"status" vd:"in($, 'approved', 'rejected')"`
+	Note   string `json:"note" vd:"len($)<=500"`
+}
+
 // --- 响应 DTO ---
 
 type User struct {
@@ -139,6 +150,23 @@ type Notification struct {
 	Content    *string `json:"content"`
 	Read       bool    `json:"read"`
 	CreatedAt  string  `json:"createdAt"`
+}
+
+type Report struct {
+	ID          string      `json:"id"`
+	ReporterID  string      `json:"reporterId"`
+	Reporter    PublicUser  `json:"reporter"`
+	TargetType  string      `json:"targetType"`
+	TargetID    string      `json:"targetId"`
+	TargetTitle string      `json:"targetTitle"`
+	TargetBody  string      `json:"targetBody"`
+	Reason      string      `json:"reason"`
+	Status      string      `json:"status"`
+	HandledBy   *string     `json:"handledBy"`
+	Handler     *PublicUser `json:"handler"`
+	Note        string      `json:"note"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
 }
 
 // SearchComment 搜索结果中的评论

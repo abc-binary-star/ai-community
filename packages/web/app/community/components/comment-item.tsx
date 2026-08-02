@@ -12,6 +12,7 @@ import { MarkdownRenderer } from '@/components/markdown-renderer'
 import type { Comment, Paginated } from 'shared'
 import { LikeButton } from './like-button'
 import { MarkdownEditor } from '@/components/markdown-editor'
+import { ReportButton } from './report-button'
 
 // 清爽评论卡片：浅蓝左边框，嵌套缩进
 export function CommentItem({
@@ -147,6 +148,7 @@ export function CommentItem({
                   回复
                 </Button>
                 <LikeButton target="comment" id={comment.id} likeCount={comment.likeCount} liked={comment.liked} />
+                {!isAuthor && <ReportButton targetType="comment" targetId={comment.id} />}
                 {isAuthor && (
                   <>
                     <Button
