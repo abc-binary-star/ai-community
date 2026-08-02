@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -41,7 +43,7 @@ func (s *AuthService) Register(ctx context.Context, req types.RegisterReq) (*typ
 		Password: string(hashed),
 	}
 	if err := dal.DB.WithContext(ctx).Create(user).Error; err != nil {
-		if strings.Contains(err.Error(), "duplicate key") {
+		if notification.IsUniqueConstraintError(err) {
 			return nil, ErrUserExists
 		}
 		return nil, err
@@ -120,8 +122,8 @@ func (s *AuthService) buildAuthResponse(user *model.User) (*types.AuthResponse, 
 			Avatar:      user.Avatar,
 			Bio:         user.Bio,
 			DisplayName: user.DisplayName,
-			CreatedAt:   user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:   user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),
 		},
 		Token:        token,
 		RefreshToken: refreshToken,

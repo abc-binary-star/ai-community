@@ -64,6 +64,9 @@ func Create(ctx context.Context, input CreateInput) {
 		}
 		if err := query.First(&existing).Error; err == nil {
 			return // 已存在，跳过
+		} else if err != gorm.ErrRecordNotFound {
+			log.Printf("查询已有通知失败: %v", err)
+			return
 		}
 	}
 
@@ -102,7 +105,10 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 	}
 
 	var users []model.User
-	dal.DB.WithContext(ctx).Where("username IN ?", usernames).Select("id").Find(&users)
+	if err := dal.DB.WithContext(ctx).Where("username IN ?", usernames).Select("id").Find(&users).Error; err != nil {
+		log.Printf("查询提及用户失败: %v", err)
+		return
+	}
 
 	cid := ""
 	if len(commentID) > 0 {

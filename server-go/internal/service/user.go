@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/url"
+	"sync"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -111,17 +112,47 @@ func (s *UserService) GetUser(ctx context.Context, username, currentUserId strin
 	}
 
 	var postCount, followerCount, followingCount int64
-	dal.DB.WithContext(ctx).Model(&model.Post{}).Where("author_id = ?", u.ID).Count(&postCount)
-	dal.DB.WithContext(ctx).Model(&model.Follow{}).Where("following_id = ?", u.ID).Count(&followerCount)
-	dal.DB.WithContext(ctx).Model(&model.Follow{}).Where("follower_id = ?", u.ID).Count(&followingCount)
-
 	isFollowing := false
-	if currentUserId != "" {
-		var cnt int64
-		dal.DB.WithContext(ctx).Model(&model.Follow{}).
-			Where("follower_id = ? AND following_id = ?", currentUserId, u.ID).
-			Count(&cnt)
-		isFollowing = cnt > 0
+
+	var wg sync.WaitGroup
+	var postErr, followerErr, followingErr, isFollowingErr error
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+		postErr = dal.DB.WithContext(ctx).Model(&model.Post{}).Where("author_id = ?", u.ID).Count(&postCount).Error
+	}()
+	go func() {
+		defer wg.Done()
+		followerErr = dal.DB.WithContext(ctx).Model(&model.Follow{}).Where("following_id = ?", u.ID).Count(&followerCount).Error
+	}()
+	go func() {
+		defer wg.Done()
+		followingErr = dal.DB.WithContext(ctx).Model(&model.Follow{}).Where("follower_id = ?", u.ID).Count(&followingCount).Error
+	}()
+	go func() {
+		defer wg.Done()
+		if currentUserId != "" {
+			var cnt int64
+			isFollowingErr = dal.DB.WithContext(ctx).Model(&model.Follow{}).
+				Where("follower_id = ? AND following_id = ?", currentUserId, u.ID).
+				Count(&cnt).Error
+			isFollowing = cnt > 0
+		}
+	}()
+	wg.Wait()
+
+	if postErr != nil {
+		return nil, postErr
+	}
+	if followerErr != nil {
+		return nil, followerErr
+	}
+	if followingErr != nil {
+		return nil, followingErr
+	}
+	if isFollowingErr != nil {
+		return nil, isFollowingErr
 	}
 
 	dto := mapper.PublicUserToDTO(&u, int(postCount), int(followerCount), int(followingCount), isFollowing)
@@ -164,10 +195,10 @@ func (s *UserService) GetUserPosts(ctx context.Context, username, currentUserId 
 // UpdateUser 更新当前用户资料
 func (s *UserService) UpdateUser(ctx context.Context, userId string, req types.UpdateUserReq) (*types.User, error) {
 	// 校验
-	if req.DisplayName != nil && len(*req.DisplayName) > 30 {
+	if req.DisplayName != nil && len([]rune(*req.DisplayName)) > 30 {
 		return nil, ErrInvalidInput
 	}
-	if req.Bio != nil && len(*req.Bio) > 500 {
+	if req.Bio != nil && len([]rune(*req.Bio)) > 500 {
 		return nil, ErrInvalidInput
 	}
 	if req.Avatar != nil {
@@ -177,6 +208,8 @@ func (s *UserService) UpdateUser(ctx context.Context, userId string, req types.U
 		}
 	}
 
+	// TODO: 当前 *string 无法区分"未提供"与"设为 null"。
+	// 前端目前不通过 API 清空字段，暂不影响使用。
 	updates := map[string]interface{}{}
 	if req.DisplayName != nil {
 		updates["display_name"] = *req.DisplayName
@@ -290,9 +323,11 @@ func (s *UserService) UnfollowUser(ctx context.Context, username, followerId str
 		return err
 	}
 
-	dal.DB.WithContext(ctx).
+	if err := dal.DB.WithContext(ctx).
 		Where("follower_id = ? AND following_id = ?", followerId, target.ID).
-		Delete(&model.Follow{})
+		Delete(&model.Follow{}).Error; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -529,12 +564,16 @@ func (s *UserService) UnbookmarkPost(ctx context.Context, postID, userId string)
 		return 0, err
 	}
 
-	dal.DB.WithContext(ctx).
+	if err := dal.DB.WithContext(ctx).
 		Where("post_id = ? AND user_id = ?", postID, userId).
-		Delete(&model.Bookmark{})
+		Delete(&model.Bookmark{}).Error; err != nil {
+		return 0, err
+	}
 
 	var count int64
-	dal.DB.WithContext(ctx).Model(&model.Bookmark{}).Where("post_id = ?", postID).Count(&count)
+	if err := dal.DB.WithContext(ctx).Model(&model.Bookmark{}).Where("post_id = ?", postID).Count(&count).Error; err != nil {
+		return 0, err
+	}
 	return int(count), nil
 }
 

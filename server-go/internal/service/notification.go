@@ -19,16 +19,20 @@ type NotificationService struct{}
 // ListNotifications 获取当前用户的通知列表
 func (s *NotificationService) ListNotifications(ctx context.Context, userID string, page, pageSize int) (*types.Paginated[types.Notification], error) {
 	var total int64
-	dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID).Count(&total)
+	if err := dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	offset := (page - 1) * pageSize
 	var rows []model.Notification
-	dal.DB.WithContext(ctx).
+	if err := dal.DB.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
-		Find(&rows)
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
 
 	// 批量获取 actor 用户名
 	actorIDs := make([]string, 0)
@@ -40,7 +44,9 @@ func (s *NotificationService) ListNotifications(ctx context.Context, userID stri
 	actorMap := make(map[string]string)
 	if len(actorIDs) > 0 {
 		var actors []model.User
-		dal.DB.WithContext(ctx).Where("id IN ?", actorIDs).Select("id", "username").Find(&actors)
+		if err := dal.DB.WithContext(ctx).Where("id IN ?", actorIDs).Select("id", "username").Find(&actors).Error; err != nil {
+			return nil, err
+		}
 		for _, a := range actors {
 			actorMap[a.ID] = a.Username
 		}
@@ -310,16 +316,24 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		// Posts
 		var postRows []model.Post
 		var postTotal int64
-		postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Limit(5).Find(&postRows)
-		postWhere().Count(&postTotal)
+		if err := postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Limit(5).Find(&postRows).Error; err != nil {
+			return nil, err
+		}
+		if err := postWhere().Count(&postTotal).Error; err != nil {
+			return nil, err
+		}
 
 		postItems := mapPostsToDTOs(ctx, postRows, userID)
 
 		// Comments
 		var commentRows []model.Comment
 		var commentTotal int64
-		commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows)
-		commentWhere().Count(&commentTotal)
+		if err := commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows).Error; err != nil {
+			return nil, err
+		}
+		if err := commentWhere().Count(&commentTotal).Error; err != nil {
+			return nil, err
+		}
 
 		commentItems := make([]types.SearchComment, 0, len(commentRows))
 		for _, c := range commentRows {
@@ -341,9 +355,13 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		// Users
 		var userRows []model.User
 		var userTotal int64
-		userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
-			Order("created_at DESC").Limit(5).Find(&userRows)
-		userWhere().Count(&userTotal)
+		if err := userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
+			Order("created_at DESC").Limit(5).Find(&userRows).Error; err != nil {
+			return nil, err
+		}
+		if err := userWhere().Count(&userTotal).Error; err != nil {
+			return nil, err
+		}
 
 		userItems := make([]types.SearchUser, 0, len(userRows))
 		for _, u := range userRows {
@@ -369,19 +387,25 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 	if scope == "posts" {
 		var total int64
-		postWhere().Count(&total)
+		if err := postWhere().Count(&total).Error; err != nil {
+			return nil, err
+		}
 
 		var rows []model.Post
 		if sort == "relevance" {
 			// 相关度排序（数据库层，pg_trgm 相似度 + 标题命中加权，无 500 条限制）
-			postWhere().Preload("Author").Preload("Tags").
+			if err := postWhere().Preload("Author").Preload("Tags").
 				Order(gorm.Expr(
 					"CASE WHEN title ILIKE ? THEN 1 ELSE 0 END DESC, similarity(title, ?) DESC, created_at DESC",
 					like, q,
 				)).
-				Offset(offset).Limit(pageSize).Find(&rows)
+				Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				return nil, err
+			}
 		} else {
-			postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+			if err := postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				return nil, err
+			}
 		}
 
 		items := mapPostsToDTOs(ctx, rows, userID)
@@ -393,15 +417,21 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 	if scope == "comments" {
 		var total int64
-		commentWhere().Count(&total)
+		if err := commentWhere().Count(&total).Error; err != nil {
+			return nil, err
+		}
 
 		var rows []model.Comment
 		if sort == "relevance" {
-			commentWhere().Preload("Author").Preload("Post").
+			if err := commentWhere().Preload("Author").Preload("Post").
 				Order(gorm.Expr("similarity(content, ?) DESC, created_at DESC", q)).
-				Offset(offset).Limit(pageSize).Find(&rows)
+				Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				return nil, err
+			}
 		} else {
-			commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+			if err := commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				return nil, err
+			}
 		}
 
 		items := make([]types.SearchComment, 0, len(rows))
@@ -429,19 +459,25 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 	// scope == "users"
 	var total int64
-	userWhere().Count(&total)
+	if err := userWhere().Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	var rows []model.User
 	if sort == "relevance" {
-		userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
+		if err := userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
 			Order(gorm.Expr(
 				"similarity(username, ?) + similarity(coalesce(display_name, ''), ?) DESC, created_at DESC",
 				q, q,
 			)).
-			Offset(offset).Limit(pageSize).Find(&rows)
+			Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+			return nil, err
+		}
 	} else {
-		userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
-			Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+		if err := userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
+			Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+			return nil, err
+		}
 	}
 
 	items := make([]types.SearchUser, 0, len(rows))

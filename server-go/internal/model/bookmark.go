@@ -10,9 +10,9 @@ import (
 // Bookmark 帖子收藏（postId+userId 联合唯一）
 type Bookmark struct {
 	ID        string    `gorm:"primaryKey" json:"id"`
-	PostID    string    `gorm:"uniqueIndex:idx_bookmark_post_user;not null;index:idx_bookmark_user" json:"postId"`
+	PostID    string    `gorm:"uniqueIndex:idx_bookmark_post_user;not null" json:"postId"`
 	Post      Post      `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
-	UserID    string    `gorm:"uniqueIndex:idx_bookmark_post_user;not null;index:idx_bookmark_user" json:"userId"`
+	UserID    string    `gorm:"uniqueIndex:idx_bookmark_post_user;not null;index" json:"userId"`
 	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 	CreatedAt time.Time `json:"createdAt"`
 }

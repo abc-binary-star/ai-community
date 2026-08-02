@@ -33,6 +33,9 @@ func Load() *Config {
 		}
 		jwtSecret = "dev-secret-change-me"
 	}
+	if nodeEnv == "production" && len(jwtSecret) < 32 {
+		log.Fatal("生产环境 JWT_SECRET 至少需要 32 位字符")
+	}
 
 	corsOrigins := strings.Split(
 		getEnvOrDefault("CORS_ORIGIN", "http://localhost:3000"),
