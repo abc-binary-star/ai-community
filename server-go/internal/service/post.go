@@ -1,19 +1,14 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -558,26 +553,13 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 
 // SuggestTags AI 标签推荐
 func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([]string, error) {
-	apiKey := conf.Global.DeepSeekKey
-	if apiKey == "" {
-		return nil, fmt.Errorf("DEEPSEEK_API_KEY 未配置")
-	}
-	baseURL := conf.Global.DeepSeekURL
-	if baseURL == "" {
-		baseURL = "https://api.deepseek.com"
-	}
-	model := conf.Global.DeepSeekModel
-	if model == "" {
-		model = "deepseek-chat"
-	}
-
 	truncatedTitle := title
-	if len([]rune(truncatedTitle)) > 200 {
-		truncatedTitle = string([]rune(truncatedTitle)[:200])
+	if runes := []rune(truncatedTitle); len(runes) > 200 {
+		truncatedTitle = string(runes[:200])
 	}
 	truncatedContent := content
-	if len([]rune(truncatedContent)) > 2000 {
-		truncatedContent = string([]rune(truncatedContent)[:2000])
+	if runes := []rune(truncatedContent); len(runes) > 2000 {
+		truncatedContent = string(runes[:2000])
 	}
 
 	systemPrompt := `你是一个社区分类标签助手。根据帖子标题和内容，为其分配 2-5 个分类标签，让帖子能被归到合适的类别下方便检索。
@@ -597,55 +579,15 @@ func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([
 - "React Server Components 实战" -> "前端,技术,React"
 - "周末去大理旅游攻略" -> "旅行,生活,攻略"`
 
-	userPrompt := fmt.Sprintf("标题：%s\n内容：%s", truncatedTitle, truncatedContent)
-
-	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": userPrompt},
-		},
-		"max_tokens":  1000,
-		"temperature": 0.3,
+	text, err := ai.Chat(ctx, ai.ChatRequest{
+		System:      systemPrompt,
+		User:        fmt.Sprintf("标题：%s\n内容：%s", truncatedTitle, truncatedContent),
+		MaxTokens:   1000,
+		Temperature: 0.3,
 	})
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("AI 服务请求失败: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("AI 服务请求失败 (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, err
-	}
-
-	choices, ok := data["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return []string{}, nil
-	}
-	choice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return []string{}, nil
-	}
-	message, ok := choice["message"].(map[string]interface{})
-	if !ok {
-		return []string{}, nil
-	}
-	text, _ := message["content"].(string)
 
 	// 解析逗号分隔标签
 	separators := func(r rune) bool {
