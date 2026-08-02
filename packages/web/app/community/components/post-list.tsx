@@ -65,17 +65,9 @@ export function PostListPage({
     <div className="flex gap-8">
       {/* 主栏：帖子列表 */}
       <div className="min-w-0 flex-1 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">{CHANNEL_LABELS[channel] || channel}</h1>
-            <p className="text-sm text-muted-foreground">分享与讨论</p>
-          </div>
-          <Button asChild size="sm" className="hidden sm:inline-flex">
-            <Link href="/community/post/new">
-              <PenLine />
-              发帖
-            </Link>
-          </Button>
+        <div>
+          <h1 className="text-2xl font-semibold">{CHANNEL_LABELS[channel] || channel}</h1>
+          <p className="text-sm text-muted-foreground">分享与讨论</p>
         </div>
 
         <SortTabs current={sort} />
@@ -138,14 +130,13 @@ export function PostListPage({
       <aside className="hidden w-72 shrink-0 space-y-6 lg:block">
         <Card className="bg-primary/5">
           <div className="space-y-3 p-5">
-            <p className="text-sm font-medium">有想法想分享？</p>
-            <p className="text-xs text-muted-foreground">发表帖子，加入社区讨论</p>
-            <Button asChild size="sm" className="w-full">
-              <Link href="/community/post/new">
-                <PenLine />
-                发布新帖
-              </Link>
-            </Button>
+            <p className="text-sm font-semibold">社区公约</p>
+            <ul className="space-y-1.5 text-xs text-muted-foreground">
+              <li>• 友善交流，尊重不同观点</li>
+              <li>• 发布原创内容，注明来源</li>
+              <li>• 技术讨论请使用代码块格式</li>
+              <li>• 避免刷屏和重复发帖</li>
+            </ul>
           </div>
         </Card>
 
