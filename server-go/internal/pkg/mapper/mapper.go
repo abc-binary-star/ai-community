@@ -16,6 +16,7 @@ func UserToDTO(u *model.User) types.User {
 		Avatar:      u.Avatar,
 		Bio:         u.Bio,
 		DisplayName: u.DisplayName,
+		Role:        u.Role,
 		CreatedAt:   u.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   u.UpdatedAt.Format(time.RFC3339),
 	}
@@ -29,6 +30,7 @@ func PublicUserToDTO(u *model.User, postCount, followerCount, followingCount int
 		Avatar:        u.Avatar,
 		Bio:           u.Bio,
 		DisplayName:   u.DisplayName,
+		Role:          u.Role,
 		PostCount:     postCount,
 		FollowerCount: followerCount,
 		FollowingCount: followingCount,
@@ -45,6 +47,7 @@ func AuthorToDTO(u *model.User) types.PublicUser {
 		Avatar:      u.Avatar,
 		Bio:         u.Bio,
 		DisplayName: u.DisplayName,
+		Role:        u.Role,
 		CreatedAt:   u.CreatedAt.Format(time.RFC3339),
 	}
 }

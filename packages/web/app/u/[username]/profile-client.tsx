@@ -108,6 +108,12 @@ export function ProfileClient({ username }: { username: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold">{user.displayName || user.username}</h1>
                 <Badge variant="outline">@{user.username}</Badge>
+                {user.role === 'admin' && (
+                  <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-transparent">管理员</Badge>
+                )}
+                {user.role === 'moderator' && (
+                  <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-transparent">版主</Badge>
+                )}
               </div>
 
               {user.bio && (

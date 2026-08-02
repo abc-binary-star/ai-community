@@ -5,6 +5,7 @@ export interface User {
   avatar: string | null
   bio: string | null
   displayName: string | null
+  role: string
   createdAt: string
   updatedAt: string
 }
@@ -15,6 +16,7 @@ export interface PublicUser {
   avatar: string | null
   bio: string | null
   displayName: string | null
+  role: string
   postCount: number
   followerCount: number
   followingCount: number

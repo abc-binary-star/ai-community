@@ -93,6 +93,26 @@ func UpdateUser(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, dto)
 }
 
+// UpdateUserRole 修改用户角色（仅管理员）
+// PUT /api/users/:username/role
+func UpdateUserRole(ctx context.Context, c *app.RequestContext) {
+	var req types.UpdateUserRoleReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+
+	username := c.Param("username")
+	currentUserID := middleware.GetCurrentUserID(c)
+
+	dto, err := userService.UpdateUserRole(ctx, username, req.Role, currentUserID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
+
 // ========== Follow Handlers ==========
 
 // FollowUser 关注某用户
