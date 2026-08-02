@@ -30,6 +30,8 @@ export default function NewPostPage() {
   const token = useAuthStore((s) => s.token)
   const [tagsInput, setTagsInput] = useState('')
   const [suggesting, setSuggesting] = useState(false)
+  const [suggestingTitle, setSuggestingTitle] = useState(false)
+  const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
   const { data: channels } = useChannels()
 
   // 频道列表，API 加载前使用 fallback
@@ -55,6 +57,29 @@ export default function NewPostPage() {
   }, [token, router])
 
   const selectedChannel = watch('channel')
+
+  // AI 建议标题
+  const handleSuggestTitle = async () => {
+    const content = getValues('content')
+    if (!content || content.trim().length < 10) {
+      toast.error('内容至少 10 个字才能生成标题')
+      return
+    }
+    setSuggestingTitle(true)
+    setTitleSuggestions([])
+    try {
+      const data = await api.post<{ titles: string[] }>('/ai/suggest-title', { content })
+      if (data.titles.length === 0) {
+        toast.error('未能生成标题，请手动输入')
+        return
+      }
+      setTitleSuggestions(data.titles)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'AI 生成失败，请手动输入')
+    } finally {
+      setSuggestingTitle(false)
+    }
+  }
 
   // AI 生成标签
   const handleSuggestTags = async () => {
@@ -115,9 +140,39 @@ export default function NewPostPage() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="title">标题</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="title">标题</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  disabled={suggestingTitle}
+                  onClick={handleSuggestTitle}
+                >
+                  {suggestingTitle ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                  {suggestingTitle ? '生成中…' : 'AI 建议标题'}
+                </Button>
+              </div>
               <Input id="title" placeholder="一句话概括你的想法" {...register('title')} />
               {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+              {titleSuggestions.length > 0 && (
+                <div className="space-y-1 rounded-lg border bg-accent/50 p-2">
+                  {titleSuggestions.map((t, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setValue('title', t, { shouldValidate: true })
+                        setTitleSuggestions([])
+                      }}
+                      className="block w-full truncate rounded-md px-2 py-1 text-left text-sm text-accent-foreground transition-colors hover:bg-accent"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>频道</Label>

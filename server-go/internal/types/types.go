@@ -49,6 +49,15 @@ type SuggestTagsReq struct {
 	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
 }
 
+type SuggestTitleReq struct {
+	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+}
+
+type RewriteReq struct {
+	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Style   string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
+}
+
 type CreateReportReq struct {
 	TargetType string `json:"targetType" vd:"in($, 'post', 'comment')"`
 	TargetID   string `json:"targetId" vd:"len($)>=1 && len($)<=64"`

@@ -53,6 +53,11 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/posts/:id/like", middleware.Auth(), handler.LikePost)
 	h.DELETE("/api/posts/:id/like", middleware.Auth(), handler.UnlikePost)
 
+	// --- AI 辅助创作路由 ---
+	ai := h.Group("/api/ai", middleware.Auth())
+	ai.POST("/suggest-title", handler.SuggestTitle)
+	ai.POST("/rewrite", handler.Rewrite)
+
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)
 	h.POST("/api/posts/:id/comments", middleware.Auth(), handler.CreateComment)
