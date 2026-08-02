@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Loader2, Save, ShieldOff, User } from 'lucide-react'
+import { ArrowLeft, Ban, Bell, Loader2, Save, ShieldOff, User } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -15,9 +15,32 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { Navbar } from '@/app/community/components/navbar'
-import { getInitials } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { Paginated, PublicUser, User as UserType } from 'shared'
+import type { NotificationPreference, Paginated, PublicUser, User as UserType } from 'shared'
+
+// 轻量开关组件：蓝色圆角滑块
+function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        checked ? 'bg-primary' : 'bg-muted-foreground/25',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-6' : 'translate-x-1',
+        )}
+      />
+    </button>
+  )
+}
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -62,6 +85,22 @@ export default function SettingsPage() {
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : '操作失败'),
   })
+
+  // 通知偏好
+  const prefsQuery = useQuery({
+    queryKey: ['notif-prefs'],
+    queryFn: () => api.get<NotificationPreference>('/notifications/preferences'),
+    enabled: !!token,
+  })
+  const prefsMutation = useMutation({
+    mutationFn: (patch: Partial<NotificationPreference>) =>
+      api.put<NotificationPreference>('/notifications/preferences', patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notif-prefs'] })
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : '保存失败'),
+  })
+  const updatePref = (patch: Partial<NotificationPreference>) => prefsMutation.mutate(patch)
 
   if (!hydrated) {
     return (
@@ -233,6 +272,85 @@ export default function SettingsPage() {
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">暂无拉黑用户</p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* 通知偏好 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="size-4 text-primary" />
+                通知偏好
+              </CardTitle>
+              <CardDescription>控制接收哪些类型的通知，以及免打扰时段</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {prefsQuery.isLoading ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  加载中…
+                </div>
+              ) : prefsQuery.data ? (
+                <div className="space-y-3">
+                  {[
+                    { key: 'comment', label: '评论通知', desc: '有人评论你的帖子时' },
+                    { key: 'reply', label: '回复通知', desc: '有人回复你的评论时' },
+                    { key: 'like', label: '点赞通知', desc: '有人给你的内容点赞时' },
+                    { key: 'follow', label: '关注通知', desc: '有人关注你时' },
+                    { key: 'mention', label: '@提及通知', desc: '有人在内容中提及你时' },
+                  ].map((item) => (
+                    <div key={item.key} className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">{item.label}</p>
+                        <p className="text-xs text-muted-foreground">{item.desc}</p>
+                      </div>
+                      <Switch
+                        checked={prefsQuery.data[item.key as keyof NotificationPreference] as boolean}
+                        onChange={(v) => updatePref({ [item.key]: v } as Partial<NotificationPreference>)}
+                      />
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                    <div>
+                      <p className="text-sm font-medium">免打扰</p>
+                      <p className="text-xs text-muted-foreground">在指定时段内不推送通知</p>
+                    </div>
+                    <Switch checked={prefsQuery.data.doNotDisturb} onChange={(v) => updatePref({ doNotDisturb: v })} />
+                  </div>
+
+                  {prefsQuery.data.doNotDisturb && (
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2.5">
+                      <span className="text-sm text-muted-foreground">时段</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={prefsQuery.data.quietStartHour}
+                        onChange={(e) => updatePref({ quietStartHour: Number(e.target.value) })}
+                        className="h-8 w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">至</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={prefsQuery.data.quietEndHour}
+                        onChange={(e) => updatePref({ quietEndHour: Number(e.target.value) })}
+                        className="h-8 w-20"
+                      />
+                      <span className="text-xs text-muted-foreground">时（24 小时制）</span>
+                    </div>
+                  )}
+
+                  {prefsMutation.isPending && (
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" />
+                      保存中…
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>

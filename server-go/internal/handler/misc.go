@@ -333,6 +333,36 @@ func MarkAllRead(ctx context.Context, c *app.RequestContext) {
 	response.OK(c)
 }
 
+// GetNotificationPreferences 获取当前用户通知偏好
+func GetNotificationPreferences(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+
+	result, err := notificationService.GetPreferences(ctx, userID)
+	if err != nil {
+		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.JSON(c, result)
+}
+
+// UpdateNotificationPreferences 更新当前用户通知偏好
+func UpdateNotificationPreferences(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+
+	var req types.UpdateNotificationPreferenceReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+
+	result, err := notificationService.UpdatePreferences(ctx, userID, req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // ========== Search Handler ==========
 
 func Search(ctx context.Context, c *app.RequestContext) {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -27,10 +28,14 @@ type CreateInput struct {
 
 // Create 创建一条通知。
 // - 跳过自己给自己的通知
+// - 遵循接收者的通知偏好（类型开关 + 免打扰时段）
 // - like/follow 类型检查是否已存在，防重复
 // - 失败仅记日志，不阻断主流程
 func Create(ctx context.Context, input CreateInput) {
 	if input.ActorID == input.UserID {
+		return
+	}
+	if !allowsPreference(ctx, input.UserID, input.Type) {
 		return
 	}
 
@@ -121,6 +126,56 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 			Content:   notifContent,
 		})
 	}
+}
+
+// allowsPreference 检查接收者是否允许接收该类型通知（类型开关 + 免打扰时段）
+func allowsPreference(ctx context.Context, userID, notifType string) bool {
+	var pref model.NotificationPreference
+	err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error
+	if err != nil {
+		// 未设置偏好或查询失败：默认允许，不阻断主流程
+		return true
+	}
+
+	// 类型开关
+	switch notifType {
+	case "comment":
+		if !pref.Comment {
+			return false
+		}
+	case "reply":
+		if !pref.Reply {
+			return false
+		}
+	case "like":
+		if !pref.Like {
+			return false
+		}
+	case "follow":
+		if !pref.Follow {
+			return false
+		}
+	case "mention":
+		if !pref.Mention {
+			return false
+		}
+	}
+
+	// 免打扰时段（支持跨午夜，如 22:00-08:00）
+	if pref.DoNotDisturb {
+		hour := time.Now().Hour()
+		start, end := pref.QuietStartHour, pref.QuietEndHour
+		if start < end {
+			if hour >= start && hour < end {
+				return false
+			}
+		} else {
+			if hour >= start || hour < end {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // IsUniqueConstraintError 判断是否为唯一约束冲突（PostgreSQL error code 23505）

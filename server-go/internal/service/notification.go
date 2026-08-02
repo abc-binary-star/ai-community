@@ -99,6 +99,95 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) er
 		Update("read", true).Error
 }
 
+// GetPreferences 获取当前用户的通知偏好（未设置时返回默认值）
+func (s *NotificationService) GetPreferences(ctx context.Context, userID string) (*types.NotificationPreference, error) {
+	var pref model.NotificationPreference
+	err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error
+	if err == gorm.ErrRecordNotFound {
+		return &types.NotificationPreference{
+			Comment: true, Reply: true, Like: true, Follow: true, Mention: true,
+			DoNotDisturb: false, QuietStartHour: 22, QuietEndHour: 8,
+		}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.toPreferenceDTO(&pref), nil
+}
+
+// UpdatePreferences 更新通知偏好（不存在则创建，仅更新传入字段）
+func (s *NotificationService) UpdatePreferences(ctx context.Context, userID string, req types.UpdateNotificationPreferenceReq) (*types.NotificationPreference, error) {
+	// 校验免打扰时段合法性
+	if req.QuietStartHour != nil && (*req.QuietStartHour < 0 || *req.QuietStartHour > 23) {
+		return nil, ErrInvalidInput
+	}
+	if req.QuietEndHour != nil && (*req.QuietEndHour < 0 || *req.QuietEndHour > 23) {
+		return nil, ErrInvalidInput
+	}
+
+	updates := map[string]interface{}{}
+	if req.Comment != nil {
+		updates["comment"] = *req.Comment
+	}
+	if req.Reply != nil {
+		updates["reply"] = *req.Reply
+	}
+	if req.Like != nil {
+		updates["like"] = *req.Like
+	}
+	if req.Follow != nil {
+		updates["follow"] = *req.Follow
+	}
+	if req.Mention != nil {
+		updates["mention"] = *req.Mention
+	}
+	if req.DoNotDisturb != nil {
+		updates["do_not_disturb"] = *req.DoNotDisturb
+	}
+	if req.QuietStartHour != nil {
+		updates["quiet_start_hour"] = *req.QuietStartHour
+	}
+	if req.QuietEndHour != nil {
+		updates["quiet_end_hour"] = *req.QuietEndHour
+	}
+
+	// 先查是否存在，不存在则创建默认记录
+	var pref model.NotificationPreference
+	err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error
+	if err == gorm.ErrRecordNotFound {
+		pref = model.NotificationPreference{UserID: userID}
+		if err := dal.DB.WithContext(ctx).Create(&pref).Error; err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	if err := dal.DB.WithContext(ctx).Model(&model.NotificationPreference{}).
+		Where("user_id = ?", userID).
+		Updates(updates).Error; err != nil {
+		return nil, err
+	}
+
+	if err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error; err != nil {
+		return nil, err
+	}
+	return s.toPreferenceDTO(&pref), nil
+}
+
+func (s *NotificationService) toPreferenceDTO(p *model.NotificationPreference) *types.NotificationPreference {
+	return &types.NotificationPreference{
+		Comment:        p.Comment,
+		Reply:          p.Reply,
+		Like:           p.Like,
+		Follow:         p.Follow,
+		Mention:        p.Mention,
+		DoNotDisturb:   p.DoNotDisturb,
+		QuietStartHour: p.QuietStartHour,
+		QuietEndHour:   p.QuietEndHour,
+	}
+}
+
 // NotificationError 通知业务错误
 type NotificationError struct {
 	Msg  string

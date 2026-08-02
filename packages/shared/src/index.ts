@@ -128,6 +128,18 @@ export interface Channel {
 }
 
 // 频道 fallback 默认值（API 不可用时使用）
+
+export interface NotificationPreference {
+  comment: boolean
+  reply: boolean
+  like: boolean
+  follow: boolean
+  mention: boolean
+  doNotDisturb: boolean
+  quietStartHour: number
+  quietEndHour: number
+}
+
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']
 
 export const CHANNEL_LABELS: Record<string, string> = {
