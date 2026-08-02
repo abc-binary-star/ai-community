@@ -7,13 +7,15 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { formatRelativeTime, getInitials, truncateMarkdown } from '@/lib/utils'
-import { CHANNEL_LABELS, type Post } from 'shared'
+import { useChannels } from '@/lib/use-channels'
+import { getChannelLabel, type Post } from 'shared'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { TagBadge } from './tag-badge'
 
 export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args: unknown[]) => void }) {
   const router = useRouter()
+  const { data: channels } = useChannels()
 
   return (
     <Card
@@ -22,7 +24,7 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
     >
       <div className="flex flex-col gap-3 p-5">
         <div className="flex items-center justify-between gap-2">
-          <Badge>{CHANNEL_LABELS[post.channel] || post.channel}</Badge>
+          <Badge>{getChannelLabel(channels, post.channel)}</Badge>
           <span className="text-xs text-muted-foreground">{formatRelativeTime(post.createdAt)}</span>
         </div>
         <Link href={`/community/post/${post.id}`} className="text-lg font-semibold leading-snug hover:text-primary">

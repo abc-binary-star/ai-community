@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
+import { useChannels } from '@/lib/use-channels'
 import { cn, formatRelativeTime, getInitials, truncateMarkdown } from '@/lib/utils'
-import { CHANNEL_LABELS, CHANNELS, type Comment, type Paginated, type Post, type PublicUser } from 'shared'
+import { CHANNELS, CHANNEL_LABELS, getChannelLabel, type Comment, type Paginated, type Post, type PublicUser } from 'shared'
 import { SearchBar } from '../components/search-bar'
 
 // 搜索返回的评论结果可能带有关联帖子标题
@@ -56,12 +57,12 @@ function highlightText(text: string, keyword: string): ReactNode {
   )
 }
 
-function PostResultCard({ post, keyword }: { post: Post; keyword: string }) {
+function PostResultCard({ post, keyword, channels }: { post: Post; keyword: string; channels: ReturnType<typeof useChannels>['data'] }) {
   return (
     <Card className="transition-all hover:-translate-y-0.5 hover:shadow-card-hover">
       <div className="flex flex-col gap-2 p-5">
         <div className="flex items-center justify-between gap-2">
-          <Badge>{CHANNEL_LABELS[post.channel] || post.channel}</Badge>
+          <Badge>{getChannelLabel(channels, post.channel)}</Badge>
           <span className="text-xs text-muted-foreground">{formatRelativeTime(post.createdAt)}</span>
         </div>
         <Link href={`/community/post/${post.id}`} className="text-lg font-semibold leading-snug hover:text-primary">
@@ -181,6 +182,12 @@ export default function SearchResultsPage({
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: channels } = useChannels()
+
+  // 频道列表，API 加载前使用 fallback
+  const channelItems = (channels && channels.length > 0)
+    ? channels
+    : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
 
   const scope = scopeProp || 'all'
   const sort = sortProp || 'relevance'
@@ -313,9 +320,9 @@ export default function SearchResultsPage({
             className="h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">全部频道</option>
-            {CHANNELS.map((ch) => (
-              <option key={ch} value={ch}>
-                {CHANNEL_LABELS[ch] || ch}
+            {channelItems.map((ch) => (
+              <option key={ch.name} value={ch.name}>
+                {ch.label}
               </option>
             ))}
           </select>
@@ -402,7 +409,7 @@ export default function SearchResultsPage({
               {allResult.posts.items.length > 0 ? (
                 <div className="grid gap-3">
                   {allResult.posts.items.slice(0, 5).map((p) => (
-                    <PostResultCard key={p.id} post={p} keyword={q} />
+                    <PostResultCard key={p.id} post={p} keyword={q} channels={channels} />
                   ))}
                 </div>
               ) : (
@@ -462,7 +469,7 @@ export default function SearchResultsPage({
           <>
             <div className="grid gap-3">
               {postsPage.items.map((p) => (
-                <PostResultCard key={p.id} post={p} keyword={q} />
+                <PostResultCard key={p.id} post={p} keyword={q} channels={channels} />
               ))}
             </div>
             <Pagination page={pageNum} totalPages={postsPage.totalPages} onChange={goPage} />

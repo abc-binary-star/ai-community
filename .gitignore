@@ -21,6 +21,7 @@ out/
 # IDE
 .vscode/
 .idea/
+.trae/
 *.swp
 .DS_Store
 

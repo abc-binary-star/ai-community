@@ -25,6 +25,12 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// 健康检查
 	h.GET("/api/health", handler.Health)
 
+	// --- 频道路由 ---
+	h.GET("/api/channels", handler.ListChannels)
+	h.POST("/api/channels", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.CreateChannel)
+	h.PUT("/api/channels/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.UpdateChannel)
+	h.DELETE("/api/channels/:id", middleware.Auth(), middleware.RequireRole("admin"), handler.DeleteChannel)
+
 	// --- 认证路由 ---
 	auth := h.Group("/api/auth")
 	auth.POST("/register", handler.Register)

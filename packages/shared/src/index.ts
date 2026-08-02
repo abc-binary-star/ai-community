@@ -88,6 +88,19 @@ export interface Notification {
   createdAt: string
 }
 
+export interface Channel {
+  id: string
+  name: string
+  label: string
+  description: string
+  icon: string
+  sortOrder: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 频道 fallback 默认值（API 不可用时使用）
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']
 
 export const CHANNEL_LABELS: Record<string, string> = {
@@ -97,3 +110,11 @@ export const CHANNEL_LABELS: Record<string, string> = {
   gaming: '游戏天地',
   life: '生活方式',
 }
+
+// 根据 API 返回的频道列表获取频道显示名称，fallback 到 CHANNEL_LABELS
+export function getChannelLabel(channels: Channel[] | undefined, name: string): string {
+  const ch = channels?.find((c) => c.name === name)
+  if (ch) return ch.label
+  return CHANNEL_LABELS[name] || name
+}
+

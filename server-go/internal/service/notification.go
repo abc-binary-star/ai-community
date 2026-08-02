@@ -177,7 +177,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
 				like, like,
 				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
-		if channel != "" && validChannel(channel) {
+		if channel != "" && validChannel(ctx, channel) {
 			w = w.Where("channel = ?", channel)
 		}
 		if author != "" {

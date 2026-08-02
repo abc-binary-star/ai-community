@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { useChannels } from '@/lib/use-channels'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
 import { MarkdownEditor } from '@/components/markdown-editor'
 
@@ -29,6 +30,12 @@ export default function NewPostPage() {
   const token = useAuthStore((s) => s.token)
   const [tagsInput, setTagsInput] = useState('')
   const [suggesting, setSuggesting] = useState(false)
+  const { data: channels } = useChannels()
+
+  // 频道列表，API 加载前使用 fallback
+  const channelItems = (channels && channels.length > 0)
+    ? channels
+    : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
   const {
     register,
     handleSubmit,
@@ -115,20 +122,20 @@ export default function NewPostPage() {
             <div className="space-y-2">
               <Label>频道</Label>
               <div className="flex flex-wrap gap-2">
-                {CHANNELS.map((ch) => {
-                  const active = selectedChannel === ch
+                {channelItems.map((ch) => {
+                  const active = selectedChannel === ch.name
                   return (
                     <button
-                      key={ch}
+                      key={ch.name}
                       type="button"
-                      onClick={() => setValue('channel', ch, { shouldValidate: true })}
+                      onClick={() => setValue('channel', ch.name, { shouldValidate: true })}
                       className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                         active
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'
                       }`}
                     >
-                      {CHANNEL_LABELS[ch] || ch}
+                      {ch.label}
                     </button>
                   )
                 })}

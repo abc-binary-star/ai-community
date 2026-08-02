@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
+	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/cloudwego/hertz/pkg/app"
@@ -56,4 +58,32 @@ func GetCurrentUserID(c *app.RequestContext) string {
 		return s
 	}
 	return ""
+}
+
+// RequireRole 角色校验中间件，需在 Auth 之后使用
+func RequireRole(roles ...string) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		userID := GetCurrentUserID(c)
+		if userID == "" {
+			response.Unauthorized(c, "未登录")
+			c.Abort()
+			return
+		}
+
+		var user model.User
+		if err := dal.DB.WithContext(ctx).Select("role").First(&user, "id = ?", userID).Error; err != nil {
+			response.Unauthorized(c, "用户不存在")
+			c.Abort()
+			return
+		}
+
+		for _, r := range roles {
+			if user.Role == r {
+				c.Next(ctx)
+				return
+			}
+		}
+		response.Forbidden(c, "权限不足")
+		c.Abort()
+	}
 }
