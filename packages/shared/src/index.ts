@@ -88,6 +88,17 @@ export interface Notification {
   createdAt: string
 }
 
+export interface NotificationPreference {
+  comment: boolean
+  reply: boolean
+  like: boolean
+  follow: boolean
+  mention: boolean
+  doNotDisturb: boolean
+  quietStartHour: number
+  quietEndHour: number
+}
+
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']
 
 export const CHANNEL_LABELS: Record<string, string> = {

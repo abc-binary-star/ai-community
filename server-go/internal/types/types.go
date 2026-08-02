@@ -135,6 +135,29 @@ type Notification struct {
 	CreatedAt  string  `json:"createdAt"`
 }
 
+// NotificationPreference 通知偏好 DTO
+type NotificationPreference struct {
+	Comment        bool `json:"comment"`
+	Reply          bool `json:"reply"`
+	Like           bool `json:"like"`
+	Follow         bool `json:"follow"`
+	Mention        bool `json:"mention"`
+	DoNotDisturb   bool `json:"doNotDisturb"`
+	QuietStartHour int  `json:"quietStartHour"`
+	QuietEndHour   int  `json:"quietEndHour"`
+}
+
+type UpdateNotificationPreferenceReq struct {
+	Comment        *bool `json:"comment"`
+	Reply          *bool `json:"reply"`
+	Like           *bool `json:"like"`
+	Follow         *bool `json:"follow"`
+	Mention        *bool `json:"mention"`
+	DoNotDisturb   *bool `json:"doNotDisturb"`
+	QuietStartHour *int  `json:"quietStartHour"`
+	QuietEndHour   *int  `json:"quietEndHour"`
+}
+
 // SearchComment 搜索结果中的评论
 type SearchComment struct {
 	ID        string     `json:"id"`

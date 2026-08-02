@@ -78,6 +78,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/notifications/unread-count", middleware.Auth(), handler.UnreadCount)
 	h.POST("/api/notifications/:id/read", middleware.Auth(), handler.MarkNotificationRead)
 	h.POST("/api/notifications/read-all", middleware.Auth(), handler.MarkAllRead)
+	h.GET("/api/notifications/preferences", middleware.Auth(), handler.GetNotificationPreferences)
+	h.PUT("/api/notifications/preferences", middleware.Auth(), handler.UpdateNotificationPreferences)
 
 	// --- 搜索路由 ---
 	h.GET("/api/search", middleware.OptionalAuth(), handler.Search)
