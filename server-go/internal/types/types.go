@@ -49,6 +49,14 @@ type SuggestTagsReq struct {
 	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
 }
 
+// PostSummary 帖子讨论摘要 DTO
+type PostSummary struct {
+	Summary      string `json:"summary"`
+	CommentCount int    `json:"commentCount"`
+	GeneratedAt  string `json:"generatedAt"`
+	Eligible     bool   `json:"eligible"` // 是否达到生成条件（评论数阈值）
+}
+
 // --- 响应 DTO ---
 
 type User struct {

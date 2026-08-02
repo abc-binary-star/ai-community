@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ChevronDown, Eye, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Eye, Loader2, Pencil, Sparkles, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import { CHANNEL_LABELS, type Comment, type Paginated, type Post } from 'shared'
+import { CHANNEL_LABELS, type Comment, type Paginated, type Post, type PostSummary } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
 import { LikeButton } from './like-button'
@@ -43,6 +43,12 @@ export function PostDetailView({ id }: { id: string }) {
       api.get<Paginated<Comment>>(
         `/posts/${id}/comments?page=${commentPage}&pageSize=${COMMENT_PAGE_SIZE}`
       ),
+  })
+
+  // AI 讨论摘要（评论达到阈值后由后端自动生成并缓存）
+  const summaryQuery = useQuery({
+    queryKey: ['post-summary', id],
+    queryFn: () => api.get<PostSummary | null>(`/posts/${id}/summary`),
   })
 
   const handleDeletePost = async () => {
@@ -139,6 +145,21 @@ export function PostDetailView({ id }: { id: string }) {
             </div>
           </div>
           <h1 className="text-2xl font-semibold leading-snug">{post.title}</h1>
+
+          {summaryQuery.data && (
+            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-primary">
+                <Sparkles className="size-4" />
+                AI 讨论摘要
+                <span className="text-xs font-normal text-muted-foreground">
+                  基于 {summaryQuery.data.commentCount} 条评论
+                </span>
+              </div>
+              <div className="text-sm leading-6">
+                <MarkdownRenderer content={summaryQuery.data.summary} />
+              </div>
+            </div>
+          )}
 
           {post.tags && post.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
