@@ -9,6 +9,7 @@ import user from './modules/user.js'
 import bookmark from './modules/bookmark.js'
 import follow from './modules/follow.js'
 import notification from './modules/notification.js'
+import search from './modules/search.js'
 import type { AppEnv } from './types.js'
 
 const app = new Hono<AppEnv>()
@@ -60,6 +61,9 @@ app.route('/api', follow)
 
 // 通知路由 /api/notifications/*
 app.route('/api', notification)
+
+// 搜索路由 /api/search
+app.route('/api/search', search)
 
 // 统一 404
 app.notFound((c) => c.json({ error: '接口不存在' }, 404))

@@ -25,7 +25,8 @@ export function SearchBar({ value }: { value?: string }) {
       params.delete('q')
     }
     params.delete('page')
-    router.push(`/community?${params.toString()}`)
+    const qs = params.toString()
+    router.push(qs ? `/community/search?${qs}` : '/community/search')
   }
 
   const handleClear = () => {
@@ -33,7 +34,8 @@ export function SearchBar({ value }: { value?: string }) {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('q')
     params.delete('page')
-    router.push(`/community?${params.toString()}`)
+    const qs = params.toString()
+    router.push(qs ? `/community/search?${qs}` : '/community/search')
     inputRef.current?.focus()
   }
 
@@ -45,7 +47,7 @@ export function SearchBar({ value }: { value?: string }) {
         type="text"
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder="搜索帖子标题…"
+        placeholder="搜索帖子、评论、用户…"
         className={cn(
           'h-9 w-full rounded-lg border border-input bg-background pl-9 pr-9 text-sm',
           'placeholder:text-muted-foreground',

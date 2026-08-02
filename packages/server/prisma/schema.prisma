@@ -28,6 +28,8 @@ model User {
   followers     Follow[]       @relation("FollowerOf")
   notifications Notification[] @relation("NotificationUser")
   actorOf       Notification[] @relation("NotificationActor")
+
+  @@index([createdAt])
 }
 
 model Post {
@@ -72,6 +74,8 @@ model Comment {
 
   @@index([postId])
   @@index([parentId])
+  @@index([createdAt])
+  @@index([authorId])
 }
 
 model PostLike {

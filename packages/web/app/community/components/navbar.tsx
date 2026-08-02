@@ -19,6 +19,7 @@ import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { NotificationBell } from './notification-bell'
+import { SearchBar } from './search-bar'
 
 function NavbarInner() {
   const router = useRouter()
@@ -35,7 +36,7 @@ function NavbarInner() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="container flex h-16 items-center justify-between gap-6">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 px-4">
         <div className="flex items-center gap-8">
           {/* 品牌：蓝色圆角方块 logo */}
           <Link href="/community" className="flex items-center gap-2 font-semibold">
@@ -63,6 +64,11 @@ function NavbarInner() {
               )
             })}
           </nav>
+        </div>
+
+        {/* 搜索栏 */}
+        <div className="flex-1 max-w-md">
+          <SearchBar value={searchParams.get('q') || ''} />
         </div>
 
         <div className="flex items-center gap-2">
