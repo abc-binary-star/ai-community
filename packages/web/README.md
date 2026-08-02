@@ -52,6 +52,6 @@ web/
 
 ## 对接
 
-- 调用 `packages/server` 的社区数据 API
-- 调用 `packages/ai-service` 的 RAG/策展 API（通过 server 网关或直连）
+- 调用 `server-go` 的社区数据 API（Go + Hertz + GORM）
+- 调用 `packages/ai-service` 的 RAG/策展 API（通过 Go 后端网关或直连）
 - 类型从 `packages/shared` 导入

@@ -13,10 +13,11 @@
 ## 决策
 
 1. **采用四层架构**：L0 卡片交互层 / L1 AI 服务层 / L2 数据模型层 / L3 社区底座，详见 [docs/design/architecture.md](../design/architecture.md)。
-2. **Monorepo 双轨管理**：
-   - TypeScript 包（web / server / shared）用 pnpm workspace
+2. **Monorepo 三轨管理**：
+   - TypeScript 包（web / shared）用 pnpm workspace
+   - Go 后端（server-go）独立管理，Hertz + GORM
    - Python 包（ai-service / profile / recommendation / knowledge）用 pyproject.toml 独立管理
-3. **跨语言协议**：`packages/shared/proto/` 维护 Protobuf，或通过 REST/HTTP 网关对接。
+3. **跨语言协议**：Go 后端通过 REST/HTTP 网关对接 Python AI 服务层；前端共享类型在 `packages/shared`。
 4. **基础设施本地化**：services/ 下用 docker-compose 编排 PostgreSQL+pgvector / Redis / Qdrant / Neo4j。
 
 ## 备选方案

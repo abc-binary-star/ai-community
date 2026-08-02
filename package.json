@@ -8,13 +8,13 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
-    "build": "pnpm -r run build",
+    "dev": "pnpm --filter web dev",
+    "dev:server": "cd server-go && go run ./cmd/server",
+    "build": "pnpm --filter web build && cd server-go && go build -o bin/server ./cmd/server",
     "lint": "pnpm -r run lint",
-    "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
-    "infra:up": "docker compose up -d",
-    "infra:down": "docker compose down"
+    "infra:up": "docker compose -f services/docker-compose.yml up -d",
+    "infra:down": "docker compose -f services/docker-compose.yml down"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

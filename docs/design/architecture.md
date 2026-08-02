@@ -17,8 +17,8 @@
 │  · 推荐引擎 packages/recommendation  (RecBole)           │
 │  · 知识沉淀 packages/knowledge       (Neo4j GraphRAG)    │
 ├──────────────────────────────────────────────────────────┤
-│  L3  社区底座    packages/server                          │
-│  频道 / 帖子 / 成员 / 检索网关  (类 Discord, 参考 TailChat)│
+│  L3  社区底座    server-go                               │
+│  频道 / 帖子 / 成员 / 检索网关  (Go + Hertz + GORM)     │
 └──────────────────────────────────────────────────────────┘
         │
         ▼
@@ -73,17 +73,17 @@
 
 **冷启动**：新用户/新内容采用多模态 embedding 内容特征方案，降低对协同过滤历史的依赖。
 
-### L3 社区底座（packages/server）
+### L3 社区底座（server-go）
 
 **职责**：频道/帖子/成员的核心模型与检索网关，类 Discord 结构。
 
 **子模块**：
-- `modules/channel/`：频道（类 Discord 频道）
-- `modules/post/`：帖子（类贴吧帖子）
-- `modules/member/`：成员
-- `modules/search/`：检索网关，统一对接 L1 AI 服务与 L2 推荐
+- `handler/channel.go`：频道（类 Discord 频道）
+- `handler/post.go`：帖子（类贴吧帖子）
+- `handler/`：成员、搜索等
+- `service/`：检索网关，统一对接 L1 AI 服务与 L2 推荐
 
-**技术**：Node.js + TypeScript。可参考 TailChat（类 Discord 开源）的频道/成员模型。
+**技术**：Go + Hertz + GORM。已替代原 TS 后端（Hono + Prisma），GORM AutoMigrate 自动建表。
 
 ## 3. 数据流
 
@@ -120,10 +120,11 @@
 
 ## 4. 跨语言协作
 
-- **TypeScript 包**（web / server / shared）通过 pnpm workspace 管理
+- **TypeScript 包**（web / shared）通过 pnpm workspace 管理
+- **Go 后端**（server-go）独立管理，通过 Hertz 框架运行
 - **Python 包**（ai-service / profile / recommendation / knowledge）通过各自 `pyproject.toml` 管理
-- **跨语言协议**：`packages/shared/proto/` 维护 gRPC/Protobuf 定义，或通过 REST/HTTP 网关对接
-- **共享类型**：`packages/shared/types/` 维护 TypeScript 类型，Python 侧用 Pydantic model 对齐
+- **跨语言协议**：Go 后端通过 REST/HTTP 网关对接 Python AI 服务层
+- **共享类型**：`packages/shared/types/` 维护 TypeScript 类型（前端消费），Go 侧用 `types/` 包对齐
 
 ## 5. 设计红线（贯穿全层）
 

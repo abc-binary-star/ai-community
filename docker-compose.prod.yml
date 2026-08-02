@@ -40,14 +40,17 @@ services:
   server:
     build:
       context: .
-      dockerfile: packages/server/Dockerfile
+      dockerfile: server-go/Dockerfile
     container_name: ai-community-server
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATABASE_URL=postgresql://aicom:aicom_password@postgres:5432/aicom?schema=public
+      - DATABASE_URL=postgresql://aicom:aicom_password@postgres:5432/aicom?sslmode=disable
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=${CORS_ORIGIN}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
       interval: 10s
@@ -60,7 +63,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: ai-community-postgres
     environment:
       - POSTGRES_USER=aicom

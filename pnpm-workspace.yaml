@@ -1,6 +1,6 @@
 packages:
-  # TypeScript 工作区
+  # TypeScript 工作区（前端 + 共享类型）
   - "packages/web"
-  - "packages/server"
   - "packages/shared"
+  # 后端已迁移至 server-go/（Go + Hertz + GORM），不纳入 pnpm 工作区
   # Python 包通过各自 pyproject.toml 管理，不纳入 pnpm 工作区
