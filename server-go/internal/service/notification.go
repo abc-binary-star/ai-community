@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	sortPkg "sort"
 	"strings"
 	"time"
 
@@ -285,25 +284,13 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 		var rows []model.Post
 		if sort == "relevance" {
-			postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Limit(500).Find(&rows)
-			ql := strings.ToLower(q)
-			sortPkg.Slice(rows, func(i, j int) bool {
-				aTitle := strings.Contains(strings.ToLower(rows[i].Title), ql)
-				bTitle := strings.Contains(strings.ToLower(rows[j].Title), ql)
-				if aTitle != bTitle {
-					return aTitle
-				}
-				return rows[j].CreatedAt.After(rows[i].CreatedAt)
-			})
-			start := offset
-			end := start + pageSize
-			if start > len(rows) {
-				start = len(rows)
-			}
-			if end > len(rows) {
-				end = len(rows)
-			}
-			rows = rows[start:end]
+			// 相关度排序（数据库层，pg_trgm 相似度 + 标题命中加权，无 500 条限制）
+			postWhere().Preload("Author").Preload("Tags").
+				Order(gorm.Expr(
+					"CASE WHEN title ILIKE ? THEN 1 ELSE 0 END DESC, similarity(title, ?) DESC, created_at DESC",
+					like, q,
+				)).
+				Offset(offset).Limit(pageSize).Find(&rows)
 		} else {
 			postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
 		}
@@ -320,7 +307,13 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		commentWhere().Count(&total)
 
 		var rows []model.Comment
-		commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+		if sort == "relevance" {
+			commentWhere().Preload("Author").Preload("Post").
+				Order(gorm.Expr("similarity(content, ?) DESC, created_at DESC", q)).
+				Offset(offset).Limit(pageSize).Find(&rows)
+		} else {
+			commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+		}
 
 		items := make([]types.SearchComment, 0, len(rows))
 		for _, c := range rows {
@@ -350,8 +343,17 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	userWhere().Count(&total)
 
 	var rows []model.User
-	userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
-		Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+	if sort == "relevance" {
+		userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
+			Order(gorm.Expr(
+				"similarity(username, ?) + similarity(coalesce(display_name, ''), ?) DESC, created_at DESC",
+				q, q,
+			)).
+			Offset(offset).Limit(pageSize).Find(&rows)
+	} else {
+		userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
+			Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+	}
 
 	items := make([]types.SearchUser, 0, len(rows))
 	for _, u := range rows {
