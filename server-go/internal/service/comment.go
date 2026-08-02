@@ -307,38 +307,6 @@ func (s *CommentService) CreateComment(ctx context.Context, postID, userID strin
 	return &dto, nil
 }
 
-// UpdateComment 编辑评论（仅作者）
-func (s *CommentService) UpdateComment(ctx context.Context, commentID, userID string, req types.UpdateCommentReq) (*types.Comment, error) {
-	var existing model.Comment
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "post_id").First(&existing, "id = ?", commentID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, ErrCommentNotFound
-		}
-		return nil, err
-	}
-	if existing.AuthorID != userID {
-		return nil, ErrCommentForbidden
-	}
-
-	if err := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("id = ?", commentID).Updates(map[string]interface{}{
-		"content": req.Content,
-		"edited":  true,
-	}).Error; err != nil {
-		return nil, err
-	}
-
-	var updated model.Comment
-	if err := dal.DB.WithContext(ctx).Preload("Author").First(&updated, "id = ?", commentID).Error; err != nil {
-		return nil, err
-	}
-
-	// 解析编辑后内容中的 @提及
-	notification.CreateMentionNotifications(ctx, req.Content, userID, existing.PostID, commentID)
-
-	dto := mapper.CommentToDTO(&updated, false, []types.Comment{}, 0)
-	return &dto, nil
-}
-
 // DeleteComment 删除评论（仅作者；级联删除其回复和点赞）
 func (s *CommentService) DeleteComment(ctx context.Context, commentID, userID string) error {
 	var existing model.Comment

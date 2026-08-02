@@ -34,10 +34,6 @@ type CreateCommentReq struct {
 	ParentID *string `json:"parentId"`
 }
 
-type UpdateCommentReq struct {
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
-}
-
 type UpdateUserReq struct {
 	DisplayName *string `json:"displayName"`
 	Bio         *string `json:"bio"`

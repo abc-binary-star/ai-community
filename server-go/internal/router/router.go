@@ -57,7 +57,6 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)
 	h.POST("/api/posts/:id/comments", middleware.Auth(), handler.CreateComment)
 	h.GET("/api/comments/:id/replies", middleware.OptionalAuth(), handler.ListReplies)
-	h.PUT("/api/comments/:id", middleware.Auth(), handler.UpdateComment)
 	h.DELETE("/api/comments/:id", middleware.Auth(), handler.DeleteComment)
 	h.POST("/api/comments/:id/like", middleware.Auth(), handler.LikeComment)
 	h.DELETE("/api/comments/:id/like", middleware.Auth(), handler.UnlikeComment)

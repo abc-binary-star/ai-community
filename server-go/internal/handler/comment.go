@@ -71,25 +71,6 @@ func CreateComment(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, comment)
 }
 
-// UpdateComment 编辑评论（仅作者）
-func UpdateComment(ctx context.Context, c *app.RequestContext) {
-	var req types.UpdateCommentReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "输入不合法")
-		return
-	}
-
-	commentID := c.Param("id")
-	userID := middleware.GetCurrentUserID(c)
-
-	comment, err := commentService.UpdateComment(ctx, commentID, userID, req)
-	if err != nil {
-		handleCommentError(c, err)
-		return
-	}
-	response.JSON(c, comment)
-}
-
 // DeleteComment 删除评论（仅作者）
 func DeleteComment(ctx context.Context, c *app.RequestContext) {
 	commentID := c.Param("id")
