@@ -159,6 +159,13 @@ export interface Message {
   createdAt: string
 }
 
+export interface PostSummary {
+  summary: string
+  commentCount: number
+  generatedAt: string
+  eligible: boolean
+}
+
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']
 
 export const CHANNEL_LABELS: Record<string, string> = {
