@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuthStore } from '@/lib/store'
+import { useChannels } from '@/lib/use-channels'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
@@ -28,6 +29,12 @@ function NavbarInner() {
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const hydrated = useHydrated()
   const activeChannel = searchParams.get('channel') || 'general'
+  const { data: channels } = useChannels()
+
+  // 频道列表，API 加载前使用 fallback
+  const channelItems: { name: string; label: string }[] = (channels && channels.length > 0)
+    ? channels
+    : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
 
   const handleLogout = () => {
     clearAuth()
@@ -47,19 +54,19 @@ function NavbarInner() {
           </Link>
           {/* 频道 tab */}
           <nav className="hidden items-center gap-1 md:flex">
-            {CHANNELS.map((ch) => {
-              const active = activeChannel === ch
+            {channelItems.map((ch) => {
+              const active = activeChannel === ch.name
               return (
                 <Link
-                  key={ch}
-                  href={`/community?channel=${encodeURIComponent(ch)}`}
+                  key={ch.name}
+                  href={`/community?channel=${encodeURIComponent(ch.name)}`}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     active
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
                 >
-                  {CHANNEL_LABELS[ch] || ch}
+                  {ch.label}
                 </Link>
               )
             })}

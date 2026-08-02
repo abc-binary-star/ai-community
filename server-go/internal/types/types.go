@@ -64,6 +64,20 @@ type HandleReportReq struct {
 	Note   string `json:"note" vd:"len($)<=500"`
 }
 
+type CreateChannelReq struct {
+	Name        string `json:"name" vd:"len($)>=2 && len($)<=30"`
+	Label       string `json:"label" vd:"len($)>=1 && len($)<=50"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+}
+
+type UpdateChannelReq struct {
+	Label       *string `json:"label"`
+	Description *string `json:"description"`
+	Icon        *string `json:"icon"`
+	SortOrder   *int    `json:"sortOrder"`
+}
+
 // --- 响应 DTO ---
 
 type User struct {
@@ -167,6 +181,18 @@ type Report struct {
 	Note        string      `json:"note"`
 	CreatedAt   string      `json:"createdAt"`
 	UpdatedAt   string      `json:"updatedAt"`
+}
+
+type Channel struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	SortOrder   int    `json:"sortOrder"`
+	CreatedBy   string `json:"createdBy"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
 }
 
 // SearchComment 搜索结果中的评论

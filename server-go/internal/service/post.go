@@ -38,13 +38,13 @@ var (
 	ErrPostInvalidInput  = &PostError{Msg: "输入不合法", Code: 400}
 )
 
-func validChannel(ch string) bool {
-	for _, c := range types.Channels {
-		if c == ch {
-			return true
-		}
+func validChannel(ctx context.Context, ch string) bool {
+	if ch == "" {
+		return false
 	}
-	return false
+	var count int64
+	dal.DB.WithContext(ctx).Model(&model.Channel{}).Where("name = ?", ch).Count(&count)
+	return count > 0
 }
 
 // batchLikedPostIDs 批量查询当前用户对一组帖子的点赞状态
@@ -125,7 +125,7 @@ func mapPostsToDTOs(ctx context.Context, posts []model.Post, userID string) []ty
 // ListPosts 帖子列表
 func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag, userID string, page, pageSize int) (*types.Paginated[types.Post], error) {
 	// 校验 channel，无效时回退到 general
-	if channel != "all" && !validChannel(channel) {
+	if channel != "all" && !validChannel(ctx, channel) {
 		channel = "general"
 	}
 
@@ -253,7 +253,7 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 // CreatePost 创建帖子（支持 tags）
 func (s *PostService) CreatePost(ctx context.Context, userID string, req types.CreatePostReq) (*types.Post, error) {
 	channel := "general"
-	if req.Channel != nil && validChannel(*req.Channel) {
+	if req.Channel != nil && validChannel(ctx, *req.Channel) {
 		channel = *req.Channel
 	}
 

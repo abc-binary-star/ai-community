@@ -13,8 +13,9 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
+import { useChannels } from '@/lib/use-channels'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import { CHANNEL_LABELS, type Comment, type Paginated, type Post } from 'shared'
+import { getChannelLabel, type Comment, type Paginated, type Post } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
 import { LikeButton } from './like-button'
@@ -33,6 +34,7 @@ export function PostDetailView({ id }: { id: string }) {
   const hydrated = useHydrated()
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [commentPage, setCommentPage] = useState(1)
+  const { data: channels } = useChannels()
 
   const postQuery = useQuery({
     queryKey: ['post', id],
@@ -130,7 +132,7 @@ export function PostDetailView({ id }: { id: string }) {
       <Card>
         <div className="space-y-4 p-6">
           <div className="flex items-center justify-between gap-2">
-            <Badge>{CHANNEL_LABELS[post.channel] || post.channel}</Badge>
+            <Badge>{getChannelLabel(channels, post.channel)}</Badge>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Eye className="size-3.5" />

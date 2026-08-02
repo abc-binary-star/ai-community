@@ -7,10 +7,11 @@ import { ChevronLeft, ChevronRight, Loader2, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
+import { useChannels } from '@/lib/use-channels'
 import { PostCard } from './post-card'
 import { SortTabs } from './sort-tabs'
 import { TagBadge } from './tag-badge'
-import { CHANNEL_LABELS, type Paginated, type Post } from 'shared'
+import { getChannelLabel, type Paginated, type Post } from 'shared'
 
 const HOT_TAGS_FALLBACK = ['AI', 'LLM', '前端', '后端', '产品', '设计', '游戏', '开源']
 
@@ -29,6 +30,7 @@ export function PostListPage({
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: channels } = useChannels()
 
   const queryParams = new URLSearchParams()
   queryParams.set('channel', channel)
@@ -66,7 +68,7 @@ export function PostListPage({
       {/* 主栏：帖子列表 */}
       <div className="min-w-0 flex-1 space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">{CHANNEL_LABELS[channel] || channel}</h1>
+          <h1 className="text-2xl font-semibold">{getChannelLabel(channels, channel)}</h1>
           <p className="text-sm text-muted-foreground">分享与讨论</p>
         </div>
 
