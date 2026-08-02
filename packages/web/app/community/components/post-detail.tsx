@@ -20,6 +20,7 @@ import { CommentForm } from './comment-form'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { TagBadge } from './tag-badge'
+import { ReportButton } from './report-button'
 import { toast } from 'sonner'
 
 const COMMENT_PAGE_SIZE = 10
@@ -195,6 +196,7 @@ export function PostDetailView({ id }: { id: string }) {
               size="md"
               onChanged={handleBookmarkChanged}
             />
+            {!isAuthor && <ReportButton targetType="post" targetId={post.id} />}
           </div>
         </div>
       </Card>

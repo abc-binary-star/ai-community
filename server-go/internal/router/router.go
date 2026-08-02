@@ -83,6 +83,11 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// --- 搜索路由 ---
 	h.GET("/api/search", middleware.OptionalAuth(), handler.Search)
 
+	// --- 举报路由 ---
+	h.POST("/api/reports", middleware.Auth(), handler.CreateReport)
+	h.GET("/api/reports", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.ListReports)
+	h.PUT("/api/reports/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.HandleReport)
+
 	// 统一 404
 	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(consts.StatusNotFound, map[string]string{"error": "接口不存在"})

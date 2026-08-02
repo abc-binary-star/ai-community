@@ -90,6 +90,23 @@ export interface Notification {
   createdAt: string
 }
 
+export interface Report {
+  id: string
+  reporterId: string
+  reporter: PublicUser
+  targetType: 'post' | 'comment'
+  targetId: string
+  targetTitle: string
+  targetBody: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  handledBy: string | null
+  handler: PublicUser | null
+  note: string
+  createdAt: string
+  updatedAt: string
+}
+
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']
 
 export const CHANNEL_LABELS: Record<string, string> = {
