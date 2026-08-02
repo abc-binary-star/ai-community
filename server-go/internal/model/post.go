@@ -18,6 +18,8 @@ type Post struct {
 	LikeCount  int       `gorm:"default:0" json:"likeCount"`
 	ViewCount  int       `gorm:"default:0" json:"viewCount"`
 	Edited     bool      `gorm:"default:false" json:"edited"`
+	IsPinned   bool      `gorm:"default:false;index" json:"isPinned"`
+	IsFeatured bool      `gorm:"default:false;index" json:"isFeatured"`
 	CreatedAt  time.Time `gorm:"index" json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 	Comments   []Comment `gorm:"foreignKey:PostID" json:"-"`

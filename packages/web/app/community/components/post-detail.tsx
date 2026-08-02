@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ChevronDown, Eye, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Eye, Loader2, Pencil, Pin, Star, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -110,6 +110,29 @@ export function PostDetailView({ id }: { id: string }) {
 
   const post = postQuery.data
   const isAuthor = hydrated && !!user && user.id === post.author.id
+  const canModerate = hydrated && !!user && (user.role === 'admin' || user.role === 'moderator')
+
+  const handleTogglePin = async () => {
+    try {
+      await api.put(`/posts/${id}/status`, { isPinned: !post.isPinned })
+      toast.success(post.isPinned ? '已取消置顶' : '已置顶')
+      queryClient.invalidateQueries({ queryKey: ['post', id] })
+      refreshPostLists()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '操作失败')
+    }
+  }
+
+  const handleToggleFeatured = async () => {
+    try {
+      await api.put(`/posts/${id}/status`, { isFeatured: !post.isFeatured })
+      toast.success(post.isFeatured ? '已取消精华' : '已设为精华')
+      queryClient.invalidateQueries({ queryKey: ['post', id] })
+      refreshPostLists()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '操作失败')
+    }
+  }
 
   // 合并已加载的所有评论页
   const allComments: Comment[] = []
@@ -132,7 +155,21 @@ export function PostDetailView({ id }: { id: string }) {
       <Card>
         <div className="space-y-4 p-6">
           <div className="flex items-center justify-between gap-2">
-            <Badge>{getChannelLabel(channels, post.channel)}</Badge>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {post.isPinned && (
+                <Badge className="border-transparent bg-amber-500/10 text-amber-600">
+                  <Pin className="size-3" />
+                  置顶
+                </Badge>
+              )}
+              {post.isFeatured && (
+                <Badge className="border-transparent bg-purple-500/10 text-purple-600">
+                  <Star className="size-3" />
+                  精华
+                </Badge>
+              )}
+              <Badge>{getChannelLabel(channels, post.channel)}</Badge>
+            </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Eye className="size-3.5" />
@@ -164,16 +201,32 @@ export function PostDetailView({ id }: { id: string }) {
                 <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-transparent">版主</Badge>
               )}
             </div>
-            {isAuthor && (
+            {(isAuthor || canModerate) && (
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => router.push(`/community/post/${id}/edit`)}>
-                  <Pencil />
-                  编辑
-                </Button>
-                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeletePost}>
-                  <Trash2 />
-                  删除帖子
-                </Button>
+                {canModerate && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleTogglePin}>
+                      <Pin />
+                      {post.isPinned ? '取消置顶' : '置顶'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleToggleFeatured}>
+                      <Star />
+                      {post.isFeatured ? '取消精华' : '精华'}
+                    </Button>
+                  </>
+                )}
+                {isAuthor && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => router.push(`/community/post/${id}/edit`)}>
+                      <Pencil />
+                      编辑
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeletePost}>
+                      <Trash2 />
+                      删除帖子
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -170,7 +170,7 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	if sortParam == "hot" {
 		// 热排序：拉取 500 条，内存排序后分页
 		var posts []model.Post
-		if err := dbQuery.Order("created_at DESC").Limit(500).Find(&posts).Error; err != nil {
+		if err := dbQuery.Order("is_pinned DESC, created_at DESC").Limit(500).Find(&posts).Error; err != nil {
 			return nil, err
 		}
 
@@ -182,6 +182,10 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		commentCounts := batchCommentCount(ctx, postIDs)
 
 		sort.Slice(posts, func(i, j int) bool {
+			// 置顶帖永远排在最前
+			if posts[i].IsPinned != posts[j].IsPinned {
+				return posts[i].IsPinned
+			}
 			scoreI := posts[i].LikeCount*2 + commentCounts[posts[i].ID]*3
 			scoreJ := posts[j].LikeCount*2 + commentCounts[posts[j].ID]*3
 			if scoreJ != scoreI {
@@ -202,7 +206,7 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		items = mapPostsToDTOs(ctx, paged, userID)
 	} else {
 		var posts []model.Post
-		if err := dbQuery.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&posts).Error; err != nil {
+		if err := dbQuery.Order("is_pinned DESC, created_at DESC").Offset(offset).Limit(pageSize).Find(&posts).Error; err != nil {
 			return nil, err
 		}
 		items = mapPostsToDTOs(ctx, posts, userID)
@@ -375,6 +379,44 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		return ErrPostForbidden
 	}
 	return dal.DB.WithContext(ctx).Delete(&model.Post{}, "id = ?", postID).Error
+}
+
+// SetPostStatus 设置帖子置顶/精华状态（管理员/版主操作）
+func (s *PostService) SetPostStatus(ctx context.Context, postID string, req types.UpdatePostStatusReq) (*types.Post, error) {
+	var existing model.Post
+	if err := dal.DB.WithContext(ctx).Select("id").First(&existing, "id = ?", postID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrPostNotFound_Post
+		}
+		return nil, err
+	}
+
+	if req.IsPinned == nil && req.IsFeatured == nil {
+		return nil, ErrPostInvalidInput
+	}
+
+	updates := map[string]interface{}{}
+	if req.IsPinned != nil {
+		updates["is_pinned"] = *req.IsPinned
+	}
+	if req.IsFeatured != nil {
+		updates["is_featured"] = *req.IsFeatured
+	}
+	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+
+	var updated model.Post
+	if err := dal.DB.WithContext(ctx).Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error; err != nil {
+		return nil, err
+	}
+
+	commentCounts := batchCommentCount(ctx, []string{postID})
+	likedSet := batchLikedPostIDs(ctx, []string{postID}, "")
+	bookmarkedSet := batchBookmarkedPostIDs(ctx, []string{postID}, "")
+	tagNames := mapper.ExtractTagNames(updated.Tags)
+	dto := mapper.PostToDTO(&updated, commentCounts[postID], likedSet[postID], bookmarkedSet[postID], tagNames)
+	return &dto, nil
 }
 
 // LikePost 点赞帖子，返回 (likeCount, alreadyLiked, error)

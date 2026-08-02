@@ -37,6 +37,8 @@ export interface Post {
   liked: boolean
   bookmarked: boolean
   edited: boolean
+  isPinned: boolean
+  isFeatured: boolean
   tags: string[]
   createdAt: string
   updatedAt: string
