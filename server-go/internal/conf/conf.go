@@ -18,6 +18,9 @@ type Config struct {
 	DeepSeekModel string
 }
 
+// Global 全局配置实例，Load 后可用
+var Global *Config
+
 // Load 从环境变量加载配置
 func Load() *Config {
 	nodeEnv := getEnvOrDefault("NODE_ENV", "development")
@@ -39,7 +42,7 @@ func Load() *Config {
 		corsOrigins[i] = strings.TrimSpace(o)
 	}
 
-	return &Config{
+	cfg := &Config{
 		Port:          getEnvOrDefault("PORT", "3001"),
 		DatabaseURL:   getEnvOrDefault("DATABASE_URL", "postgresql://aicom:aicom_dev@localhost:5432/aicom?sslmode=disable"),
 		JWTSecret:     jwtSecret,
@@ -49,6 +52,8 @@ func Load() *Config {
 		DeepSeekURL:   getEnvOrDefault("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
 		DeepSeekModel: getEnvOrDefault("DEEPSEEK_MODEL", "deepseek-chat"),
 	}
+	Global = cfg
+	return cfg
 }
 
 func getEnvOrDefault(key, defaultVal string) string {

@@ -168,51 +168,70 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		toTime, hasTo = parseTime(to)
 	}
 
-	if scope == "all" {
-		// 并行查询各取前 5 条
-		// Posts
-		postQuery := dal.DB.WithContext(ctx).
-			Preload("Author").
-			Preload("Tags").
-			Where("title ILIKE ? OR content ILIKE ?", like, like)
+	// 可复用的 where 条件构建器：每次调用返回独立的 *gorm.DB 查询链
+	// 确保 count 和 find 使用完全相同的过滤条件
+
+	// Post: title / content / author.username 命中关键词
+	postWhere := func() *gorm.DB {
+		w := dal.DB.WithContext(ctx).Model(&model.Post{}).
+			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
+				like, like,
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
 		if channel != "" && validChannel(channel) {
-			postQuery = postQuery.Where("channel = ?", channel)
+			w = w.Where("channel = ?", channel)
 		}
 		if author != "" {
-			postQuery = postQuery.Where("author_id IN (?)",
+			w = w.Where("author_id IN (?)",
 				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", "%"+author+"%"))
 		}
 		if hasFrom {
-			postQuery = postQuery.Where("created_at >= ?", fromTime)
+			w = w.Where("created_at >= ?", fromTime)
 		}
 		if hasTo {
-			postQuery = postQuery.Where("created_at <= ?", toTime)
+			w = w.Where("created_at <= ?", toTime)
 		}
+		return w
+	}
 
+	// Comment: content 命中关键词
+	commentWhere := func() *gorm.DB {
+		w := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like)
+		if hasFrom {
+			w = w.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			w = w.Where("created_at <= ?", toTime)
+		}
+		return w
+	}
+
+	// User: username / displayName 命中关键词
+	userWhere := func() *gorm.DB {
+		w := dal.DB.WithContext(ctx).Model(&model.User{}).
+			Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+		if hasFrom {
+			w = w.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			w = w.Where("created_at <= ?", toTime)
+		}
+		return w
+	}
+
+	if scope == "all" {
+		// Posts
 		var postRows []model.Post
 		var postTotal int64
-		postQuery.Order("created_at DESC").Limit(5).Find(&postRows)
-		dal.DB.WithContext(ctx).Model(&model.Post{}).
-			Where("title ILIKE ? OR content ILIKE ?", like, like).
-			Count(&postTotal)
+		postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Limit(5).Find(&postRows)
+		postWhere().Count(&postTotal)
 
 		postItems := mapPostsToDTOs(ctx, postRows, userID)
 
 		// Comments
-		commentQuery := dal.DB.WithContext(ctx).
-			Preload("Author").
-			Where("content ILIKE ?", like)
-		if hasFrom {
-			commentQuery = commentQuery.Where("created_at >= ?", fromTime)
-		}
-		if hasTo {
-			commentQuery = commentQuery.Where("created_at <= ?", toTime)
-		}
-
 		var commentRows []model.Comment
 		var commentTotal int64
-		commentQuery.Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows)
-		dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like).Count(&commentTotal)
+		commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows)
+		commentWhere().Count(&commentTotal)
 
 		commentItems := make([]types.SearchComment, 0, len(commentRows))
 		for _, c := range commentRows {
@@ -222,7 +241,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 				PostID:    c.PostID,
 				AuthorID:  c.AuthorID,
 				Author:    mapper.AuthorToDTO(&c.Author),
-				CreatedAt: c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				CreatedAt: c.CreatedAt.Format(time.RFC3339),
 				LikeCount: c.LikeCount,
 			}
 			item.Post.ID = c.Post.ID
@@ -232,22 +251,11 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		}
 
 		// Users
-		userQuery := dal.DB.WithContext(ctx).
-			Where("username ILIKE ? OR display_name ILIKE ?", like, like)
-		if hasFrom {
-			userQuery = userQuery.Where("created_at >= ?", fromTime)
-		}
-		if hasTo {
-			userQuery = userQuery.Where("created_at <= ?", toTime)
-		}
-
 		var userRows []model.User
 		var userTotal int64
-		userQuery.Select("id", "username", "avatar", "bio", "display_name", "created_at").
+		userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
 			Order("created_at DESC").Limit(5).Find(&userRows)
-		dal.DB.WithContext(ctx).Model(&model.User{}).
-			Where("username ILIKE ? OR display_name ILIKE ?", like, like).
-			Count(&userTotal)
+		userWhere().Count(&userTotal)
 
 		userItems := make([]types.SearchUser, 0, len(userRows))
 		for _, u := range userRows {
@@ -257,7 +265,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 				Avatar:      u.Avatar,
 				DisplayName: u.DisplayName,
 				Bio:         u.Bio,
-				CreatedAt:   u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				CreatedAt:   u.CreatedAt.Format(time.RFC3339),
 			})
 		}
 
@@ -272,32 +280,12 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	offset := (page - 1) * pageSize
 
 	if scope == "posts" {
-		query := dal.DB.WithContext(ctx).
-			Preload("Author").
-			Preload("Tags").
-			Where("title ILIKE ? OR content ILIKE ?", like, like)
-		if channel != "" && validChannel(channel) {
-			query = query.Where("channel = ?", channel)
-		}
-		if author != "" {
-			query = query.Where("author_id IN (?)",
-				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", "%"+author+"%"))
-		}
-		if hasFrom {
-			query = query.Where("created_at >= ?", fromTime)
-		}
-		if hasTo {
-			query = query.Where("created_at <= ?", toTime)
-		}
-
 		var total int64
-		dal.DB.WithContext(ctx).Model(&model.Post{}).
-			Where("title ILIKE ? OR content ILIKE ?", like, like).
-			Count(&total)
+		postWhere().Count(&total)
 
 		var rows []model.Post
 		if sort == "relevance" {
-			query.Order("created_at DESC").Limit(500).Find(&rows)
+			postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Limit(500).Find(&rows)
 			ql := strings.ToLower(q)
 			sortPkg.Slice(rows, func(i, j int) bool {
 				aTitle := strings.Contains(strings.ToLower(rows[i].Title), ql)
@@ -317,7 +305,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 			}
 			rows = rows[start:end]
 		} else {
-			query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+			postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
 		}
 
 		items := mapPostsToDTOs(ctx, rows, userID)
@@ -328,22 +316,11 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	}
 
 	if scope == "comments" {
-		query := dal.DB.WithContext(ctx).
-			Preload("Author").
-			Preload("Post").
-			Where("content ILIKE ?", like)
-		if hasFrom {
-			query = query.Where("created_at >= ?", fromTime)
-		}
-		if hasTo {
-			query = query.Where("created_at <= ?", toTime)
-		}
-
 		var total int64
-		dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like).Count(&total)
+		commentWhere().Count(&total)
 
 		var rows []model.Comment
-		query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+		commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
 
 		items := make([]types.SearchComment, 0, len(rows))
 		for _, c := range rows {
@@ -353,7 +330,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 				PostID:    c.PostID,
 				AuthorID:  c.AuthorID,
 				Author:    mapper.AuthorToDTO(&c.Author),
-				CreatedAt: c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				CreatedAt: c.CreatedAt.Format(time.RFC3339),
 				LikeCount: c.LikeCount,
 			}
 			item.Post.ID = c.Post.ID
@@ -369,22 +346,11 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	}
 
 	// scope == "users"
-	query := dal.DB.WithContext(ctx).
-		Where("username ILIKE ? OR display_name ILIKE ?", like, like)
-	if hasFrom {
-		query = query.Where("created_at >= ?", fromTime)
-	}
-	if hasTo {
-		query = query.Where("created_at <= ?", toTime)
-	}
-
 	var total int64
-	dal.DB.WithContext(ctx).Model(&model.User{}).
-		Where("username ILIKE ? OR display_name ILIKE ?", like, like).
-		Count(&total)
+	userWhere().Count(&total)
 
 	var rows []model.User
-	query.Select("id", "username", "avatar", "bio", "display_name", "created_at").
+	userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
 		Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
 
 	items := make([]types.SearchUser, 0, len(rows))
@@ -395,7 +361,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 			Avatar:      u.Avatar,
 			DisplayName: u.DisplayName,
 			Bio:         u.Bio,
-			CreatedAt:   u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt:   u.CreatedAt.Format(time.RFC3339),
 		})
 	}
 

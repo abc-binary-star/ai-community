@@ -24,13 +24,27 @@ func handleCommentError(c *app.RequestContext, err error) {
 
 // ========== Comment Handlers ==========
 
-// ListComments 获取帖子评论列表（树形，分页根评论）
+// ListComments 获取帖子评论列表（根评论分页 + 回复预览）
 func ListComments(ctx context.Context, c *app.RequestContext) {
 	postID := c.Param("id")
 	currentUserID := middleware.GetCurrentUserID(c)
 	page, pageSize := pagination.Parse(c)
 
 	result, err := commentService.ListComments(ctx, postID, currentUserID, page, pageSize)
+	if err != nil {
+		handleCommentError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
+// ListReplies 分页加载某条评论的回复
+func ListReplies(ctx context.Context, c *app.RequestContext) {
+	commentID := c.Param("id")
+	currentUserID := middleware.GetCurrentUserID(c)
+	page, pageSize := pagination.Parse(c)
+
+	result, err := commentService.ListReplies(ctx, commentID, currentUserID, page, pageSize)
 	if err != nil {
 		handleCommentError(c, err)
 		return
@@ -99,15 +113,16 @@ func LikeComment(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	status := consts.StatusCreated
-	if alreadyLiked {
-		status = consts.StatusOK
-	}
-	c.JSON(status, map[string]interface{}{
+	body := map[string]interface{}{
 		"ok":        true,
 		"liked":     true,
 		"likeCount": likeCount,
-	})
+	}
+	if alreadyLiked {
+		response.JSON(c, body)
+	} else {
+		response.Created(c, body)
+	}
 }
 
 // UnlikeComment 取消点赞评论

@@ -94,18 +94,19 @@ type Post struct {
 }
 
 type Comment struct {
-	ID        string     `json:"id"`
-	Content   string     `json:"content"`
-	PostID    string     `json:"postId"`
-	AuthorID  string     `json:"authorId"`
-	Author    PublicUser `json:"author"`
-	ParentID  *string    `json:"parentId"`
-	Replies   []Comment  `json:"replies"`
-	LikeCount int        `json:"likeCount"`
-	Liked     bool       `json:"liked"`
-	Edited    bool       `json:"edited"`
-	CreatedAt string     `json:"createdAt"`
-	UpdatedAt string     `json:"updatedAt"`
+	ID          string     `json:"id"`
+	Content     string     `json:"content"`
+	PostID      string     `json:"postId"`
+	AuthorID    string     `json:"authorId"`
+	Author      PublicUser `json:"author"`
+	ParentID    *string    `json:"parentId"`
+	Replies     []Comment  `json:"replies"`
+	ReplyCount  int        `json:"replyCount"`
+	LikeCount   int        `json:"likeCount"`
+	Liked       bool       `json:"liked"`
+	Edited      bool       `json:"edited"`
+	CreatedAt   string     `json:"createdAt"`
+	UpdatedAt   string     `json:"updatedAt"`
 }
 
 type AuthResponse struct {

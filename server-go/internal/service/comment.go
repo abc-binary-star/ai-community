@@ -39,7 +39,10 @@ func truncateContent(content string) string {
 	return content
 }
 
-// ListComments 获取帖子的评论列表（树形，分页根评论）
+// replyPreviewLimit 每条根评论初始加载的回复条数
+const replyPreviewLimit = 3
+
+// ListComments 获取帖子的评论列表（根评论分页 + 每条根评论前 N 条回复预览）
 func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID string, page, pageSize int) (*types.Paginated[types.Comment], error) {
 	// 检查帖子是否存在
 	var post model.Post
@@ -66,46 +69,61 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 		Limit(pageSize).
 		Find(&rootRows)
 
-	// 全量加载回复（因为要组装树）
-	var replyRows []model.Comment
+	if len(rootRows) == 0 {
+		return &types.Paginated[types.Comment]{
+			Items:      []types.Comment{},
+			Total:      int(total),
+			Page:       page,
+			PageSize:   pageSize,
+			TotalPages: pagination.TotalPages(int(total), pageSize),
+		}, nil
+	}
+
+	// 收集根评论 ID
+	rootIDs := make([]string, 0, len(rootRows))
+	for i := range rootRows {
+		rootIDs = append(rootIDs, rootRows[i].ID)
+	}
+
+	// 批量查询每条根评论的回复总数
+	type countRow struct {
+		ParentID string
+		Cnt      int64
+	}
+	var countRows []countRow
+	dal.DB.WithContext(ctx).Model(&model.Comment{}).
+		Select("parent_id as parent_id, COUNT(*) as cnt").
+		Where("parent_id IN ?", rootIDs).
+		Group("parent_id").
+		Scan(&countRows)
+	replyCountMap := make(map[string]int, len(countRows))
+	for _, r := range countRows {
+		replyCountMap[r.ParentID] = int(r.Cnt)
+	}
+
+	// 批量加载每条根评论的前 replyPreviewLimit 条回复（按时间正序）
+	var previewReplies []model.Comment
 	dal.DB.WithContext(ctx).
 		Preload("Author").
-		Where("post_id = ? AND parent_id IS NOT NULL", postID).
+		Where("parent_id IN ?", rootIDs).
 		Order("created_at ASC").
-		Find(&replyRows)
+		Find(&previewReplies)
 
-	// 合并根评论与回复
-	allRows := append(rootRows, replyRows...)
-
-	// 记录当前页存在的评论 ID（用于过滤父评论不在当前页的孤儿回复）
-	presentIDs := make(map[string]bool)
-	for i := range allRows {
-		presentIDs[allRows[i].ID] = true
-	}
-
-	// 构建子评论映射 + 根评论列表
-	childrenMap := make(map[string][]model.Comment)
-	var rootModels []model.Comment
-	for i := range allRows {
-		r := &allRows[i]
-		if r.ParentID != nil && presentIDs[*r.ParentID] {
-			childrenMap[*r.ParentID] = append(childrenMap[*r.ParentID], *r)
-		} else if r.ParentID == nil {
-			rootModels = append(rootModels, *r)
+	// 按 parent_id 分组，每组只取前 replyPreviewLimit 条
+	repliesMap := make(map[string][]model.Comment)
+	for i := range previewReplies {
+		pid := *previewReplies[i].ParentID
+		if len(repliesMap[pid]) < replyPreviewLimit {
+			repliesMap[pid] = append(repliesMap[pid], previewReplies[i])
 		}
 	}
 
-	// 递归收集树中所有评论 ID
-	var collectIDs func(models []model.Comment) []string
-	collectIDs = func(models []model.Comment) []string {
-		var ids []string
-		for i := range models {
-			ids = append(ids, models[i].ID)
-			ids = append(ids, collectIDs(childrenMap[models[i].ID])...)
-		}
-		return ids
+	// 收集所有预览回复的 ID，用于批量查点赞状态
+	allIDs := make([]string, 0, len(rootRows)+len(previewReplies))
+	allIDs = append(allIDs, rootIDs...)
+	for i := range previewReplies {
+		allIDs = append(allIDs, previewReplies[i].ID)
 	}
-	allIDs := collectIDs(rootModels)
 
 	// 批量查询当前用户的点赞状态
 	likedSet := make(map[string]bool)
@@ -120,20 +138,77 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 		}
 	}
 
-	// 递归构建 DTO 树
-	var build func(c *model.Comment) types.Comment
-	build = func(c *model.Comment) types.Comment {
-		var replies []types.Comment
-		children := childrenMap[c.ID]
-		for i := range children {
-			replies = append(replies, build(&children[i]))
+	// 构建 DTO
+	items := make([]types.Comment, 0, len(rootRows))
+	for i := range rootRows {
+		root := &rootRows[i]
+		children := repliesMap[root.ID]
+		replies := make([]types.Comment, 0, len(children))
+		for j := range children {
+			c := &children[j]
+			replies = append(replies, mapper.CommentToDTO(c, likedSet[c.ID], []types.Comment{}, 0))
 		}
-		return mapper.CommentToDTO(c, likedSet[c.ID], replies)
+		rc := replyCountMap[root.ID]
+		items = append(items, mapper.CommentToDTO(root, likedSet[root.ID], replies, rc))
 	}
 
-	items := make([]types.Comment, 0, len(rootModels))
-	for i := range rootModels {
-		items = append(items, build(&rootModels[i]))
+	return &types.Paginated[types.Comment]{
+		Items:      items,
+		Total:      int(total),
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: pagination.TotalPages(int(total), pageSize),
+	}, nil
+}
+
+// ListReplies 分页加载某条根评论的回复（扁平列表，非树形）
+func (s *CommentService) ListReplies(ctx context.Context, commentID, currentUserID string, page, pageSize int) (*types.Paginated[types.Comment], error) {
+	// 检查评论是否存在
+	var comment model.Comment
+	if err := dal.DB.WithContext(ctx).Select("id").First(&comment, "id = ?", commentID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrCommentNotFound
+		}
+		return nil, err
+	}
+
+	// 回复总数
+	var total int64
+	dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("parent_id = ?", commentID).Count(&total)
+
+	offset := (page - 1) * pageSize
+
+	// 分页加载回复（正序，时间从早到晚）
+	var rows []model.Comment
+	dal.DB.WithContext(ctx).
+		Preload("Author").
+		Where("parent_id = ?", commentID).
+		Order("created_at ASC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&rows)
+
+	// 收集 ID 批量查点赞状态
+	ids := make([]string, 0, len(rows))
+	for i := range rows {
+		ids = append(ids, rows[i].ID)
+	}
+	likedSet := make(map[string]bool)
+	if currentUserID != "" && len(ids) > 0 {
+		var likes []model.CommentLike
+		dal.DB.WithContext(ctx).
+			Where("user_id = ? AND comment_id IN ?", currentUserID, ids).
+			Select("comment_id").
+			Find(&likes)
+		for _, l := range likes {
+			likedSet[l.CommentID] = true
+		}
+	}
+
+	items := make([]types.Comment, 0, len(rows))
+	for i := range rows {
+		c := &rows[i]
+		items = append(items, mapper.CommentToDTO(c, likedSet[c.ID], []types.Comment{}, 0))
 	}
 
 	return &types.Paginated[types.Comment]{
@@ -213,7 +288,7 @@ func (s *CommentService) CreateComment(ctx context.Context, postID, userID strin
 	// 解析评论内容中的 @提及
 	notification.CreateMentionNotifications(ctx, req.Content, userID, postID, created.ID)
 
-	dto := mapper.CommentToDTO(created, false, []types.Comment{})
+	dto := mapper.CommentToDTO(created, false, []types.Comment{}, 0)
 	return &dto, nil
 }
 
@@ -245,7 +320,7 @@ func (s *CommentService) UpdateComment(ctx context.Context, commentID, userID st
 	// 解析编辑后内容中的 @提及
 	notification.CreateMentionNotifications(ctx, req.Content, userID, existing.PostID, commentID)
 
-	dto := mapper.CommentToDTO(&updated, false, []types.Comment{})
+	dto := mapper.CommentToDTO(&updated, false, []types.Comment{}, 0)
 	return &dto, nil
 }
 

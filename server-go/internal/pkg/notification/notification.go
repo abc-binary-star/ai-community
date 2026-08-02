@@ -2,12 +2,14 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"log"
 	"regexp"
 	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -102,10 +104,11 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 		cid = commentID[0]
 	}
 
-	// 截断过长内容
+	// 截断过长内容（按 rune 计，避免截断中文产生乱码）
 	notifContent := content
-	if len(notifContent) > 50 {
-		notifContent = content[:50] + "…"
+	runes := []rune(content)
+	if len(runes) > 50 {
+		notifContent = string(runes[:50]) + "…"
 	}
 
 	for _, u := range users {
@@ -120,9 +123,17 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 	}
 }
 
-// IsUniqueConstraintError 判断是否为唯一约束冲突
+// IsUniqueConstraintError 判断是否为唯一约束冲突（PostgreSQL error code 23505）
 func IsUniqueConstraintError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "duplicate key value")
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	// 兼容非 pgx 驱动或被包装的错误，回退到字符串匹配
+	return strings.Contains(err.Error(), "duplicate key value")
 }
 
 // IsNotFoundError 判断是否为记录不存在

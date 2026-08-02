@@ -75,23 +75,24 @@ func PostToDTO(p *model.Post, commentCount int, liked, bookmarked bool, tagNames
 }
 
 // CommentToDTO 将 Comment model 转为 Comment DTO
-func CommentToDTO(c *model.Comment, liked bool, replies []types.Comment) types.Comment {
+func CommentToDTO(c *model.Comment, liked bool, replies []types.Comment, replyCount int) types.Comment {
 	if replies == nil {
 		replies = []types.Comment{}
 	}
 	return types.Comment{
-		ID:        c.ID,
-		Content:   c.Content,
-		PostID:    c.PostID,
-		AuthorID:  c.AuthorID,
-		Author:    AuthorToDTO(&c.Author),
-		ParentID:  c.ParentID,
-		Replies:   replies,
-		LikeCount: c.LikeCount,
-		Liked:     liked,
-		Edited:    c.Edited,
-		CreatedAt: c.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: c.UpdatedAt.Format(time.RFC3339),
+		ID:         c.ID,
+		Content:    c.Content,
+		PostID:     c.PostID,
+		AuthorID:   c.AuthorID,
+		Author:     AuthorToDTO(&c.Author),
+		ParentID:   c.ParentID,
+		Replies:    replies,
+		ReplyCount: replyCount,
+		LikeCount:  c.LikeCount,
+		Liked:      liked,
+		Edited:     c.Edited,
+		CreatedAt:  c.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  c.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

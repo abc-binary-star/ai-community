@@ -33,20 +33,22 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	auth.GET("/me", middleware.Auth(), handler.Me)
 
 	// --- 帖子路由 ---
-	posts := h.Group("/api/posts")
-	posts.GET("/", middleware.OptionalAuth(), handler.ListPosts)
-	posts.GET("/tags/popular", handler.PopularTags)
-	posts.POST("/suggest-tags", middleware.Auth(), handler.SuggestTags)
-	posts.GET("/:id", middleware.OptionalAuth(), handler.GetPost)
-	posts.POST("/", middleware.Auth(), handler.CreatePost)
-	posts.PUT("/:id", middleware.Auth(), handler.UpdatePost)
-	posts.DELETE("/:id", middleware.Auth(), handler.DeletePost)
-	posts.POST("/:id/like", middleware.Auth(), handler.LikePost)
-	posts.DELETE("/:id/like", middleware.Auth(), handler.UnlikePost)
+	// 注意：前端请求 /api/posts（不带尾部斜杠），Hertz 不会自动重定向，
+	// 因此直接在 h 上注册而非用 Group 的 "/" 路径
+	h.GET("/api/posts", middleware.OptionalAuth(), handler.ListPosts)
+	h.POST("/api/posts", middleware.Auth(), handler.CreatePost)
+	h.GET("/api/posts/tags/popular", handler.PopularTags)
+	h.POST("/api/posts/suggest-tags", middleware.Auth(), handler.SuggestTags)
+	h.GET("/api/posts/:id", middleware.OptionalAuth(), handler.GetPost)
+	h.PUT("/api/posts/:id", middleware.Auth(), handler.UpdatePost)
+	h.DELETE("/api/posts/:id", middleware.Auth(), handler.DeletePost)
+	h.POST("/api/posts/:id/like", middleware.Auth(), handler.LikePost)
+	h.DELETE("/api/posts/:id/like", middleware.Auth(), handler.UnlikePost)
 
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)
 	h.POST("/api/posts/:id/comments", middleware.Auth(), handler.CreateComment)
+	h.GET("/api/comments/:id/replies", middleware.OptionalAuth(), handler.ListReplies)
 	h.PUT("/api/comments/:id", middleware.Auth(), handler.UpdateComment)
 	h.DELETE("/api/comments/:id", middleware.Auth(), handler.DeleteComment)
 	h.POST("/api/comments/:id/like", middleware.Auth(), handler.LikeComment)
@@ -71,11 +73,11 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/followers/:username", middleware.OptionalAuth(), handler.ListFollowers)
 
 	// --- 通知路由 ---
-	notifications := h.Group("/api/notifications", middleware.Auth())
-	notifications.GET("/", handler.ListNotifications)
-	notifications.GET("/unread-count", handler.UnreadCount)
-	notifications.POST("/:id/read", handler.MarkNotificationRead)
-	notifications.POST("/read-all", handler.MarkAllRead)
+	// 注意：前端请求 /api/notifications（不带尾部斜杠）
+	h.GET("/api/notifications", middleware.Auth(), handler.ListNotifications)
+	h.GET("/api/notifications/unread-count", middleware.Auth(), handler.UnreadCount)
+	h.POST("/api/notifications/:id/read", middleware.Auth(), handler.MarkNotificationRead)
+	h.POST("/api/notifications/read-all", middleware.Auth(), handler.MarkAllRead)
 
 	// --- 搜索路由 ---
 	h.GET("/api/search", middleware.OptionalAuth(), handler.Search)

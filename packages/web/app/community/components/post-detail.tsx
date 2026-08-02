@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Eye, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Eye, Loader2, Pencil, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,13 +14,15 @@ import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import { CHANNEL_LABELS, type Comment, type Post } from 'shared'
+import { CHANNEL_LABELS, type Comment, type Paginated, type Post } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { TagBadge } from './tag-badge'
 import { toast } from 'sonner'
+
+const COMMENT_PAGE_SIZE = 10
 
 export function PostDetailView({ id }: { id: string }) {
   const router = useRouter()
@@ -29,14 +31,18 @@ export function PostDetailView({ id }: { id: string }) {
   const token = useAuthStore((s) => s.token)
   const hydrated = useHydrated()
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
+  const [commentPage, setCommentPage] = useState(1)
 
   const postQuery = useQuery({
     queryKey: ['post', id],
     queryFn: () => api.get<Post>(`/posts/${id}`),
   })
   const commentsQuery = useQuery({
-    queryKey: ['comments', id],
-    queryFn: () => api.get<{ items: Comment[] }>(`/posts/${id}/comments`),
+    queryKey: ['comments', id, commentPage],
+    queryFn: () =>
+      api.get<Paginated<Comment>>(
+        `/posts/${id}/comments?page=${commentPage}&pageSize=${COMMENT_PAGE_SIZE}`
+      ),
   })
 
   const handleDeletePost = async () => {
@@ -101,6 +107,17 @@ export function PostDetailView({ id }: { id: string }) {
 
   const post = postQuery.data
   const isAuthor = hydrated && !!user && user.id === post.author.id
+
+  // 合并已加载的所有评论页
+  const allComments: Comment[] = []
+  for (let p = 1; p <= commentPage; p++) {
+    const pageData = queryClient.getQueryData<Paginated<Comment>>(['comments', id, p])
+    if (pageData) {
+      allComments.push(...pageData.items)
+    }
+  }
+  const commentsData = commentsQuery.data
+  const hasMoreComments = commentsData ? commentPage < commentsData.totalPages : false
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -200,20 +217,39 @@ export function PostDetailView({ id }: { id: string }) {
           </Card>
         )}
 
-        {commentsQuery.isLoading ? (
+        {commentsQuery.isLoading && commentPage === 1 ? (
           <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
             <Loader2 className="animate-spin" />
             加载评论…
           </div>
         ) : commentsQuery.isError ? (
           <p className="py-6 text-center text-sm text-muted-foreground">评论加载失败，请稍后重试</p>
-        ) : commentsQuery.data && commentsQuery.data.items.length > 0 ? (
-          <CommentTree
-            comments={commentsQuery.data.items}
-            currentUserId={user?.id}
-            onReply={setReplyTo}
-            onDeleted={refreshComments}
-          />
+        ) : allComments.length > 0 ? (
+          <>
+            <CommentTree
+              comments={allComments}
+              currentUserId={user?.id}
+              onReply={setReplyTo}
+              onDeleted={refreshComments}
+            />
+            {hasMoreComments && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCommentPage((p) => p + 1)}
+                  disabled={commentsQuery.isFetching}
+                >
+                  {commentsQuery.isFetching ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                  加载更多评论
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <p className="py-6 text-center text-sm text-muted-foreground">还没有评论，来说点什么吧</p>
         )}

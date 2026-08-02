@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
@@ -35,6 +35,7 @@ func (e *PostError) Error() string { return e.Msg }
 var (
 	ErrPostNotFound_Post = &PostError{Msg: "帖子不存在", Code: 404}
 	ErrPostForbidden     = &PostError{Msg: "无权操作他人的帖子", Code: 403}
+	ErrPostInvalidInput  = &PostError{Msg: "输入不合法", Code: 400}
 )
 
 func validChannel(ch string) bool {
@@ -123,6 +124,11 @@ func mapPostsToDTOs(ctx context.Context, posts []model.Post, userID string) []ty
 
 // ListPosts 帖子列表
 func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag, userID string, page, pageSize int) (*types.Paginated[types.Post], error) {
+	// 校验 channel，无效时回退到 general
+	if channel != "all" && !validChannel(channel) {
+		channel = "general"
+	}
+
 	query := dal.DB.WithContext(ctx).Model(&model.Post{})
 
 	if q != "" {
@@ -164,7 +170,9 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	if sortParam == "hot" {
 		// 热排序：拉取 500 条，内存排序后分页
 		var posts []model.Post
-		dbQuery.Order("created_at DESC").Limit(500).Find(&posts)
+		if err := dbQuery.Order("created_at DESC").Limit(500).Find(&posts).Error; err != nil {
+			return nil, err
+		}
 
 		// 获取评论数用于热排序
 		postIDs := make([]string, 0, len(posts))
@@ -194,7 +202,9 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		items = mapPostsToDTOs(ctx, paged, userID)
 	} else {
 		var posts []model.Post
-		dbQuery.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&posts)
+		if err := dbQuery.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&posts).Error; err != nil {
+			return nil, err
+		}
 		items = mapPostsToDTOs(ctx, posts, userID)
 	}
 
@@ -297,6 +307,20 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 
 // UpdatePost 更新帖子
 func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req types.UpdatePostReq) (*types.Post, error) {
+	// 字段长度校验
+	if req.Title != nil {
+		titleLen := len([]rune(*req.Title))
+		if titleLen < 1 || titleLen > 100 {
+			return nil, ErrPostInvalidInput
+		}
+	}
+	if req.Content != nil {
+		contentLen := len([]rune(*req.Content))
+		if contentLen < 1 || contentLen > 20000 {
+			return nil, ErrPostInvalidInput
+		}
+	}
+
 	var existing model.Post
 	if err := dal.DB.WithContext(ctx).Select("id", "author_id").First(&existing, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -453,15 +477,15 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 
 // SuggestTags AI 标签推荐
 func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([]string, error) {
-	apiKey := os.Getenv("DEEPSEEK_API_KEY")
+	apiKey := conf.Global.DeepSeekKey
 	if apiKey == "" {
 		return nil, fmt.Errorf("DEEPSEEK_API_KEY 未配置")
 	}
-	baseURL := os.Getenv("DEEPSEEK_BASE_URL")
+	baseURL := conf.Global.DeepSeekURL
 	if baseURL == "" {
 		baseURL = "https://api.deepseek.com"
 	}
-	model := os.Getenv("DEEPSEEK_MODEL")
+	model := conf.Global.DeepSeekModel
 	if model == "" {
 		model = "deepseek-chat"
 	}

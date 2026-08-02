@@ -48,6 +48,7 @@ export interface Comment {
   author: PublicUser
   parentId: string | null
   replies: Comment[]
+  replyCount: number
   likeCount: number
   liked: boolean
   edited: boolean

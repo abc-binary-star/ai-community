@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, MessageSquare, Pencil, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, MessageSquare, Pencil, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import type { Comment } from 'shared'
+import type { Comment, Paginated } from 'shared'
 import { LikeButton } from './like-button'
 import { MarkdownEditor } from '@/components/markdown-editor'
 
@@ -31,6 +31,15 @@ export function CommentItem({
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState(comment.content)
   const [submitting, setSubmitting] = useState(false)
+
+  // 回复折叠/展开状态
+  const [replies, setReplies] = useState<Comment[]>(comment.replies)
+  const [replyCount, setReplyCount] = useState(comment.replyCount)
+  const [expanded, setExpanded] = useState(false)
+  const [loadingReplies, setLoadingReplies] = useState(false)
+
+  // 剩余未展示的回复数
+  const hiddenCount = replyCount - replies.length
 
   const handleDelete = async () => {
     if (!window.confirm('确定删除这条评论吗？')) return
@@ -67,6 +76,29 @@ export function CommentItem({
   const cancelEdit = () => {
     setEditing(false)
     setEditContent(comment.content)
+  }
+
+  // 展开回复：加载下一页回复
+  const handleLoadMoreReplies = async () => {
+    if (loadingReplies) return
+    setLoadingReplies(true)
+    try {
+      const res = await api.get<Paginated<Comment>>(
+        `/comments/${comment.id}/replies?page=1&pageSize=${replyCount}`
+      )
+      setReplies(res.items)
+      setExpanded(true)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '加载回复失败')
+    } finally {
+      setLoadingReplies(false)
+    }
+  }
+
+  // 收起回复：恢复到只展示前3条
+  const handleCollapse = () => {
+    setReplies(comment.replies)
+    setExpanded(false)
   }
 
   return (
@@ -143,9 +175,30 @@ export function CommentItem({
         </div>
       </Card>
 
-      {comment.replies.length > 0 && (
+      {/* 回复折叠/展开按钮 */}
+      {hiddenCount > 0 && !expanded && (
+        <div className="ml-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-primary hover:text-primary"
+            onClick={handleLoadMoreReplies}
+            disabled={loadingReplies}
+          >
+            {loadingReplies ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <ChevronDown className="size-3.5" />
+            )}
+            展开 {hiddenCount} 条回复
+          </Button>
+        </div>
+      )}
+
+      {/* 回复列表 */}
+      {replies.length > 0 && (
         <div className="space-y-2">
-          {comment.replies.map((r) => (
+          {replies.map((r) => (
             <CommentItem
               key={r.id}
               comment={r}
@@ -155,6 +208,19 @@ export function CommentItem({
               onDeleted={onDeleted}
             />
           ))}
+          {expanded && hiddenCount === 0 && replyCount > 3 && (
+            <div className="ml-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-muted-foreground"
+                onClick={handleCollapse}
+              >
+                <ChevronUp className="size-3.5" />
+                收起回复
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
