@@ -1,18 +1,15 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"gorm.io/gorm"
 )
@@ -101,19 +98,6 @@ func summaryToDTO(s *model.PostSummary) *types.PostSummary {
 
 // generateDiscussionSummary 调用 DeepSeek 生成讨论要点摘要
 func generateDiscussionSummary(ctx context.Context, post *model.Post, comments []model.Comment) (string, error) {
-	apiKey := conf.Global.DeepSeekKey
-	if apiKey == "" {
-		return "", fmt.Errorf("DEEPSEEK_API_KEY 未配置")
-	}
-	baseURL := conf.Global.DeepSeekURL
-	if baseURL == "" {
-		baseURL = "https://api.deepseek.com"
-	}
-	model := conf.Global.DeepSeekModel
-	if model == "" {
-		model = "deepseek-chat"
-	}
-
 	// 截断帖子内容
 	postContent := post.Content
 	if runes := []rune(postContent); len(runes) > 2000 {
@@ -142,48 +126,10 @@ func generateDiscussionSummary(ctx context.Context, post *model.Post, comments [
 4. 使用 Markdown 无序列表输出（每行以 "- " 开头）
 5. 只输出要点列表，不要任何前言或后语`
 
-	userPrompt := fmt.Sprintf("帖子标题：%s\n帖子内容：%s\n\n讨论评论：\n%s", post.Title, postContent, commentsText)
-
-	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": userPrompt},
-		},
-		"max_tokens":  1000,
-		"temperature": 0.3,
+	return ai.Chat(ctx, ai.ChatRequest{
+		System:      systemPrompt,
+		User:        fmt.Sprintf("帖子标题：%s\n帖子内容：%s\n\n讨论评论：\n%s", post.Title, postContent, commentsText),
+		MaxTokens:   1000,
+		Temperature: 0.3,
 	})
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
-	if err != nil {
-		return "", err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("AI 服务请求失败: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("AI 服务请求失败 (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return "", err
-	}
-
-	choices, ok := data["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return "", fmt.Errorf("AI 返回内容为空")
-	}
-	choice := choices[0].(map[string]interface{})
-	message := choice["message"].(map[string]interface{})
-	text, _ := message["content"].(string)
-	return strings.TrimSpace(text), nil
 }
