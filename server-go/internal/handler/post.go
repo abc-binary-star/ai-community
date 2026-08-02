@@ -119,6 +119,24 @@ func DeletePost(ctx context.Context, c *app.RequestContext) {
 	response.OK(c)
 }
 
+// SetPostStatus 设置帖子置顶/精华状态（管理员/版主）
+func SetPostStatus(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+
+	var req types.UpdatePostStatusReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+
+	result, err := postService.SetPostStatus(ctx, id, req)
+	if err != nil {
+		handlePostError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // LikePost 点赞帖子
 func LikePost(ctx context.Context, c *app.RequestContext) {
 	id := c.Param("id")

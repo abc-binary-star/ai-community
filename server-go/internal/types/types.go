@@ -53,6 +53,11 @@ type SuggestTagsReq struct {
 	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
 }
 
+type UpdatePostStatusReq struct {
+	IsPinned   *bool `json:"isPinned"`
+	IsFeatured *bool `json:"isFeatured"`
+}
+
 // --- 响应 DTO ---
 
 type User struct {
@@ -94,6 +99,8 @@ type Post struct {
 	Liked        bool        `json:"liked"`
 	Bookmarked   bool        `json:"bookmarked"`
 	Edited       bool        `json:"edited"`
+	IsPinned     bool        `json:"isPinned"`
+	IsFeatured   bool        `json:"isFeatured"`
 	Tags         []string    `json:"tags"`
 	CreatedAt    string      `json:"createdAt"`
 	UpdatedAt    string      `json:"updatedAt"`

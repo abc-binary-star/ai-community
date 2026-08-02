@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, MessageCircle } from 'lucide-react'
+import { Eye, MessageCircle, Pin, Star } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -22,7 +22,21 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
     >
       <div className="flex flex-col gap-3 p-5">
         <div className="flex items-center justify-between gap-2">
-          <Badge>{CHANNEL_LABELS[post.channel] || post.channel}</Badge>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {post.isPinned && (
+              <Badge className="border-transparent bg-amber-500/10 text-amber-600">
+                <Pin className="size-3" />
+                置顶
+              </Badge>
+            )}
+            {post.isFeatured && (
+              <Badge className="border-transparent bg-purple-500/10 text-purple-600">
+                <Star className="size-3" />
+                精华
+              </Badge>
+            )}
+            <Badge>{CHANNEL_LABELS[post.channel] || post.channel}</Badge>
+          </div>
           <span className="text-xs text-muted-foreground">{formatRelativeTime(post.createdAt)}</span>
         </div>
         <Link href={`/community/post/${post.id}`} className="text-lg font-semibold leading-snug hover:text-primary">
