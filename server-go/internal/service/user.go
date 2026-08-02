@@ -35,7 +35,35 @@ func (e *ServiceError) Error() string { return e.Msg }
 var (
 	ErrCannotFollowSelf = &ServiceError{Msg: "不能关注自己", Code: 400}
 	ErrInvalidInput     = &ServiceError{Msg: "输入不合法", Code: 400}
+	ErrCannotBlockSelf  = &ServiceError{Msg: "不能屏蔽自己", Code: 400}
 )
+
+// blockedUserIDs 返回当前用户屏蔽的用户 ID 集合
+func blockedUserIDs(ctx context.Context, userID string) map[string]bool {
+	result := make(map[string]bool)
+	if userID == "" {
+		return result
+	}
+	var blocks []model.Block
+	dal.DB.WithContext(ctx).
+		Select("blocked_id").
+		Where("blocker_id = ?", userID).
+		Find(&blocks)
+	for _, b := range blocks {
+		result[b.BlockedID] = true
+	}
+	return result
+}
+
+// blockedIDList 返回当前用户屏蔽的用户 ID 切片（供 NOT IN 过滤使用）
+func blockedIDList(ctx context.Context, userID string) []string {
+	set := blockedUserIDs(ctx, userID)
+	ids := make([]string, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	return ids
+}
 
 // ========== User Module ==========
 
@@ -226,6 +254,110 @@ func (s *UserService) UnfollowUser(ctx context.Context, username, followerId str
 		Where("follower_id = ? AND following_id = ?", followerId, target.ID).
 		Delete(&model.Follow{})
 	return nil
+}
+
+// ========== Block Module ==========
+
+// BlockUser 屏蔽用户（幂等）。created=true 表示新建屏蔽(201)，false 表示已屏蔽(200)
+func (s *UserService) BlockUser(ctx context.Context, blockerID, blockedUsername string) (created bool, err error) {
+	var target model.User
+	err = dal.DB.WithContext(ctx).Select("id").Where("username = ?", blockedUsername).First(&target).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, ErrUserNotFound
+		}
+		return false, err
+	}
+	if target.ID == blockerID {
+		return false, ErrCannotBlockSelf
+	}
+
+	// 是否已屏蔽
+	var existing model.Block
+	result := dal.DB.WithContext(ctx).
+		Where("blocker_id = ? AND blocked_id = ?", blockerID, target.ID).
+		First(&existing)
+	if result.Error == nil {
+		return false, nil
+	}
+	if result.Error != gorm.ErrRecordNotFound {
+		return false, result.Error
+	}
+
+	block := &model.Block{BlockerID: blockerID, BlockedID: target.ID}
+	if err := dal.DB.WithContext(ctx).Create(block).Error; err != nil {
+		if notification.IsUniqueConstraintError(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// UnblockUser 解除屏蔽（幂等）
+func (s *UserService) UnblockUser(ctx context.Context, blockerID, blockedUsername string) error {
+	var target model.User
+	err := dal.DB.WithContext(ctx).Select("id").Where("username = ?", blockedUsername).First(&target).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	dal.DB.WithContext(ctx).
+		Where("blocker_id = ? AND blocked_id = ?", blockerID, target.ID).
+		Delete(&model.Block{})
+	return nil
+}
+
+// ListBlockedUsers 分页获取当前用户的屏蔽列表
+func (s *UserService) ListBlockedUsers(ctx context.Context, blockerID string, page, pageSize int) (*types.Paginated[types.PublicUser], error) {
+	var total int64
+	dal.DB.WithContext(ctx).Model(&model.Block{}).Where("blocker_id = ?", blockerID).Count(&total)
+
+	var blocks []model.Block
+	dal.DB.WithContext(ctx).
+		Preload("Blocked").
+		Where("blocker_id = ?", blockerID).
+		Order("created_at DESC").
+		Offset((page - 1) * pageSize).Limit(pageSize).
+		Find(&blocks)
+
+	users := make([]model.User, 0, len(blocks))
+	for _, b := range blocks {
+		users = append(users, b.Blocked)
+	}
+
+	items := s.mapUsersToPublic(ctx, users, blockerID)
+
+	return &types.Paginated[types.PublicUser]{
+		Items:      items,
+		Total:      int(total),
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: pagination.TotalPages(int(total), pageSize),
+	}, nil
+}
+
+// IsBlocked 查询当前用户是否已屏蔽目标用户
+func (s *UserService) IsBlocked(ctx context.Context, blockerID, username string) (bool, error) {
+	if blockerID == "" {
+		return false, nil
+	}
+	var target model.User
+	err := dal.DB.WithContext(ctx).Select("id").Where("username = ?", username).First(&target).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, ErrUserNotFound
+		}
+		return false, err
+	}
+	var cnt int64
+	dal.DB.WithContext(ctx).Model(&model.Block{}).
+		Where("blocker_id = ? AND blocked_id = ?", blockerID, target.ID).
+		Count(&cnt)
+	return cnt > 0, nil
 }
 
 // ListFollowing 分页获取某用户的关注列表

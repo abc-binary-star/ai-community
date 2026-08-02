@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, Settings, UserPlus, UserCheck } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, Settings, UserPlus, UserCheck, Ban } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -61,6 +61,21 @@ export function ProfileClient({ username }: { username: string }) {
       toast.error(e instanceof ApiError ? e.message : '操作失败')
     },
   })
+
+  const blockMutation = useMutation({
+    mutationFn: () => api.post<void>(`/users/${encodeURIComponent(username)}/block`),
+    onSuccess: () => {
+      toast.success(`已拉黑 ${username}`)
+      queryClient.invalidateQueries({ queryKey: ['user', username] })
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : '操作失败'),
+  })
+
+  const handleBlock = () => {
+    if (!window.confirm(`确定拉黑 ${username} 吗？拉黑后将不再看到 TA 的帖子与评论，可在设置页解除。`)) return
+    blockMutation.mutate()
+  }
 
   if (userQuery.isLoading) {
     return (
@@ -129,21 +144,33 @@ export function ProfileClient({ username }: { username: string }) {
                   </Link>
                 </Button>
               ) : hydrated && token ? (
-                <Button
-                  size="sm"
-                  variant={user.isFollowing ? 'outline' : 'default'}
-                  disabled={followMutation.isPending}
-                  onClick={() => followMutation.mutate(!user.isFollowing)}
-                >
-                  {followMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : user.isFollowing ? (
-                    <UserCheck />
-                  ) : (
-                    <UserPlus />
-                  )}
-                  {user.isFollowing ? '取消关注' : '关注'}
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant={user.isFollowing ? 'outline' : 'default'}
+                    disabled={followMutation.isPending}
+                    onClick={() => followMutation.mutate(!user.isFollowing)}
+                  >
+                    {followMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : user.isFollowing ? (
+                      <UserCheck />
+                    ) : (
+                      <UserPlus />
+                    )}
+                    {user.isFollowing ? '取消关注' : '关注'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={blockMutation.isPending}
+                    onClick={handleBlock}
+                  >
+                    {blockMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Ban />}
+                    拉黑
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>

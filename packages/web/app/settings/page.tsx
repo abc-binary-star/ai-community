@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Save, User } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Ban, Loader2, Save, ShieldOff, User } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,7 @@ import { useHydrated } from '@/lib/use-hydrated'
 import { Navbar } from '@/app/community/components/navbar'
 import { getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { User as UserType } from 'shared'
+import type { Paginated, PublicUser, User as UserType } from 'shared'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -46,6 +46,21 @@ export default function SettingsPage() {
     onError: (e: unknown) => {
       toast.error(e instanceof ApiError ? e.message : '保存失败')
     },
+  })
+
+  // 屏蔽管理：我的拉黑列表
+  const blockedQuery = useQuery({
+    queryKey: ['blocked-users'],
+    queryFn: () => api.get<Paginated<PublicUser>>('/users/me/blocked?page=1&pageSize=50'),
+    enabled: !!token,
+  })
+  const unblockMutation = useMutation({
+    mutationFn: (username: string) => api.del<void>(`/users/${encodeURIComponent(username)}/block`),
+    onSuccess: () => {
+      toast.success('已解除拉黑')
+      queryClient.invalidateQueries({ queryKey: ['blocked-users'] })
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : '操作失败'),
   })
 
   if (!hydrated) {
@@ -174,6 +189,52 @@ export default function SettingsPage() {
               </Button>
             </div>
           </form>
+
+          {/* 屏蔽管理 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldOff className="size-4 text-destructive" />
+                屏蔽管理
+              </CardTitle>
+              <CardDescription>拉黑后不再看到对方的帖子与评论</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {blockedQuery.isLoading ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  加载中…
+                </div>
+              ) : blockedQuery.data && blockedQuery.data.items.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {blockedQuery.data.items.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 py-2.5">
+                      <Avatar className="size-9">
+                        <AvatarFallback className="bg-primary/10 text-xs text-primary">{getInitials(u.username)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/u/${encodeURIComponent(u.username)}`} className="font-medium hover:text-primary">
+                          {u.displayName || u.username}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">@{u.username}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={unblockMutation.isPending}
+                        onClick={() => unblockMutation.mutate(u.username)}
+                      >
+                        {unblockMutation.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Ban />}
+                        解除
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">暂无拉黑用户</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

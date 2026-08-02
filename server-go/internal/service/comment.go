@@ -53,18 +53,29 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 		return nil, err
 	}
 
+	// 过滤当前用户屏蔽的评论作者
+	blocked := blockedIDList(ctx, currentUserID)
+
 	// 根评论总数
+	baseWhere := "post_id = ? AND parent_id IS NULL"
 	var total int64
-	dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("post_id = ? AND parent_id IS NULL", postID).Count(&total)
+	query := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where(baseWhere, postID)
+	if len(blocked) > 0 {
+		query = query.Where("author_id NOT IN ?", blocked)
+	}
+	query.Count(&total)
 
 	offset := (page - 1) * pageSize
 
 	// 分页加载根评论（倒序，最新在前）
 	var rootRows []model.Comment
-	dal.DB.WithContext(ctx).
+	rootQuery := dal.DB.WithContext(ctx).
 		Preload("Author").
-		Where("post_id = ? AND parent_id IS NULL", postID).
-		Order("created_at DESC").
+		Where(baseWhere, postID)
+	if len(blocked) > 0 {
+		rootQuery = rootQuery.Where("author_id NOT IN ?", blocked)
+	}
+	rootQuery.Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Find(&rootRows)
@@ -91,11 +102,13 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 		Cnt      int64
 	}
 	var countRows []countRow
-	dal.DB.WithContext(ctx).Model(&model.Comment{}).
+	replyCountQuery := dal.DB.WithContext(ctx).Model(&model.Comment{}).
 		Select("parent_id as parent_id, COUNT(*) as cnt").
-		Where("parent_id IN ?", rootIDs).
-		Group("parent_id").
-		Scan(&countRows)
+		Where("parent_id IN ?", rootIDs)
+	if len(blocked) > 0 {
+		replyCountQuery = replyCountQuery.Where("author_id NOT IN ?", blocked)
+	}
+	replyCountQuery.Group("parent_id").Scan(&countRows)
 	replyCountMap := make(map[string]int, len(countRows))
 	for _, r := range countRows {
 		replyCountMap[r.ParentID] = int(r.Cnt)
@@ -103,11 +116,13 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 
 	// 批量加载每条根评论的前 replyPreviewLimit 条回复（按时间正序）
 	var previewReplies []model.Comment
-	dal.DB.WithContext(ctx).
+	previewQuery := dal.DB.WithContext(ctx).
 		Preload("Author").
-		Where("parent_id IN ?", rootIDs).
-		Order("created_at ASC").
-		Find(&previewReplies)
+		Where("parent_id IN ?", rootIDs)
+	if len(blocked) > 0 {
+		previewQuery = previewQuery.Where("author_id NOT IN ?", blocked)
+	}
+	previewQuery.Order("created_at ASC").Find(&previewReplies)
 
 	// 按 parent_id 分组，每组只取前 replyPreviewLimit 条
 	repliesMap := make(map[string][]model.Comment)
