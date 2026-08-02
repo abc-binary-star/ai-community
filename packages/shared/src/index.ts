@@ -88,6 +88,25 @@ export interface Notification {
   createdAt: string
 }
 
+export interface Conversation {
+  id: string
+  otherUser: PublicUser
+  lastMessage: string
+  lastMessageAt: string
+  unreadCount: number
+}
+
+export interface Message {
+  id: string
+  conversationId: string
+  senderId: string
+  senderName: string
+  senderAvatar: string | null
+  content: string
+  readAt: string | null
+  createdAt: string
+}
+
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']
 
 export const CHANNEL_LABELS: Record<string, string> = {

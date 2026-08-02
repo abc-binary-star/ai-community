@@ -49,6 +49,16 @@ type SuggestTagsReq struct {
 	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
 }
 
+// 私信：创建会话
+type CreateConversationReq struct {
+	RecipientID string `json:"recipientId" vd:"len($)>=1"`
+}
+
+// 私信：发送消息
+type SendMessageReq struct {
+	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+}
+
 // --- 响应 DTO ---
 
 type User struct {
@@ -169,4 +179,25 @@ var ChannelLabels = map[string]string{
 	"design":  "设计美学",
 	"gaming":  "游戏天地",
 	"life":    "生活方式",
+}
+
+// Conversation 私信会话 DTO
+type Conversation struct {
+	ID            string     `json:"id"`
+	OtherUser     PublicUser `json:"otherUser"` // 会话中的另一方
+	LastMessage   string     `json:"lastMessage"`
+	LastMessageAt string     `json:"lastMessageAt"`
+	UnreadCount   int        `json:"unreadCount"`
+}
+
+// Message 私信消息 DTO
+type Message struct {
+	ID             string  `json:"id"`
+	ConversationID string  `json:"conversationId"`
+	SenderID       string  `json:"senderId"`
+	SenderName     string  `json:"senderName"`
+	SenderAvatar   *string `json:"senderAvatar"`
+	Content        string  `json:"content"`
+	ReadAt         *string `json:"readAt"`
+	CreatedAt      string  `json:"createdAt"`
 }
