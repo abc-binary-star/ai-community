@@ -82,6 +82,9 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// --- 搜索路由 ---
 	h.GET("/api/search", middleware.OptionalAuth(), handler.Search)
 
+	// --- 发现页路由 ---
+	h.GET("/api/discover", middleware.OptionalAuth(), handler.Discover)
+
 	// 统一 404
 	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(consts.StatusNotFound, map[string]string{"error": "接口不存在"})

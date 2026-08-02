@@ -3,7 +3,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Bookmark, ChevronDown, LogOut, PenLine, Settings } from 'lucide-react'
+import { Bookmark, ChevronDown, Compass, LogOut, PenLine, Settings } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -47,6 +47,13 @@ function NavbarInner() {
           </Link>
           {/* 频道 tab */}
           <nav className="hidden items-center gap-1 md:flex">
+            <Link
+              href="/community/discover"
+              className={`mr-1 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground`}
+            >
+              <Compass className="size-4" />
+              发现
+            </Link>
             {CHANNELS.map((ch) => {
               const active = activeChannel === ch
               return (
