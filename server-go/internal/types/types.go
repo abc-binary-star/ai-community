@@ -161,6 +161,13 @@ type Paginated[T any] struct {
 	TotalPages int `json:"totalPages"`
 }
 
+// DiscoverResponse 发现页聚合数据
+type DiscoverResponse struct {
+	HotPosts         []Post                   `json:"hotPosts"`
+	TrendingTags     []map[string]interface{} `json:"trendingTags"`
+	RecommendedUsers []PublicUser             `json:"recommendedUsers"`
+}
+
 type Notification struct {
 	ID         string  `json:"id"`
 	Type       string  `json:"type"`

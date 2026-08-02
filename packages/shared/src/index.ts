@@ -74,6 +74,12 @@ export interface Paginated<T> {
   totalPages: number
 }
 
+export interface DiscoverResponse {
+  hotPosts: Post[]
+  trendingTags: { name: string; postCount: number }[]
+  recommendedUsers: PublicUser[]
+}
+
 export interface Tag {
   id: string
   name: string
