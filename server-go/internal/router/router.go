@@ -72,9 +72,12 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	users.GET("/:username", middleware.OptionalAuth(), handler.GetUser)
 	users.GET("/:username/posts", middleware.OptionalAuth(), handler.GetUserPosts)
 	users.PUT("/me", middleware.Auth(), handler.UpdateUser)
+	users.GET("/me/blocked", middleware.Auth(), handler.ListBlockedUsers)
 	users.POST("/:username/follow", middleware.Auth(), handler.FollowUser)
 	users.DELETE("/:username/follow", middleware.Auth(), handler.UnfollowUser)
 	users.PUT("/:username/role", middleware.Auth(), middleware.RequireRole("admin"), handler.UpdateUserRole)
+	users.POST("/:username/block", middleware.Auth(), handler.BlockUser)
+	users.DELETE("/:username/block", middleware.Auth(), handler.UnblockUser)
 
 	// --- 关注列表 ---
 	h.GET("/api/following/:username", middleware.OptionalAuth(), handler.ListFollowing)

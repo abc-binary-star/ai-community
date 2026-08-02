@@ -131,6 +131,13 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 
 	query := dal.DB.WithContext(ctx).Model(&model.Post{})
 
+	// 过滤当前用户屏蔽的作者
+	if userID != "" {
+		if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
+			query = query.Where("author_id NOT IN ?", blocked)
+		}
+	}
+
 	if q != "" {
 		like := "%" + q + "%"
 		query = query.Where("title ILIKE ? OR content ILIKE ?", like, like)
@@ -149,6 +156,13 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	dbQuery := dal.DB.WithContext(ctx).
 		Preload("Author").
 		Preload("Tags")
+
+	// 过滤当前用户屏蔽的作者
+	if userID != "" {
+		if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
+			dbQuery = dbQuery.Where("author_id NOT IN ?", blocked)
+		}
+	}
 
 	// 复用相同的 where 条件
 	if q != "" {

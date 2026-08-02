@@ -148,6 +148,55 @@ func UnfollowUser(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]interface{}{"ok": true, "isFollowing": false})
 }
 
+// ========== Block Handlers ==========
+
+// BlockUser 屏蔽用户
+// POST /api/users/:username/block
+func BlockUser(ctx context.Context, c *app.RequestContext) {
+	username := c.Param("username")
+	userID := middleware.GetCurrentUserID(c)
+
+	created, err := userService.BlockUser(ctx, userID, username)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	body := map[string]interface{}{"ok": true, "isBlocked": true}
+	if created {
+		response.Created(c, body)
+	} else {
+		response.JSON(c, body)
+	}
+}
+
+// UnblockUser 解除屏蔽
+// DELETE /api/users/:username/block
+func UnblockUser(ctx context.Context, c *app.RequestContext) {
+	username := c.Param("username")
+	userID := middleware.GetCurrentUserID(c)
+
+	err := userService.UnblockUser(ctx, userID, username)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]interface{}{"ok": true, "isBlocked": false})
+}
+
+// ListBlockedUsers 我的屏蔽列表
+// GET /api/users/me/blocked
+func ListBlockedUsers(ctx context.Context, c *app.RequestContext) {
+	page, pageSize := pagination.Parse(c)
+	userID := middleware.GetCurrentUserID(c)
+
+	result, err := userService.ListBlockedUsers(ctx, userID, page, pageSize)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // ListFollowing 获取某用户的关注列表
 // GET /api/following/:username
 func ListFollowing(ctx context.Context, c *app.RequestContext) {

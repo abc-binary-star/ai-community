@@ -34,8 +34,9 @@ func Init(cfg *conf.Config) {
 		&model.Bookmark{},
 		&model.Follow{},
 		&model.Notification{},
-		&model.Report{},
-		&model.Channel{},
+	&model.Report{},
+	&model.Channel{},
+	&model.Block{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
