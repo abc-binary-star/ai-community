@@ -178,7 +178,7 @@ func SuggestTags(ctx context.Context, c *app.RequestContext) {
 
 	tags, err := postService.SuggestTags(ctx, req.Title, req.Content)
 	if err != nil {
-		response.Error(c, consts.StatusServiceUnavailable, err.Error())
+		response.Error(c, consts.StatusServiceUnavailable, "AI 标签推荐服务暂时不可用")
 		return
 	}
 	response.JSON(c, map[string]interface{}{"tags": tags})

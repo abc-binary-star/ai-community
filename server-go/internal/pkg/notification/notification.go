@@ -2,12 +2,14 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"log"
 	"regexp"
 	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -57,6 +59,9 @@ func Create(ctx context.Context, input CreateInput) {
 		}
 		if err := query.First(&existing).Error; err == nil {
 			return // 已存在，跳过
+		} else if err != gorm.ErrRecordNotFound {
+			log.Printf("查询已有通知失败: %v", err)
+			return
 		}
 	}
 
@@ -95,7 +100,10 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 	}
 
 	var users []model.User
-	dal.DB.WithContext(ctx).Where("username IN ?", usernames).Select("id").Find(&users)
+	if err := dal.DB.WithContext(ctx).Where("username IN ?", usernames).Select("id").Find(&users).Error; err != nil {
+		log.Printf("查询提及用户失败: %v", err)
+		return
+	}
 
 	cid := ""
 	if len(commentID) > 0 {
@@ -104,8 +112,9 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 
 	// 截断过长内容
 	notifContent := content
-	if len(notifContent) > 50 {
-		notifContent = content[:50] + "…"
+	runes := []rune(content)
+	if len(runes) > 50 {
+		notifContent = string(runes[:50]) + "…"
 	}
 
 	for _, u := range users {
@@ -122,7 +131,15 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 
 // IsUniqueConstraintError 判断是否为唯一约束冲突
 func IsUniqueConstraintError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "duplicate key value")
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	// Fallback to string matching for non-pgx errors
+	return strings.Contains(err.Error(), "duplicate key value")
 }
 
 // IsNotFoundError 判断是否为记录不存在

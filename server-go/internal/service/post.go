@@ -129,6 +129,9 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		like := "%" + q + "%"
 		query = query.Where("title ILIKE ? OR content ILIKE ?", like, like)
 	} else if channel != "" && channel != "all" {
+		if !validChannel(channel) {
+			channel = "general"
+		}
 		query = query.Where("channel = ?", channel)
 	}
 	if tag != "" {
@@ -138,7 +141,9 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	dbQuery := dal.DB.WithContext(ctx).
 		Preload("Author").
@@ -164,7 +169,9 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	if sortParam == "hot" {
 		// 热排序：拉取 500 条，内存排序后分页
 		var posts []model.Post
-		dbQuery.Order("created_at DESC").Limit(500).Find(&posts)
+		if err := dbQuery.Order("created_at DESC").Limit(500).Find(&posts).Error; err != nil {
+			return nil, err
+		}
 
 		// 获取评论数用于热排序
 		postIDs := make([]string, 0, len(posts))
@@ -194,7 +201,9 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		items = mapPostsToDTOs(ctx, paged, userID)
 	} else {
 		var posts []model.Post
-		dbQuery.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&posts)
+		if err := dbQuery.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&posts).Error; err != nil {
+			return nil, err
+		}
 		items = mapPostsToDTOs(ctx, posts, userID)
 	}
 
@@ -264,19 +273,27 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			seen := make(map[string]bool)
 			for _, rawTag := range req.Tags {
 				tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
-				if tagName == "" || len(tagName) > 20 || seen[tagName] {
+				if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
 					continue
 				}
 				seen[tagName] = true
 
 				// upsert tag
 				var tag model.Tag
-				if err := tx.Where("name = ?", tagName).First(&tag).Error; err == gorm.ErrRecordNotFound {
-					tag = model.Tag{Name: tagName}
-					tx.Create(&tag)
+				if err := tx.Where("name = ?", tagName).First(&tag).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						tag = model.Tag{Name: tagName}
+						if err := tx.Create(&tag).Error; err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
 				}
 				// 创建关联
-				tx.Create(&model.PostTag{PostID: post.ID, TagID: tag.ID})
+				if err := tx.Create(&model.PostTag{PostID: post.ID, TagID: tag.ID}).Error; err != nil {
+					return err
+				}
 			}
 		}
 
@@ -367,6 +384,8 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 	var existing model.PostLike
 	if err := dal.DB.WithContext(ctx).Where("post_id = ? AND user_id = ?", postID, userID).First(&existing).Error; err == nil {
 		return post.LikeCount, true, nil
+	} else if err != gorm.ErrRecordNotFound {
+		return 0, false, err
 	}
 
 	// 事务：创建点赞 + 增加计数
@@ -380,7 +399,9 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 	if err != nil {
 		if notification.IsUniqueConstraintError(err) {
 			var p model.Post
-			dal.DB.WithContext(ctx).Select("like_count").First(&p, "id = ?", postID)
+			if err := dal.DB.WithContext(ctx).Select("like_count").First(&p, "id = ?", postID).Error; err != nil {
+				return 0, false, err
+			}
 			return p.LikeCount, true, nil
 		}
 		return 0, false, err
@@ -395,7 +416,9 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 	})
 
 	var updated model.Post
-	dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", postID)
+	if err := dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", postID).Error; err != nil {
+		return 0, false, err
+	}
 	return updated.LikeCount, false, nil
 }
 
@@ -417,10 +440,14 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 		return post.LikeCount, nil
 	}
 
-	dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ? AND like_count > 0", postID).UpdateColumn("like_count", gorm.Expr("like_count - 1"))
+	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ? AND like_count > 0", postID).UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error; err != nil {
+		return 0, err
+	}
 
 	var updated model.Post
-	dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", postID)
+	if err := dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", postID).Error; err != nil {
+		return 0, err
+	}
 	return updated.LikeCount, nil
 }
 
@@ -431,7 +458,7 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 		PostCount int
 	}
 	var rows []tagCount
-	dal.DB.WithContext(ctx).
+	if err := dal.DB.WithContext(ctx).
 		Model(&model.Tag{}).
 		Select("tags.name as name, count(post_tags.post_id) as post_count").
 		Joins("LEFT JOIN post_tags ON post_tags.tag_id = tags.id").
@@ -439,7 +466,9 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 		Having("count(post_tags.post_id) > 0").
 		Order("post_count DESC").
 		Limit(20).
-		Find(&rows)
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
 
 	items := make([]map[string]interface{}, 0, len(rows))
 	for _, r := range rows {
@@ -532,8 +561,14 @@ func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([
 	if !ok || len(choices) == 0 {
 		return []string{}, nil
 	}
-	choice := choices[0].(map[string]interface{})
-	message := choice["message"].(map[string]interface{})
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return []string{}, nil
+	}
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return []string{}, nil
+	}
 	text, _ := message["content"].(string)
 
 	// 解析逗号分隔标签

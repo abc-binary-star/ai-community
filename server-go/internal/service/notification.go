@@ -20,16 +20,20 @@ type NotificationService struct{}
 // ListNotifications 获取当前用户的通知列表
 func (s *NotificationService) ListNotifications(ctx context.Context, userID string, page, pageSize int) (*types.Paginated[types.Notification], error) {
 	var total int64
-	dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID).Count(&total)
+	if err := dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	offset := (page - 1) * pageSize
 	var rows []model.Notification
-	dal.DB.WithContext(ctx).
+	if err := dal.DB.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
-		Find(&rows)
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
 
 	// 批量获取 actor 用户名
 	actorIDs := make([]string, 0)
@@ -41,7 +45,9 @@ func (s *NotificationService) ListNotifications(ctx context.Context, userID stri
 	actorMap := make(map[string]string)
 	if len(actorIDs) > 0 {
 		var actors []model.User
-		dal.DB.WithContext(ctx).Where("id IN ?", actorIDs).Select("id", "username").Find(&actors)
+		if err := dal.DB.WithContext(ctx).Where("id IN ?", actorIDs).Select("id", "username").Find(&actors).Error; err != nil {
+			return nil, err
+		}
 		for _, a := range actors {
 			actorMap[a.ID] = a.Username
 		}
@@ -174,7 +180,9 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		postQuery := dal.DB.WithContext(ctx).
 			Preload("Author").
 			Preload("Tags").
-			Where("title ILIKE ? OR content ILIKE ?", like, like)
+			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
+				like, like,
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
 		if channel != "" && validChannel(channel) {
 			postQuery = postQuery.Where("channel = ?", channel)
 		}
@@ -191,10 +199,29 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 		var postRows []model.Post
 		var postTotal int64
-		postQuery.Order("created_at DESC").Limit(5).Find(&postRows)
-		dal.DB.WithContext(ctx).Model(&model.Post{}).
-			Where("title ILIKE ? OR content ILIKE ?", like, like).
-			Count(&postTotal)
+		if err := postQuery.Order("created_at DESC").Limit(5).Find(&postRows).Error; err != nil {
+			return nil, err
+		}
+		postCountQuery := dal.DB.WithContext(ctx).Model(&model.Post{}).
+			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
+				like, like,
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
+		if channel != "" && validChannel(channel) {
+			postCountQuery = postCountQuery.Where("channel = ?", channel)
+		}
+		if author != "" {
+			postCountQuery = postCountQuery.Where("author_id IN (?)",
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", "%"+author+"%"))
+		}
+		if hasFrom {
+			postCountQuery = postCountQuery.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			postCountQuery = postCountQuery.Where("created_at <= ?", toTime)
+		}
+		if err := postCountQuery.Count(&postTotal).Error; err != nil {
+			return nil, err
+		}
 
 		postItems := mapPostsToDTOs(ctx, postRows, userID)
 
@@ -211,8 +238,19 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 		var commentRows []model.Comment
 		var commentTotal int64
-		commentQuery.Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows)
-		dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like).Count(&commentTotal)
+		if err := commentQuery.Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows).Error; err != nil {
+			return nil, err
+		}
+		commentCountQuery := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like)
+		if hasFrom {
+			commentCountQuery = commentCountQuery.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			commentCountQuery = commentCountQuery.Where("created_at <= ?", toTime)
+		}
+		if err := commentCountQuery.Count(&commentTotal).Error; err != nil {
+			return nil, err
+		}
 
 		commentItems := make([]types.SearchComment, 0, len(commentRows))
 		for _, c := range commentRows {
@@ -243,11 +281,21 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 
 		var userRows []model.User
 		var userTotal int64
-		userQuery.Select("id", "username", "avatar", "bio", "display_name", "created_at").
-			Order("created_at DESC").Limit(5).Find(&userRows)
-		dal.DB.WithContext(ctx).Model(&model.User{}).
-			Where("username ILIKE ? OR display_name ILIKE ?", like, like).
-			Count(&userTotal)
+		if err := userQuery.Select("id", "username", "avatar", "bio", "display_name", "created_at").
+			Order("created_at DESC").Limit(5).Find(&userRows).Error; err != nil {
+			return nil, err
+		}
+		userCountQuery := dal.DB.WithContext(ctx).Model(&model.User{}).
+			Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+		if hasFrom {
+			userCountQuery = userCountQuery.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			userCountQuery = userCountQuery.Where("created_at <= ?", toTime)
+		}
+		if err := userCountQuery.Count(&userTotal).Error; err != nil {
+			return nil, err
+		}
 
 		userItems := make([]types.SearchUser, 0, len(userRows))
 		for _, u := range userRows {
@@ -275,7 +323,9 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		query := dal.DB.WithContext(ctx).
 			Preload("Author").
 			Preload("Tags").
-			Where("title ILIKE ? OR content ILIKE ?", like, like)
+			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
+				like, like,
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
 		if channel != "" && validChannel(channel) {
 			query = query.Where("channel = ?", channel)
 		}
@@ -291,13 +341,32 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		}
 
 		var total int64
-		dal.DB.WithContext(ctx).Model(&model.Post{}).
-			Where("title ILIKE ? OR content ILIKE ?", like, like).
-			Count(&total)
+		postCountQuery := dal.DB.WithContext(ctx).Model(&model.Post{}).
+			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
+				like, like,
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
+		if channel != "" && validChannel(channel) {
+			postCountQuery = postCountQuery.Where("channel = ?", channel)
+		}
+		if author != "" {
+			postCountQuery = postCountQuery.Where("author_id IN (?)",
+				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", "%"+author+"%"))
+		}
+		if hasFrom {
+			postCountQuery = postCountQuery.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			postCountQuery = postCountQuery.Where("created_at <= ?", toTime)
+		}
+		if err := postCountQuery.Count(&total).Error; err != nil {
+			return nil, err
+		}
 
 		var rows []model.Post
 		if sort == "relevance" {
-			query.Order("created_at DESC").Limit(500).Find(&rows)
+			if err := query.Order("created_at DESC").Limit(500).Find(&rows).Error; err != nil {
+				return nil, err
+			}
 			ql := strings.ToLower(q)
 			sortPkg.Slice(rows, func(i, j int) bool {
 				aTitle := strings.Contains(strings.ToLower(rows[i].Title), ql)
@@ -317,7 +386,9 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 			}
 			rows = rows[start:end]
 		} else {
-			query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+			if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				return nil, err
+			}
 		}
 
 		items := mapPostsToDTOs(ctx, rows, userID)
@@ -340,10 +411,21 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		}
 
 		var total int64
-		dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like).Count(&total)
+		commentCountQuery := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like)
+		if hasFrom {
+			commentCountQuery = commentCountQuery.Where("created_at >= ?", fromTime)
+		}
+		if hasTo {
+			commentCountQuery = commentCountQuery.Where("created_at <= ?", toTime)
+		}
+		if err := commentCountQuery.Count(&total).Error; err != nil {
+			return nil, err
+		}
 
 		var rows []model.Comment
-		query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+		if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+			return nil, err
+		}
 
 		items := make([]types.SearchComment, 0, len(rows))
 		for _, c := range rows {
@@ -379,13 +461,23 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	}
 
 	var total int64
-	dal.DB.WithContext(ctx).Model(&model.User{}).
-		Where("username ILIKE ? OR display_name ILIKE ?", like, like).
-		Count(&total)
+	userCountQuery := dal.DB.WithContext(ctx).Model(&model.User{}).
+		Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+	if hasFrom {
+		userCountQuery = userCountQuery.Where("created_at >= ?", fromTime)
+	}
+	if hasTo {
+		userCountQuery = userCountQuery.Where("created_at <= ?", toTime)
+	}
+	if err := userCountQuery.Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	var rows []model.User
-	query.Select("id", "username", "avatar", "bio", "display_name", "created_at").
-		Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows)
+	if err := query.Select("id", "username", "avatar", "bio", "display_name", "created_at").
+		Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+		return nil, err
+	}
 
 	items := make([]types.SearchUser, 0, len(rows))
 	for _, u := range rows {

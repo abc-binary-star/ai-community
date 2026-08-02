@@ -22,6 +22,11 @@ func Init(cfg *conf.Config) {
 		log.Fatalf("数据库连接失败: %v", err)
 	}
 
+	// 告知 GORM many2many 连接表的真实结构
+	if err := DB.SetupJoinTable(&model.Post{}, "Tags", &model.PostTag{}); err != nil {
+		log.Printf("Warning: SetupJoinTable failed: %v", err)
+	}
+
 	// 自动迁移
 	if err := DB.AutoMigrate(
 		&model.User{},
