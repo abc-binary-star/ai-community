@@ -103,6 +103,14 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// --- 发现页路由 ---
 	h.GET("/api/discover", middleware.OptionalAuth(), handler.Discover)
 
+	// --- 私信路由 ---
+	h.GET("/api/messages/unread-count", middleware.Auth(), handler.UnreadMessageCount)
+	h.GET("/api/messages/conversations", middleware.Auth(), handler.ListConversations)
+	h.POST("/api/messages/conversations", middleware.Auth(), handler.CreateConversation)
+	h.GET("/api/messages/conversations/:id/messages", middleware.Auth(), handler.ListMessages)
+	h.POST("/api/messages/conversations/:id/messages", middleware.Auth(), handler.SendMessage)
+	h.POST("/api/messages/conversations/:id/read", middleware.Auth(), handler.MarkConversationRead)
+
 	// 统一 404
 	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(consts.StatusNotFound, map[string]string{"error": "接口不存在"})

@@ -27,6 +27,8 @@ func handleServiceError(c *app.RequestContext, err error) {
 		response.Error(c, e.Code, e.Msg)
 	case *service.NotificationError:
 		response.Error(c, e.Code, e.Msg)
+	case *service.MessageError:
+		response.Error(c, e.Code, e.Msg)
 	default:
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 	}

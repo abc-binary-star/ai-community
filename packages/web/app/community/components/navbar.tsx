@@ -3,7 +3,8 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Bookmark, ChevronDown, Compass, LogOut, PenLine, Settings, ShieldCheck } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Bookmark, ChevronDown, Compass, LogOut, MessageCircle, PenLine, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,9 +19,39 @@ import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
+import { api } from '@/lib/api'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { NotificationBell } from './notification-bell'
 import { SearchBar } from './search-bar'
+
+// 私信入口：带未读角标，点击进入消息页
+function MessageEntry() {
+  const token = useAuthStore((s) => s.token)
+  const hydrated = useHydrated()
+
+  const unreadQuery = useQuery({
+    queryKey: ['messages-unread-count'],
+    queryFn: () => api.get<{ count: number }>('/messages/unread-count'),
+    enabled: !!token,
+    refetchInterval: 30000,
+  })
+
+  if (!hydrated || !token) return null
+  const unread = unreadQuery.data?.count ?? 0
+
+  return (
+    <Button asChild variant="ghost" size="icon" className="relative" aria-label="私信">
+      <Link href="/messages">
+        <MessageCircle className="size-5" />
+        {unread > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex size-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+      </Link>
+    </Button>
+  )
+}
 
 function NavbarInner() {
   const router = useRouter()
@@ -106,6 +137,7 @@ function NavbarInner() {
                   <Bookmark />
                 </Link>
               </Button>
+              <MessageEntry />
               <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

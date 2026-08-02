@@ -38,6 +38,8 @@ func Init(cfg *conf.Config) {
 	&model.Channel{},
 	&model.Block{},
 	&model.NotificationPreference{},
+	&model.Conversation{},
+	&model.Message{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, Settings, UserPlus, UserCheck, Ban } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, MessageCircle, Settings, UserPlus, UserCheck, Ban } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -141,7 +141,7 @@ export function ProfileClient({ username }: { username: string }) {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:items-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               {isSelf ? (
                 <Button asChild variant="outline" size="sm">
                   <Link href="/settings">
@@ -151,6 +151,14 @@ export function ProfileClient({ username }: { username: string }) {
                 </Button>
               ) : hydrated && token ? (
                 <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/messages?user=${encodeURIComponent(user.id)}`)}
+                  >
+                    <MessageCircle />
+                    发私信
+                  </Button>
                   <Button
                     size="sm"
                     variant={user.isFollowing ? 'outline' : 'default'}
