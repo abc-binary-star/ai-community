@@ -45,3 +45,42 @@ export function truncate(text: string, max: number): string {
   if (text.length <= max) return text
   return text.slice(0, max) + '…'
 }
+
+// 去除 Markdown 标记，返回纯文本（用于列表摘要）
+export function stripMarkdown(md: string): string {
+  return md
+    // 代码块 ```...```
+    .replace(/```[\s\S]*?```/g, '')
+    // 行内代码 `code`
+    .replace(/`([^`]+)`/g, '$1')
+    // 图片 ![alt](url)
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    // 链接 [text](url)
+    .replace(/\[([^\]]*)\]\([^)]+\)/g, '$1')
+    // 标题标记 #
+    .replace(/^#{1,6}\s+/gm, '')
+    // 粗体/斜体 **text** / *text* / __text__ / _text_
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    // 删除线 ~~text~~
+    .replace(/~~([^~]+)~~/g, '$1')
+    // 引用 > text
+    .replace(/^>\s+/gm, '')
+    // 列表标记 - / * / 1.
+    .replace(/^[\s]*[-*+]\s+/gm, '')
+    .replace(/^[\s]*\d+\.\s+/gm, '')
+    // 水平分割线
+    .replace(/^[-*_]{3,}$/gm, '')
+    // 表格分隔行
+    .replace(/^\|.*\|$/gm, '')
+    // 多余的空行和空白
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+}
+
+// 去除 Markdown 标记后截断
+export function truncateMarkdown(md: string, max: number): string {
+  return truncate(stripMarkdown(md), max)
+}

@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
-import { renderContentWithMentions } from '@/lib/mention'
+import { MarkdownRenderer } from '@/components/markdown-renderer'
 import type { Comment } from 'shared'
 import { LikeButton } from './like-button'
-import { MentionTextarea } from './mention-textarea'
+import { MarkdownEditor } from '@/components/markdown-editor'
 
 // 清爽评论卡片：浅蓝左边框，嵌套缩进
 export function CommentItem({
@@ -87,10 +87,10 @@ export function CommentItem({
           </div>
           {editing ? (
             <div className="mt-2 space-y-2">
-              <MentionTextarea
+              <MarkdownEditor
                 value={editContent}
                 onChange={setEditContent}
-                rows={3}
+                height={150}
                 placeholder="编辑评论内容…"
               />
               <div className="flex justify-end gap-2">
@@ -106,9 +106,9 @@ export function CommentItem({
             </div>
           ) : (
             <>
-              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
-                {renderContentWithMentions(comment.content)}
-              </p>
+              <div className="mt-2 break-words text-sm leading-6 text-foreground/90">
+                <MarkdownRenderer content={comment.content} />
+              </div>
               <div className="mt-2 flex items-center gap-1">
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => onReply(comment)}>
                   <MessageSquare className="size-3.5" />

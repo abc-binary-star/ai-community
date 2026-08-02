@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
-import { MentionTextarea } from '@/app/community/components/mention-textarea'
+import { MarkdownEditor } from '@/components/markdown-editor'
 
 const schema = z.object({
   title: z.string().min(1, '请输入标题').max(100, '标题最多 100 字'),
@@ -136,12 +136,10 @@ export default function NewPostPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="content">内容</Label>
-              <MentionTextarea
-                id="content"
-                rows={10}
-                placeholder="分享你的想法，输入 @ 可以提及用户"
+              <MarkdownEditor
                 value={watch('content') || ''}
                 onChange={(val) => setValue('content', val, { shouldValidate: true })}
+                placeholder="支持 Markdown 语法，输入 @ 可提及用户"
               />
               {errors.content && <p className="text-xs text-destructive">{errors.content.message}</p>}
             </div>

@@ -13,7 +13,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
-import { renderContentWithMentions } from '@/lib/mention'
+import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { CHANNEL_LABELS, type Comment, type Post } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
@@ -151,8 +151,8 @@ export function PostDetailView({ id }: { id: string }) {
               </div>
             )}
           </div>
-          <div className="whitespace-pre-wrap break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
-            {renderContentWithMentions(post.content)}
+          <div className="break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
+            <MarkdownRenderer content={post.content} />
           </div>
           {post.edited && (
             <p className="text-xs text-muted-foreground">已编辑于 {formatEditedTime(post.updatedAt)}</p>

@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
-import { MentionTextarea } from '@/app/community/components/mention-textarea'
+import { MarkdownEditor } from '@/components/markdown-editor'
 
 export default function EditPostPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -106,12 +106,10 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="content">内容</Label>
-              <MentionTextarea
-                id="content"
-                rows={10}
+              <MarkdownEditor
                 value={content}
                 onChange={setContent}
-                placeholder="分享你的想法，输入 @ 可以提及用户"
+                placeholder="支持 Markdown 语法，输入 @ 可提及用户"
               />
             </div>
             <div className="flex justify-end gap-2">

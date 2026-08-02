@@ -6,7 +6,7 @@ import { Eye, MessageCircle } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { formatRelativeTime, getInitials, truncate } from '@/lib/utils'
+import { formatRelativeTime, getInitials, truncateMarkdown } from '@/lib/utils'
 import { CHANNEL_LABELS, type Post } from 'shared'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
@@ -28,7 +28,7 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
         <Link href={`/community/post/${post.id}`} className="text-lg font-semibold leading-snug hover:text-primary">
           {post.title}
         </Link>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{truncate(post.content, 160)}</p>
+        <p className="line-clamp-2 text-sm text-muted-foreground">{truncateMarkdown(post.content, 160)}</p>
 
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>

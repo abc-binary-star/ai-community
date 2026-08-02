@@ -71,3 +71,84 @@
     background: transparent;
   }
 }
+
+/* ============================================================
+   Prism 代码高亮主题（配合 rehype-prism-plus 使用）
+   基于 Prism One Light，适配项目配色
+   ============================================================ */
+pre[class*="language-"],
+code[class*="language-"] {
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.875rem;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 2;
+  hyphens: none;
+}
+
+pre[class*="language-"] {
+  padding: 1rem;
+  margin: 0;
+  overflow: auto;
+  border-radius: 0.5rem;
+  background: hsl(var(--muted));
+}
+
+/* Token 样式 */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: hsl(var(--muted-foreground));
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: hsl(14 80% 50%);
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: hsl(150 50% 40%);
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: hsl(199 89% 40%);
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: hsl(265 70% 55%);
+}
+
+.token.function,
+.token.class-name {
+  color: hsl(199 89% 45%);
+  font-weight: 600;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: hsl(30 90% 50%);
+}

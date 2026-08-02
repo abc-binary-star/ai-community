@@ -6,7 +6,7 @@ import { Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiError } from '@/lib/api'
 import type { Comment } from 'shared'
-import { MentionTextarea } from './mention-textarea'
+import { MarkdownEditor } from '@/components/markdown-editor'
 
 export function CommentForm({
   postId,
@@ -53,17 +53,11 @@ export function CommentForm({
           </button>
         </div>
       )}
-      <MentionTextarea
+      <MarkdownEditor
         value={content}
         onChange={setContent}
-        onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-            e.preventDefault()
-            submit()
-          }
-        }}
-        rows={3}
-        placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论，输入 @ 提及用户…'}
+        height={120}
+        placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论，支持 Markdown 语法…'}
       />
       <div className="flex justify-end">
         <Button onClick={submit} disabled={submitting || !content.trim()}>

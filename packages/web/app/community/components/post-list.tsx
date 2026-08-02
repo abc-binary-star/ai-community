@@ -9,7 +9,6 @@ import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { PostCard } from './post-card'
 import { SortTabs } from './sort-tabs'
-import { SearchBar } from './search-bar'
 import { TagBadge } from './tag-badge'
 import { CHANNEL_LABELS, type Paginated, type Post } from 'shared'
 
@@ -79,12 +78,7 @@ export function PostListPage({
           </Button>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <SortTabs current={sort} />
-          <div className="w-full sm:w-64">
-            <SearchBar value={q} />
-          </div>
-        </div>
+        <SortTabs current={sort} />
 
         {/* 移动端：热门标签横向滚动 */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:hidden">
