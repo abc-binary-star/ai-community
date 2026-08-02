@@ -44,6 +44,10 @@ type UpdateUserReq struct {
 	Avatar      *string `json:"avatar"`
 }
 
+type UpdateUserRoleReq struct {
+	Role string `json:"role"`
+}
+
 type SuggestTagsReq struct {
 	Title   string `json:"title" vd:"len($)>=1 && len($)<=200"`
 	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
@@ -58,6 +62,7 @@ type User struct {
 	Avatar      *string `json:"avatar"`
 	Bio         *string `json:"bio"`
 	DisplayName *string `json:"displayName"`
+	Role        string  `json:"role"`
 	CreatedAt   string  `json:"createdAt"`
 	UpdatedAt   string  `json:"updatedAt"`
 }
@@ -68,6 +73,7 @@ type PublicUser struct {
 	Avatar        *string `json:"avatar"`
 	Bio           *string `json:"bio"`
 	DisplayName   *string `json:"displayName"`
+	Role          string  `json:"role"`
 	PostCount     int     `json:"postCount"`
 	FollowerCount int     `json:"followerCount"`
 	FollowingCount int    `json:"followingCount"`

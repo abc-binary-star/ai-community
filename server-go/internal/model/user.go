@@ -16,6 +16,7 @@ type User struct {
 	Avatar      *string        `json:"avatar"`
 	Bio         *string        `json:"bio"`
 	DisplayName *string        `json:"displayName"`
+	Role        string         `gorm:"type:varchar(20);default:'user';not null" json:"role"`
 	CreatedAt   time.Time      `gorm:"index" json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	Posts       []Post         `gorm:"foreignKey:AuthorID" json:"-"`

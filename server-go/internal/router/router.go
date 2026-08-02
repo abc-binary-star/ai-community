@@ -67,6 +67,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	users.PUT("/me", middleware.Auth(), handler.UpdateUser)
 	users.POST("/:username/follow", middleware.Auth(), handler.FollowUser)
 	users.DELETE("/:username/follow", middleware.Auth(), handler.UnfollowUser)
+	users.PUT("/:username/role", middleware.Auth(), middleware.RequireRole("admin"), handler.UpdateUserRole)
 
 	// --- 关注列表 ---
 	h.GET("/api/following/:username", middleware.OptionalAuth(), handler.ListFollowing)

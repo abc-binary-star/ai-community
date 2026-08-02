@@ -35,7 +35,15 @@ func (e *ServiceError) Error() string { return e.Msg }
 var (
 	ErrCannotFollowSelf = &ServiceError{Msg: "不能关注自己", Code: 400}
 	ErrInvalidInput     = &ServiceError{Msg: "输入不合法", Code: 400}
+	ErrCannotModifySelfRole = &ServiceError{Msg: "不能修改自己的角色", Code: 400}
 )
+
+// validRoles 允许的用户角色
+var validRoles = map[string]bool{
+	"user":       true,
+	"moderator":  true,
+	"admin":      true,
+}
 
 // ========== User Module ==========
 
@@ -158,6 +166,38 @@ func (s *UserService) UpdateUser(ctx context.Context, userId string, req types.U
 
 	var user model.User
 	if err := dal.DB.WithContext(ctx).First(&user, "id = ?", userId).Error; err != nil {
+		return nil, err
+	}
+	dto := mapper.UserToDTO(&user)
+	return &dto, nil
+}
+
+// UpdateUserRole 修改用户角色（仅管理员可操作，不能修改自己的角色）
+func (s *UserService) UpdateUserRole(ctx context.Context, username, role, currentUserId string) (*types.User, error) {
+	if !validRoles[role] {
+		return nil, ErrInvalidInput
+	}
+
+	var user model.User
+	err := dal.DB.WithContext(ctx).Where("username = ?", username).First(&user).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	// 不能修改自己的角色（防止自我降权锁死）
+	if user.ID == currentUserId {
+		return nil, ErrCannotModifySelfRole
+	}
+
+	if err := dal.DB.WithContext(ctx).Model(&model.User{}).Where("id = ?", user.ID).Update("role", role).Error; err != nil {
+		return nil, err
+	}
+
+	// 重新查询获取更新后的数据
+	if err := dal.DB.WithContext(ctx).First(&user, "id = ?", user.ID).Error; err != nil {
 		return nil, err
 	}
 	dto := mapper.UserToDTO(&user)

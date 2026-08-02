@@ -4,9 +4,12 @@ import (
 	"context"
 	"strings"
 
+	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
+	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // Auth JWT 强制验证中间件
@@ -56,4 +59,35 @@ func GetCurrentUserID(c *app.RequestContext) string {
 		return s
 	}
 	return ""
+}
+
+// RequireRole 角色校验中间件，检查当前用户角色是否在允许列表中
+func RequireRole(roles ...string) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		userID := GetCurrentUserID(c)
+		if userID == "" {
+			response.Error(c, consts.StatusUnauthorized, "未登录")
+			c.Abort()
+			return
+		}
+		var user model.User
+		if err := dal.DB.WithContext(ctx).Select("id", "role").First(&user, "id = ?", userID).Error; err != nil {
+			response.Error(c, consts.StatusUnauthorized, "用户不存在")
+			c.Abort()
+			return
+		}
+		allowed := false
+		for _, r := range roles {
+			if user.Role == r {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			response.Error(c, consts.StatusForbidden, "权限不足")
+			c.Abort()
+			return
+		}
+		c.Next(ctx)
+	}
 }

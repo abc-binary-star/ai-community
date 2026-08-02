@@ -154,6 +154,12 @@ export function PostDetailView({ id }: { id: string }) {
                 <AvatarFallback className="bg-primary/10 text-xs text-primary">{getInitials(post.author.username)}</AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium">{post.author.username}</span>
+              {post.author.role === 'admin' && (
+                <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-transparent">管理员</Badge>
+              )}
+              {post.author.role === 'moderator' && (
+                <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-transparent">版主</Badge>
+              )}
             </div>
             {isAuthor && (
               <div className="flex items-center gap-1">
