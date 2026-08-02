@@ -1,0 +1,340 @@
+package service
+
+import (
+	"context"
+
+	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
+	"github.com/abc-binary-star/ai-community/server-go/internal/model"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
+	"github.com/abc-binary-star/ai-community/server-go/internal/types"
+	"gorm.io/gorm"
+)
+
+// CommentService 评论服务
+type CommentService struct{}
+
+// CommentError 评论业务错误
+type CommentError struct {
+	Msg  string
+	Code int
+}
+
+func (e *CommentError) Error() string { return e.Msg }
+
+var (
+	ErrPostNotFound         = &CommentError{Msg: "帖子不存在", Code: 404}
+	ErrCommentNotFound      = &CommentError{Msg: "评论不存在", Code: 404}
+	ErrParentCommentInvalid = &CommentError{Msg: "父评论不存在或不属于该帖子", Code: 400}
+	ErrCommentForbidden     = &CommentError{Msg: "无权操作他人的评论", Code: 403}
+)
+
+// truncateContent 截断通知内容到 50 个字符（按 rune 计），超出加省略号
+func truncateContent(content string) string {
+	runes := []rune(content)
+	if len(runes) > 50 {
+		return string(runes[:50]) + "…"
+	}
+	return content
+}
+
+// ListComments 获取帖子的评论列表（树形，分页根评论）
+func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID string, page, pageSize int) (*types.Paginated[types.Comment], error) {
+	// 检查帖子是否存在
+	var post model.Post
+	if err := dal.DB.WithContext(ctx).Select("id").First(&post, "id = ?", postID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrPostNotFound
+		}
+		return nil, err
+	}
+
+	// 根评论总数
+	var total int64
+	dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("post_id = ? AND parent_id IS NULL", postID).Count(&total)
+
+	offset := (page - 1) * pageSize
+
+	// 分页加载根评论（倒序，最新在前）
+	var rootRows []model.Comment
+	dal.DB.WithContext(ctx).
+		Preload("Author").
+		Where("post_id = ? AND parent_id IS NULL", postID).
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&rootRows)
+
+	// 全量加载回复（因为要组装树）
+	var replyRows []model.Comment
+	dal.DB.WithContext(ctx).
+		Preload("Author").
+		Where("post_id = ? AND parent_id IS NOT NULL", postID).
+		Order("created_at ASC").
+		Find(&replyRows)
+
+	// 合并根评论与回复
+	allRows := append(rootRows, replyRows...)
+
+	// 记录当前页存在的评论 ID（用于过滤父评论不在当前页的孤儿回复）
+	presentIDs := make(map[string]bool)
+	for i := range allRows {
+		presentIDs[allRows[i].ID] = true
+	}
+
+	// 构建子评论映射 + 根评论列表
+	childrenMap := make(map[string][]model.Comment)
+	var rootModels []model.Comment
+	for i := range allRows {
+		r := &allRows[i]
+		if r.ParentID != nil && presentIDs[*r.ParentID] {
+			childrenMap[*r.ParentID] = append(childrenMap[*r.ParentID], *r)
+		} else if r.ParentID == nil {
+			rootModels = append(rootModels, *r)
+		}
+	}
+
+	// 递归收集树中所有评论 ID
+	var collectIDs func(models []model.Comment) []string
+	collectIDs = func(models []model.Comment) []string {
+		var ids []string
+		for i := range models {
+			ids = append(ids, models[i].ID)
+			ids = append(ids, collectIDs(childrenMap[models[i].ID])...)
+		}
+		return ids
+	}
+	allIDs := collectIDs(rootModels)
+
+	// 批量查询当前用户的点赞状态
+	likedSet := make(map[string]bool)
+	if currentUserID != "" && len(allIDs) > 0 {
+		var likes []model.CommentLike
+		dal.DB.WithContext(ctx).
+			Where("user_id = ? AND comment_id IN ?", currentUserID, allIDs).
+			Select("comment_id").
+			Find(&likes)
+		for _, l := range likes {
+			likedSet[l.CommentID] = true
+		}
+	}
+
+	// 递归构建 DTO 树
+	var build func(c *model.Comment) types.Comment
+	build = func(c *model.Comment) types.Comment {
+		var replies []types.Comment
+		children := childrenMap[c.ID]
+		for i := range children {
+			replies = append(replies, build(&children[i]))
+		}
+		return mapper.CommentToDTO(c, likedSet[c.ID], replies)
+	}
+
+	items := make([]types.Comment, 0, len(rootModels))
+	for i := range rootModels {
+		items = append(items, build(&rootModels[i]))
+	}
+
+	return &types.Paginated[types.Comment]{
+		Items:      items,
+		Total:      int(total),
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: pagination.TotalPages(int(total), pageSize),
+	}, nil
+}
+
+// CreateComment 创建评论或回复
+func (s *CommentService) CreateComment(ctx context.Context, postID, userID string, req types.CreateCommentReq) (*types.Comment, error) {
+	// 检查帖子存在并获取作者 ID（用于通知）
+	var post model.Post
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id").First(&post, "id = ?", postID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrPostNotFound
+		}
+		return nil, err
+	}
+
+	// 若指定父评论，校验其属于同一帖子，并取出其作者用于回复通知
+	var parentAuthorID string
+	if req.ParentID != nil {
+		var parent model.Comment
+		if err := dal.DB.WithContext(ctx).Select("id", "post_id", "author_id").First(&parent, "id = ?", *req.ParentID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, ErrParentCommentInvalid
+			}
+			return nil, err
+		}
+		if parent.PostID != postID {
+			return nil, ErrParentCommentInvalid
+		}
+		parentAuthorID = parent.AuthorID
+	}
+
+	// 创建评论
+	created := &model.Comment{
+		Content:  req.Content,
+		PostID:   postID,
+		AuthorID: userID,
+		ParentID: req.ParentID,
+	}
+	if err := dal.DB.WithContext(ctx).Create(created).Error; err != nil {
+		return nil, err
+	}
+
+	// 加载作者信息用于 DTO
+	if err := dal.DB.WithContext(ctx).Preload("Author").First(created, "id = ?", created.ID).Error; err != nil {
+		return nil, err
+	}
+
+	// 产生通知：回复评论通知被回复者，普通评论通知帖子作者
+	notifContent := truncateContent(req.Content)
+	if req.ParentID != nil {
+		notification.Create(ctx, notification.CreateInput{
+			UserID:    parentAuthorID,
+			Type:      "reply",
+			ActorID:   userID,
+			PostID:    postID,
+			CommentID: created.ID,
+			Content:   notifContent,
+		})
+	} else {
+		notification.Create(ctx, notification.CreateInput{
+			UserID:    post.AuthorID,
+			Type:      "comment",
+			ActorID:   userID,
+			PostID:    postID,
+			CommentID: created.ID,
+			Content:   notifContent,
+		})
+	}
+
+	// 解析评论内容中的 @提及
+	notification.CreateMentionNotifications(ctx, req.Content, userID, postID, created.ID)
+
+	dto := mapper.CommentToDTO(created, false, []types.Comment{})
+	return &dto, nil
+}
+
+// UpdateComment 编辑评论（仅作者）
+func (s *CommentService) UpdateComment(ctx context.Context, commentID, userID string, req types.UpdateCommentReq) (*types.Comment, error) {
+	var existing model.Comment
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "post_id").First(&existing, "id = ?", commentID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrCommentNotFound
+		}
+		return nil, err
+	}
+	if existing.AuthorID != userID {
+		return nil, ErrCommentForbidden
+	}
+
+	if err := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("id = ?", commentID).Updates(map[string]interface{}{
+		"content": req.Content,
+		"edited":  true,
+	}).Error; err != nil {
+		return nil, err
+	}
+
+	var updated model.Comment
+	if err := dal.DB.WithContext(ctx).Preload("Author").First(&updated, "id = ?", commentID).Error; err != nil {
+		return nil, err
+	}
+
+	// 解析编辑后内容中的 @提及
+	notification.CreateMentionNotifications(ctx, req.Content, userID, existing.PostID, commentID)
+
+	dto := mapper.CommentToDTO(&updated, false, []types.Comment{})
+	return &dto, nil
+}
+
+// DeleteComment 删除评论（仅作者；级联删除其回复和点赞）
+func (s *CommentService) DeleteComment(ctx context.Context, commentID, userID string) error {
+	var existing model.Comment
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id").First(&existing, "id = ?", commentID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrCommentNotFound
+		}
+		return err
+	}
+	if existing.AuthorID != userID {
+		return ErrCommentForbidden
+	}
+
+	if err := dal.DB.WithContext(ctx).Delete(&model.Comment{}, "id = ?", commentID).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// LikeComment 点赞评论，返回 (likeCount, alreadyLiked, error)
+func (s *CommentService) LikeComment(ctx context.Context, commentID, userID string) (int, bool, error) {
+	var comment model.Comment
+	if err := dal.DB.WithContext(ctx).Select("id", "like_count").First(&comment, "id = ?", commentID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return 0, false, ErrCommentNotFound
+		}
+		return 0, false, err
+	}
+
+	// 检查是否已点赞
+	var existing model.CommentLike
+	if err := dal.DB.WithContext(ctx).Where("comment_id = ? AND user_id = ?", commentID, userID).First(&existing).Error; err == nil {
+		return comment.LikeCount, true, nil
+	} else if err != gorm.ErrRecordNotFound {
+		return 0, false, err
+	}
+
+	// 事务：创建点赞 + 增加计数，捕获并发下的唯一约束冲突
+	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		like := &model.CommentLike{
+			CommentID: commentID,
+			UserID:    userID,
+		}
+		if err := tx.Create(like).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Comment{}).Where("id = ?", commentID).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+	})
+	if err != nil {
+		if notification.IsUniqueConstraintError(err) {
+			var c2 model.Comment
+			dal.DB.WithContext(ctx).Select("like_count").First(&c2, "id = ?", commentID)
+			return c2.LikeCount, true, nil
+		}
+		return 0, false, err
+	}
+
+	var updated model.Comment
+	dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", commentID)
+	return updated.LikeCount, false, nil
+}
+
+// UnlikeComment 取消点赞，返回 (likeCount, error)
+func (s *CommentService) UnlikeComment(ctx context.Context, commentID, userID string) (int, error) {
+	var comment model.Comment
+	if err := dal.DB.WithContext(ctx).Select("id", "like_count").First(&comment, "id = ?", commentID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return 0, ErrCommentNotFound
+		}
+		return 0, err
+	}
+
+	// 幂等删除（DeleteMany 语义：零匹配不报错）
+	result := dal.DB.WithContext(ctx).Where("comment_id = ? AND user_id = ?", commentID, userID).Delete(&model.CommentLike{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return comment.LikeCount, nil
+	}
+
+	// 减少计数（gt:0 条件防止减为负数）
+	dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("id = ? AND like_count > 0", commentID).UpdateColumn("like_count", gorm.Expr("like_count - 1"))
+
+	var updated model.Comment
+	dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", commentID)
+	return updated.LikeCount, nil
+}

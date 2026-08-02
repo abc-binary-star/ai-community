@@ -1,0 +1,87 @@
+package router
+
+import (
+	"context"
+
+	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
+	"github.com/abc-binary-star/ai-community/server-go/internal/handler"
+	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/hertz-contrib/cors"
+)
+
+// Register 注册所有路由
+func Register(h *server.Hertz, cfg *conf.Config) {
+	// CORS
+	h.Use(cors.New(cors.Config{
+		AllowOrigins:     cfg.CORSOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
+	// 健康检查
+	h.GET("/api/health", handler.Health)
+
+	// --- 认证路由 ---
+	auth := h.Group("/api/auth")
+	auth.POST("/register", handler.Register)
+	auth.POST("/login", handler.Login)
+	auth.POST("/refresh", handler.RefreshToken)
+	auth.GET("/me", middleware.Auth(), handler.Me)
+
+	// --- 帖子路由 ---
+	posts := h.Group("/api/posts")
+	posts.GET("/", middleware.OptionalAuth(), handler.ListPosts)
+	posts.GET("/tags/popular", handler.PopularTags)
+	posts.POST("/suggest-tags", middleware.Auth(), handler.SuggestTags)
+	posts.GET("/:id", middleware.OptionalAuth(), handler.GetPost)
+	posts.POST("/", middleware.Auth(), handler.CreatePost)
+	posts.PUT("/:id", middleware.Auth(), handler.UpdatePost)
+	posts.DELETE("/:id", middleware.Auth(), handler.DeletePost)
+	posts.POST("/:id/like", middleware.Auth(), handler.LikePost)
+	posts.DELETE("/:id/like", middleware.Auth(), handler.UnlikePost)
+
+	// --- 评论路由 ---
+	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)
+	h.POST("/api/posts/:id/comments", middleware.Auth(), handler.CreateComment)
+	h.PUT("/api/comments/:id", middleware.Auth(), handler.UpdateComment)
+	h.DELETE("/api/comments/:id", middleware.Auth(), handler.DeleteComment)
+	h.POST("/api/comments/:id/like", middleware.Auth(), handler.LikeComment)
+	h.DELETE("/api/comments/:id/like", middleware.Auth(), handler.UnlikeComment)
+
+	// --- 收藏路由 ---
+	h.POST("/api/posts/:id/bookmark", middleware.Auth(), handler.BookmarkPost)
+	h.DELETE("/api/posts/:id/bookmark", middleware.Auth(), handler.UnbookmarkPost)
+	h.GET("/api/bookmarks", middleware.Auth(), handler.ListBookmarks)
+
+	// --- 用户路由 ---
+	users := h.Group("/api/users")
+	users.GET("/search", middleware.Auth(), handler.SearchUsers)
+	users.GET("/:username", middleware.OptionalAuth(), handler.GetUser)
+	users.GET("/:username/posts", middleware.OptionalAuth(), handler.GetUserPosts)
+	users.PUT("/me", middleware.Auth(), handler.UpdateUser)
+	users.POST("/:username/follow", middleware.Auth(), handler.FollowUser)
+	users.DELETE("/:username/follow", middleware.Auth(), handler.UnfollowUser)
+
+	// --- 关注列表 ---
+	h.GET("/api/following/:username", middleware.OptionalAuth(), handler.ListFollowing)
+	h.GET("/api/followers/:username", middleware.OptionalAuth(), handler.ListFollowers)
+
+	// --- 通知路由 ---
+	notifications := h.Group("/api/notifications", middleware.Auth())
+	notifications.GET("/", handler.ListNotifications)
+	notifications.GET("/unread-count", handler.UnreadCount)
+	notifications.POST("/:id/read", handler.MarkNotificationRead)
+	notifications.POST("/read-all", handler.MarkAllRead)
+
+	// --- 搜索路由 ---
+	h.GET("/api/search", middleware.OptionalAuth(), handler.Search)
+
+	// 统一 404
+	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {
+		c.JSON(consts.StatusNotFound, map[string]string{"error": "接口不存在"})
+	})
+}
