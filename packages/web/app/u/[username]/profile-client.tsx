@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Heart, Loader2, MessageCircle, Settings, UserPlus, UserCheck, Ban } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Edit3, FileText, Heart, Loader2, MessageCircle, Settings, UserPlus, Users, UserCheck, Ban } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -191,26 +191,31 @@ export function ProfileClient({ username }: { username: string }) {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-6 border-t border-border pt-4 text-sm">
-            <div className="text-center">
-              <div className="text-lg font-semibold">{user.postCount}</div>
-              <div className="text-xs text-muted-foreground">帖子</div>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center gap-1 text-lg font-semibold">
-                <Heart className="size-3.5 text-red-500" />
-                {user.likeCount}
+          <div className="mt-6 rounded-2xl border border-border/60 bg-muted/30 p-2">
+            <div className="grid grid-cols-4 divide-x divide-border/60">
+              <div className="group flex flex-col items-center gap-1.5 rounded-xl py-3 transition-colors hover:bg-accent/50">
+                <span className="text-xl font-bold tabular-nums leading-none text-foreground">{user.postCount}</span>
+                <FileText className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
               </div>
-              <div className="text-xs text-muted-foreground">获赞</div>
+              <div className="group flex flex-col items-center gap-1.5 rounded-xl py-3 transition-colors hover:bg-accent/50">
+                <span className="text-xl font-bold tabular-nums leading-none text-foreground">{user.likeCount}</span>
+                <Heart className="size-4 text-red-400 transition-colors group-hover:text-red-500" />
+              </div>
+              <Link
+                href={`/u/${encodeURIComponent(username)}/followers`}
+                className="group flex flex-col items-center gap-1.5 rounded-xl py-3 transition-colors hover:bg-accent/50"
+              >
+                <span className="text-xl font-bold tabular-nums leading-none text-foreground">{user.followerCount}</span>
+                <Users className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+              </Link>
+              <Link
+                href={`/u/${encodeURIComponent(username)}/following`}
+                className="group flex flex-col items-center gap-1.5 rounded-xl py-3 transition-colors hover:bg-accent/50"
+              >
+                <span className="text-xl font-bold tabular-nums leading-none text-foreground">{user.followingCount}</span>
+                <UserPlus className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+              </Link>
             </div>
-            <Link href={`/u/${encodeURIComponent(username)}/followers`} className="text-center transition-opacity hover:opacity-70">
-              <div className="text-lg font-semibold">{user.followerCount}</div>
-              <div className="text-xs text-muted-foreground">粉丝</div>
-            </Link>
-            <Link href={`/u/${encodeURIComponent(username)}/following`} className="text-center transition-opacity hover:opacity-70">
-              <div className="text-lg font-semibold">{user.followingCount}</div>
-              <div className="text-xs text-muted-foreground">关注</div>
-            </Link>
           </div>
 
           {user.channels && user.channels.length > 0 && (
