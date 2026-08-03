@@ -126,22 +126,15 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [polishing, setPolishing] = useState(false)
-  // 持续追踪 textarea 的选区位置，避免点击按钮时选区丢失
-  const selRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 })
+  // 暂存选区：onMouseDown 时读取（此时 textarea 还没失焦），onClick 时使用
+  const savedSelRef = useRef<{ start: number; end: number } | null>(null)
   const [diffState, setDiffState] = useState<{
     original: string
     rewritten: string
-    selection: string
+    isSelection: boolean
     selStart: number
     selEnd: number
   } | null>(null)
-
-  // 记录选区变化
-  const handleSelect = () => {
-    const ta = textareaRef.current
-    if (!ta) return
-    selRef.current = { start: ta.selectionStart, end: ta.selectionEnd }
-  }
 
   const handleAction = useCallback((btn: ToolbarBtn) => {
     if (textareaRef.current) {
@@ -149,19 +142,29 @@ export function MarkdownEditor({
     }
   }, [value, onChange])
 
+  // 润色按钮 onMouseDown：此时 textarea 还没失焦，读出选区暂存
+  const handlePolishMouseDown = () => {
+    const ta = textareaRef.current
+    if (!ta) return
+    savedSelRef.current = { start: ta.selectionStart, end: ta.selectionEnd }
+  }
+
   // AI 润色：有选区时润色选段，否则润色全文
   const handlePolish = async () => {
     const ta = textareaRef.current
     if (!ta) return
 
-    // 如果 diff 面板已打开，先关闭（避免重复润色已采纳的内容）
+    // 如果 diff 面板已打开，先关闭
     if (diffState) {
       setDiffState(null)
       return
     }
 
-    // 从 ref 中读取最后记录的选区位置
-    const { start, end } = selRef.current
+    // 从暂存的选区读取
+    const sel = savedSelRef.current
+    savedSelRef.current = null
+    const start = sel?.start ?? 0
+    const end = sel?.end ?? 0
     const selection = start !== end ? value.slice(start, end) : ''
 
     if (!selection && !value.trim()) {
@@ -183,7 +186,7 @@ export function MarkdownEditor({
       setDiffState({
         original: selection || value,
         rewritten: data.result,
-        selection,
+        isSelection: !!selection,
         selStart: start,
         selEnd: end,
       })
@@ -197,8 +200,8 @@ export function MarkdownEditor({
   // 采纳润色结果
   const handleAccept = () => {
     if (!diffState) return
-    if (diffState.selection) {
-      // 选段润色：替换选区部分
+    if (diffState.isSelection) {
+      // 选段润色：只替换选区部分
       const newText = value.slice(0, diffState.selStart) + diffState.rewritten + value.slice(diffState.selEnd)
       onChange(newText)
     } else {
@@ -240,7 +243,7 @@ export function MarkdownEditor({
             size="sm"
             className="h-8 gap-1.5 text-xs text-primary"
             disabled={polishing}
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={handlePolishMouseDown}
             onClick={handlePolish}
             title="选中文字后点击只润色选段，未选中润色全文"
           >
@@ -253,9 +256,6 @@ export function MarkdownEditor({
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onSelect={handleSelect}
-          onClick={handleSelect}
-          onKeyUp={handleSelect}
           placeholder={placeholder}
           className="min-h-[120px] resize-y rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
           style={{ height }}
