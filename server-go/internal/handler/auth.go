@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
@@ -27,6 +28,7 @@ func Register(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, ae.Code, ae.Msg)
 			return
 		}
+		log.Printf("[Auth] 注册失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -47,6 +49,7 @@ func Login(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, ae.Code, ae.Msg)
 			return
 		}
+		log.Printf("[Auth] 登录失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -67,6 +70,7 @@ func RefreshToken(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, ae.Code, ae.Msg)
 			return
 		}
+		log.Printf("[Auth] 刷新token失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}

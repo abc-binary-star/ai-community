@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
@@ -18,6 +19,7 @@ func Discover(ctx context.Context, c *app.RequestContext) {
 
 	result, err := discoverService.Discover(ctx, userID)
 	if err != nil {
+		log.Printf("[Discover] 获取发现页数据失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}

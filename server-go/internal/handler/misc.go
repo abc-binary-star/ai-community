@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -32,6 +33,7 @@ func handleServiceError(c *app.RequestContext, err error) {
 	case *service.PostSummaryError:
 		response.Error(c, e.Code, e.Msg)
 	default:
+		log.Printf("[Service] 未预期的错误: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 	}
 }
@@ -44,6 +46,7 @@ func SearchUsers(ctx context.Context, c *app.RequestContext) {
 	q := c.Query("q")
 	items, err := userService.SearchUsers(ctx, q)
 	if err != nil {
+		log.Printf("[SearchUsers] 搜索用户失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -299,6 +302,7 @@ func ListNotifications(ctx context.Context, c *app.RequestContext) {
 
 	result, err := notificationService.ListNotifications(ctx, userID, page, pageSize)
 	if err != nil {
+		log.Printf("[Notification] 获取通知列表失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -310,6 +314,7 @@ func UnreadCount(ctx context.Context, c *app.RequestContext) {
 
 	count, err := notificationService.UnreadCount(ctx, userID)
 	if err != nil {
+		log.Printf("[Notification] 获取未读数失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -331,6 +336,7 @@ func MarkAllRead(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
 
 	if err := notificationService.MarkAllRead(ctx, userID); err != nil {
+		log.Printf("[Notification] 全部已读失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -343,6 +349,7 @@ func GetNotificationPreferences(ctx context.Context, c *app.RequestContext) {
 
 	result, err := notificationService.GetPreferences(ctx, userID)
 	if err != nil {
+		log.Printf("[Notification] 获取偏好失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -391,6 +398,7 @@ func Search(ctx context.Context, c *app.RequestContext) {
 
 	result, err := searchService.Search(ctx, q, scope, channel, author, from, to, sort, userID, page, pageSize)
 	if err != nil {
+		log.Printf("[Search] 搜索失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "搜索失败")
 		return
 	}

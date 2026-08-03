@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -19,6 +20,7 @@ func handlePostError(c *app.RequestContext, err error) {
 		response.Error(c, pe.Code, pe.Msg)
 		return
 	}
+	log.Printf("[Post] 未预期的错误: %v", err)
 	response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 }
 
@@ -192,6 +194,7 @@ func UnlikePost(ctx context.Context, c *app.RequestContext) {
 func PopularTags(ctx context.Context, c *app.RequestContext) {
 	items, err := postService.PopularTags(ctx)
 	if err != nil {
+		log.Printf("[PopularTags] 查询热门标签失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
@@ -208,6 +211,7 @@ func SuggestTags(ctx context.Context, c *app.RequestContext) {
 
 	tags, err := postService.SuggestTags(ctx, req.Title, req.Content)
 	if err != nil {
+		log.Printf("[SuggestTags] AI 标签推荐失败: %v", err)
 		response.Error(c, consts.StatusServiceUnavailable, "AI 标签推荐服务暂时不可用")
 		return
 	}

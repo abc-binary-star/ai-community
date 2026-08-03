@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -47,6 +48,7 @@ func (s *MessageService) GetOrCreateConversation(ctx context.Context, userID, re
 		if err == gorm.ErrRecordNotFound {
 			return nil, &MessageError{Msg: "用户不存在", Code: 404}
 		}
+		log.Printf("[Message/GetOrCreateConversation] failed to get recipient, recipientID=%s, err=%v", recipientID, err)
 		return nil, err
 	}
 
@@ -56,9 +58,11 @@ func (s *MessageService) GetOrCreateConversation(ctx context.Context, userID, re
 	if err == gorm.ErrRecordNotFound {
 		conv = model.Conversation{UserAID: a, UserBID: b}
 		if err := dal.DB.WithContext(ctx).Create(&conv).Error; err != nil {
+			log.Printf("[Message/GetOrCreateConversation] failed to create conversation, userAID=%s, userBID=%s, err=%v", a, b, err)
 			return nil, err
 		}
 	} else if err != nil {
+		log.Printf("[Message/GetOrCreateConversation] failed to get conversation, userAID=%s, userBID=%s, err=%v", a, b, err)
 		return nil, err
 	}
 
@@ -83,6 +87,7 @@ func (s *MessageService) ListConversations(ctx context.Context, userID string, p
 	for i := range rows {
 		item, err := s.conversationToDTO(ctx, &rows[i], userID)
 		if err != nil {
+			log.Printf("[Message/ListConversations] failed to convert conversation to DTO, convID=%s, err=%v", rows[i].ID, err)
 			return nil, err
 		}
 		items = append(items, *item)
@@ -101,6 +106,7 @@ func (s *MessageService) ListConversations(ctx context.Context, userID string, p
 // 返回按时间正序，hasMore 表示是否还有更早的消息可加载
 func (s *MessageService) ListMessages(ctx context.Context, userID, conversationID, beforeID string, limit int) ([]types.Message, bool, error) {
 	if _, err := s.getParticipatedConversation(ctx, userID, conversationID); err != nil {
+		log.Printf("[Message/ListMessages] failed to verify participation, userID=%s, conversationID=%s, err=%v", userID, conversationID, err)
 		return nil, false, err
 	}
 
@@ -124,6 +130,7 @@ func (s *MessageService) ListMessages(ctx context.Context, userID, conversationI
 	// 多查一条用于判断是否还有更早消息
 	var rows []model.Message
 	if err := q.Preload("Sender").Order("created_at DESC, id DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
+		log.Printf("[Message/ListMessages] failed to list messages, conversationID=%s, err=%v", conversationID, err)
 		return nil, false, err
 	}
 	hasMore := false
@@ -160,6 +167,7 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, conversationID
 		return nil, &MessageError{Msg: "消息内容过长", Code: 400}
 	}
 	if _, err := s.getParticipatedConversation(ctx, userID, conversationID); err != nil {
+		log.Printf("[Message/SendMessage] failed to verify participation, userID=%s, conversationID=%s, err=%v", userID, conversationID, err)
 		return nil, err
 	}
 
@@ -171,6 +179,7 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, conversationID
 		CreatedAt:      now,
 	}
 	if err := dal.DB.WithContext(ctx).Create(&msg).Error; err != nil {
+		log.Printf("[Message/SendMessage] failed to create message, conversationID=%s, senderID=%s, err=%v", conversationID, userID, err)
 		return nil, err
 	}
 
@@ -185,6 +194,7 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, conversationID
 			"last_message":    preview,
 			"last_message_at": now,
 		}).Error; err != nil {
+		log.Printf("[Message/SendMessage] failed to update conversation last message, conversationID=%s, err=%v", conversationID, err)
 		return nil, err
 	}
 
@@ -210,11 +220,16 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, conversationID
 // MarkConversationRead 将会话中对方发来的消息全部标记为已读
 func (s *MessageService) MarkConversationRead(ctx context.Context, userID, conversationID string) error {
 	if _, err := s.getParticipatedConversation(ctx, userID, conversationID); err != nil {
+		log.Printf("[Message/MarkConversationRead] failed to verify participation, userID=%s, conversationID=%s, err=%v", userID, conversationID, err)
 		return err
 	}
-	return dal.DB.WithContext(ctx).Model(&model.Message{}).
+	if err := dal.DB.WithContext(ctx).Model(&model.Message{}).
 		Where("conversation_id = ? AND sender_id <> ? AND read_at IS NULL", conversationID, userID).
-		Update("read_at", time.Now()).Error
+		Update("read_at", time.Now()).Error; err != nil {
+		log.Printf("[Message/MarkConversationRead] failed to mark messages read, conversationID=%s, err=%v", conversationID, err)
+		return err
+	}
+	return nil
 }
 
 // UnreadCount 当前用户在所有会话中的未读消息总数
@@ -226,6 +241,9 @@ func (s *MessageService) UnreadCount(ctx context.Context, userID string) (int64,
 	err := dal.DB.WithContext(ctx).Model(&model.Message{}).
 		Where("conversation_id IN (?) AND sender_id <> ? AND read_at IS NULL", sub, userID).
 		Count(&count).Error
+	if err != nil {
+		log.Printf("[Message/UnreadCount] failed to count unread messages, userID=%s, err=%v", userID, err)
+	}
 	return count, err
 }
 
@@ -240,6 +258,7 @@ func (s *MessageService) conversationToDTO(ctx context.Context, conv *model.Conv
 	if err := dal.DB.WithContext(ctx).
 		Select("id", "username", "avatar", "bio", "display_name", "created_at").
 		First(&other, "id = ?", otherID).Error; err != nil {
+		log.Printf("[Message/conversationToDTO] failed to get other user, otherID=%s, err=%v", otherID, err)
 		return nil, err
 	}
 
@@ -269,6 +288,7 @@ func (s *MessageService) getParticipatedConversation(ctx context.Context, userID
 		if err == gorm.ErrRecordNotFound {
 			return nil, &MessageError{Msg: "会话不存在", Code: 404}
 		}
+		log.Printf("[Message/getParticipatedConversation] failed to get conversation, conversationID=%s, err=%v", conversationID, err)
 		return nil, err
 	}
 	if conv.UserAID != userID && conv.UserBID != userID {

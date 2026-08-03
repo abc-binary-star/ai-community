@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ func (s *PostSummaryService) GetSummary(ctx context.Context, postID string) (*ty
 		if err == gorm.ErrRecordNotFound {
 			return nil, &PostSummaryError{Msg: "帖子不存在", Code: 404}
 		}
+		log.Printf("[PostSummary/GetSummary] failed to get post, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -50,6 +52,7 @@ func (s *PostSummaryService) GetSummary(ctx context.Context, postID string) (*ty
 	if err := dal.DB.WithContext(ctx).First(&cached, "post_id = ?", postID).Error; err == nil {
 		return summaryToDTO(&cached), nil
 	} else if err != gorm.ErrRecordNotFound {
+		log.Printf("[PostSummary/GetSummary] failed to get cached summary, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -67,11 +70,13 @@ func (s *PostSummaryService) GetSummary(ctx context.Context, postID string) (*ty
 		Order("created_at ASC").
 		Limit(summaryMaxComments).
 		Find(&comments).Error; err != nil {
+		log.Printf("[PostSummary/GetSummary] failed to get comments, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
 	summaryText, err := generateDiscussionSummary(ctx, &post, comments)
 	if err != nil {
+		log.Printf("[PostSummary/GetSummary] failed to generate discussion summary, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -82,6 +87,7 @@ func (s *PostSummaryService) GetSummary(ctx context.Context, postID string) (*ty
 		Model:        conf.Global.DeepSeekModel,
 	}
 	if err := dal.DB.WithContext(ctx).Create(&rec).Error; err != nil {
+		log.Printf("[PostSummary/GetSummary] failed to create summary record, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 	return summaryToDTO(&rec), nil

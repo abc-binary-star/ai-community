@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
@@ -41,6 +42,7 @@ func SuggestTitle(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
 			return
 		}
+		log.Printf("[AI] 标题建议失败: %v", err)
 		response.Error(c, consts.StatusServiceUnavailable, err.Error())
 		return
 	}
@@ -74,6 +76,7 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
 			return
 		}
+		log.Printf("[AI] 文本润色失败: %v", err)
 		response.Error(c, consts.StatusServiceUnavailable, err.Error())
 		return
 	}
@@ -99,6 +102,7 @@ func Summarize(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
 			return
 		}
+		log.Printf("[AI] 摘要生成失败: %v", err)
 		response.Error(c, consts.StatusServiceUnavailable, err.Error())
 		return
 	}

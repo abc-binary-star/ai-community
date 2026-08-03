@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -24,6 +25,7 @@ func handleReportError(c *app.RequestContext, err error) {
 		response.Error(c, ce.Code, ce.Msg)
 		return
 	}
+	log.Printf("[Report] 未预期的错误: %v", err)
 	response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 }
 

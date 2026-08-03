@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ func (s *ThreadSummaryService) GetThreadSummary(ctx context.Context, postID stri
 		if err == gorm.ErrRecordNotFound {
 			return nil, &PostSummaryError{Msg: "帖子不存在", Code: 404}
 		}
+		log.Printf("[ThreadSummary/GetThreadSummary] failed to get post, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -73,6 +75,7 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID
 		if err == gorm.ErrRecordNotFound {
 			return nil, &PostSummaryError{Msg: "帖子不存在", Code: 404}
 		}
+		log.Printf("[ThreadSummary/GenerateThreadSummary] failed to get post, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -95,6 +98,14 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID
 	}
 
 	// 无缓存或旧数据（summary 为空），异步生成
+	// 但评论数未达阈值时不生成
+	if commentCount < int64(threadSummaryMinComments) {
+		return &types.ThreadSummaryDTO{
+			Status:       "none",
+			CommentCount: int(commentCount),
+		}, nil
+	}
+
 	go s.asyncGenerate(postID)
 
 	return &types.ThreadSummaryDTO{
@@ -111,6 +122,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 	// 拉取帖子
 	var post model.Post
 	if err := dal.DB.WithContext(ctx).Select("id", "title", "content").First(&post, "id = ?", postID).Error; err != nil {
+		log.Printf("[ThreadSummary/asyncGenerate] failed to get post, postID=%s, err=%v", postID, err)
 		return
 	}
 
@@ -122,11 +134,13 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 		Order("created_at ASC").
 		Limit(threadSummaryMaxComments).
 		Find(&comments).Error; err != nil {
+		log.Printf("[ThreadSummary/asyncGenerate] failed to get comments, postID=%s, err=%v", postID, err)
 		return
 	}
 
 	summaryText, err := generateThreadSummaryText(ctx, &post, comments)
 	if err != nil {
+		log.Printf("[ThreadSummary/asyncGenerate] failed to generate summary text, postID=%s, err=%v", postID, err)
 		return
 	}
 
@@ -194,6 +208,7 @@ func generateThreadSummaryText(ctx context.Context, post *model.Post, comments [
 		Temperature: 0.3,
 	})
 	if err != nil {
+		log.Printf("[ThreadSummary/generateThreadSummaryText] failed to call AI, postID=%s, err=%v", post.ID, err)
 		return "", err
 	}
 	text = strings.TrimSpace(text)

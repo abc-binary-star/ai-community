@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/service"
@@ -21,6 +22,7 @@ func GetThreadSummary(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, pe.Code, pe.Msg)
 			return
 		}
+		log.Printf("[ThreadSummary] 获取讨论摘要失败: %v", err)
 		response.Error(c, 500, "服务器内部错误")
 		return
 	}
@@ -38,6 +40,7 @@ func GenerateThreadSummary(ctx context.Context, c *app.RequestContext) {
 			response.Error(c, pe.Code, pe.Msg)
 			return
 		}
+		log.Printf("[ThreadSummary] 生成讨论摘要失败: %v", err)
 		response.Error(c, 500, "服务器内部错误")
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -347,6 +348,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			AiSummary: req.AiSummary,
 		}
 		if err := tx.Create(post).Error; err != nil {
+			log.Printf("[CreatePost] 创建帖子失败, userID=%s, title=%s, err=%v", userID, req.Title, err)
 			return err
 		}
 
@@ -366,21 +368,28 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 					if err == gorm.ErrRecordNotFound {
 						tag = model.Tag{Name: tagName}
 						if err := tx.Create(&tag).Error; err != nil {
+							log.Printf("[CreatePost] 创建标签失败, tagName=%s, postID=%s, err=%v", tagName, post.ID, err)
 							return err
 						}
 					} else {
+						log.Printf("[CreatePost] 查询标签失败, tagName=%s, postID=%s, err=%v", tagName, post.ID, err)
 						return err
 					}
 				}
 				// 创建关联
 				if err := tx.Create(&model.PostTag{PostID: post.ID, TagID: tag.ID}).Error; err != nil {
+					log.Printf("[CreatePost] 创建标签关联失败, postID=%s, tagID=%s, tagName=%s, err=%v", post.ID, tag.ID, tagName, err)
 					return err
 				}
 			}
 		}
 
 		// 重新加载带关联的数据
-		return tx.Preload("Author").Preload("Tags").First(&created, "id = ?", post.ID).Error
+		if err := tx.Preload("Author").Preload("Tags").First(&created, "id = ?", post.ID).Error; err != nil {
+			log.Printf("[CreatePost] 重新加载帖子关联数据失败, postID=%s, err=%v", post.ID, err)
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -401,6 +410,7 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound_Post
 		}
+		log.Printf("[UpdatePost] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 	if existing.AuthorID != userID {
@@ -436,18 +446,21 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 		updates["ai_summary"] = *req.AiSummary
 	}
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
+		log.Printf("[UpdatePost] 更新帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
 	// 标签更新：全量替换
 	if req.Tags != nil {
 		if err := replacePostTags(ctx, postID, *req.Tags); err != nil {
+			log.Printf("[UpdatePost] 更新标签失败, postID=%s, err=%v", postID, err)
 			return nil, err
 		}
 	}
 
 	var updated model.Post
 	if err := dal.DB.WithContext(ctx).Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error; err != nil {
+		log.Printf("[UpdatePost] 重新加载帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -472,12 +485,17 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		if err == gorm.ErrRecordNotFound {
 			return ErrPostNotFound_Post
 		}
+		log.Printf("[DeletePost] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return err
 	}
 	if existing.AuthorID != userID {
 		return ErrPostForbidden
 	}
-	return dal.DB.WithContext(ctx).Delete(&model.Post{}, "id = ?", postID).Error
+	if err := dal.DB.WithContext(ctx).Delete(&model.Post{}, "id = ?", postID).Error; err != nil {
+		log.Printf("[DeletePost] 删除帖子失败, postID=%s, err=%v", postID, err)
+		return err
+	}
+	return nil
 }
 
 // SetPostStatus 设置帖子置顶/精华状态（管理员/版主操作）
@@ -487,6 +505,7 @@ func (s *PostService) SetPostStatus(ctx context.Context, postID string, req type
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound_Post
 		}
+		log.Printf("[SetPostStatus] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -502,11 +521,13 @@ func (s *PostService) SetPostStatus(ctx context.Context, postID string, req type
 		updates["is_featured"] = *req.IsFeatured
 	}
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
+		log.Printf("[SetPostStatus] 更新帖子状态失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
 	var updated model.Post
 	if err := dal.DB.WithContext(ctx).Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error; err != nil {
+		log.Printf("[SetPostStatus] 重新加载帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -525,6 +546,7 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 		if err == gorm.ErrRecordNotFound {
 			return 0, false, ErrPostNotFound_Post
 		}
+		log.Printf("[LikePost] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return 0, false, err
 	}
 
@@ -533,6 +555,7 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 	if err := dal.DB.WithContext(ctx).Where("post_id = ? AND user_id = ?", postID, userID).First(&existing).Error; err == nil {
 		return post.LikeCount, true, nil
 	} else if err != gorm.ErrRecordNotFound {
+		log.Printf("[LikePost] 检查点赞状态失败, postID=%s, userID=%s, err=%v", postID, userID, err)
 		return 0, false, err
 	}
 
@@ -548,10 +571,12 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 		if notification.IsUniqueConstraintError(err) {
 			var p model.Post
 			if err := dal.DB.WithContext(ctx).Select("like_count").First(&p, "id = ?", postID).Error; err != nil {
+				log.Printf("[LikePost] 查询点赞数失败, postID=%s, err=%v", postID, err)
 				return 0, false, err
 			}
 			return p.LikeCount, true, nil
 		}
+		log.Printf("[LikePost] 点赞事务失败, postID=%s, userID=%s, err=%v", postID, userID, err)
 		return 0, false, err
 	}
 
@@ -565,6 +590,7 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int,
 
 	var updated model.Post
 	if err := dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", postID).Error; err != nil {
+		log.Printf("[LikePost] 查询点赞数失败, postID=%s, err=%v", postID, err)
 		return 0, false, err
 	}
 	return updated.LikeCount, false, nil
@@ -577,11 +603,13 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 		if err == gorm.ErrRecordNotFound {
 			return 0, ErrPostNotFound_Post
 		}
+		log.Printf("[UnlikePost] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return 0, err
 	}
 
 	result := dal.DB.WithContext(ctx).Where("post_id = ? AND user_id = ?", postID, userID).Delete(&model.PostLike{})
 	if result.Error != nil {
+		log.Printf("[UnlikePost] 删除点赞记录失败, postID=%s, userID=%s, err=%v", postID, userID, result.Error)
 		return 0, result.Error
 	}
 	if result.RowsAffected == 0 {
@@ -589,11 +617,13 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 	}
 
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ? AND like_count > 0", postID).UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error; err != nil {
+		log.Printf("[UnlikePost] 更新点赞数失败, postID=%s, err=%v", postID, err)
 		return 0, err
 	}
 
 	var updated model.Post
 	if err := dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", postID).Error; err != nil {
+		log.Printf("[UnlikePost] 查询点赞数失败, postID=%s, err=%v", postID, err)
 		return 0, err
 	}
 	return updated.LikeCount, nil
@@ -615,6 +645,7 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 		Order("post_count DESC").
 		Limit(20).
 		Find(&rows).Error; err != nil {
+		log.Printf("[PopularTags] 查询热门标签失败, err=%v", err)
 		return nil, err
 	}
 

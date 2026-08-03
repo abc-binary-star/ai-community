@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
@@ -33,6 +34,7 @@ func (s *AIService) SuggestTitle(ctx context.Context, content string) ([]string,
 		Temperature: 0.7,
 	})
 	if err != nil {
+		log.Printf("[AI/SuggestTitle] failed to call AI, err=%v", err)
 		return nil, err
 	}
 
@@ -124,6 +126,7 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 		Temperature: 0.3,
 	})
 	if err != nil {
+		log.Printf("[AI/Rewrite] failed to call AI, err=%v", err)
 		return "", err
 	}
 
@@ -159,6 +162,7 @@ func (s *AIService) Summarize(ctx context.Context, content string) (string, erro
 		Temperature: 0.3,
 	})
 	if err != nil {
+		log.Printf("[AI/Summarize] failed to call AI, err=%v", err)
 		return "", err
 	}
 	if text == "" {

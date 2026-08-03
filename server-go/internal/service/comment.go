@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -50,6 +51,7 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound
 		}
+		log.Printf("[Comment/ListComments] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -184,6 +186,7 @@ func (s *CommentService) ListReplies(ctx context.Context, commentID, currentUser
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrCommentNotFound
 		}
+		log.Printf("[Comment/ListReplies] 查询评论失败, commentID=%s, err=%v", commentID, err)
 		return nil, err
 	}
 
@@ -243,6 +246,7 @@ func (s *CommentService) CreateComment(ctx context.Context, postID, userID strin
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound
 		}
+		log.Printf("[Comment/CreateComment] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
@@ -254,6 +258,7 @@ func (s *CommentService) CreateComment(ctx context.Context, postID, userID strin
 			if err == gorm.ErrRecordNotFound {
 				return nil, ErrParentCommentInvalid
 			}
+			log.Printf("[Comment/CreateComment] 查询父评论失败, parentID=%s, err=%v", *req.ParentID, err)
 			return nil, err
 		}
 		if parent.PostID != postID {
@@ -270,11 +275,13 @@ func (s *CommentService) CreateComment(ctx context.Context, postID, userID strin
 		ParentID: req.ParentID,
 	}
 	if err := dal.DB.WithContext(ctx).Create(created).Error; err != nil {
+		log.Printf("[Comment/CreateComment] 创建评论失败, postID=%s, userID=%s, err=%v", postID, userID, err)
 		return nil, err
 	}
 
 	// 加载作者信息用于 DTO
 	if err := dal.DB.WithContext(ctx).Preload("Author").First(created, "id = ?", created.ID).Error; err != nil {
+		log.Printf("[Comment/CreateComment] 加载评论作者信息失败, commentID=%s, err=%v", created.ID, err)
 		return nil, err
 	}
 
@@ -314,6 +321,7 @@ func (s *CommentService) LikeComment(ctx context.Context, commentID, userID stri
 		if err == gorm.ErrRecordNotFound {
 			return 0, false, ErrCommentNotFound
 		}
+		log.Printf("[Comment/LikeComment] 查询评论失败, commentID=%s, err=%v", commentID, err)
 		return 0, false, err
 	}
 
@@ -322,6 +330,7 @@ func (s *CommentService) LikeComment(ctx context.Context, commentID, userID stri
 	if err := dal.DB.WithContext(ctx).Where("comment_id = ? AND user_id = ?", commentID, userID).First(&existing).Error; err == nil {
 		return comment.LikeCount, true, nil
 	} else if err != gorm.ErrRecordNotFound {
+		log.Printf("[Comment/LikeComment] 查询已有点赞记录失败, commentID=%s, userID=%s, err=%v", commentID, userID, err)
 		return 0, false, err
 	}
 
@@ -342,6 +351,7 @@ func (s *CommentService) LikeComment(ctx context.Context, commentID, userID stri
 			dal.DB.WithContext(ctx).Select("like_count").First(&c2, "id = ?", commentID)
 			return c2.LikeCount, true, nil
 		}
+		log.Printf("[Comment/LikeComment] 事务执行点赞失败, commentID=%s, userID=%s, err=%v", commentID, userID, err)
 		return 0, false, err
 	}
 
@@ -357,12 +367,14 @@ func (s *CommentService) UnlikeComment(ctx context.Context, commentID, userID st
 		if err == gorm.ErrRecordNotFound {
 			return 0, ErrCommentNotFound
 		}
+		log.Printf("[Comment/UnlikeComment] 查询评论失败, commentID=%s, err=%v", commentID, err)
 		return 0, err
 	}
 
 	// 幂等删除（DeleteMany 语义：零匹配不报错）
 	result := dal.DB.WithContext(ctx).Where("comment_id = ? AND user_id = ?", commentID, userID).Delete(&model.CommentLike{})
 	if result.Error != nil {
+		log.Printf("[Comment/UnlikeComment] 删除点赞记录失败, commentID=%s, userID=%s, err=%v", commentID, userID, result.Error)
 		return 0, result.Error
 	}
 

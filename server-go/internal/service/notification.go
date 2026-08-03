@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ type NotificationService struct{}
 func (s *NotificationService) ListNotifications(ctx context.Context, userID string, page, pageSize int) (*types.Paginated[types.Notification], error) {
 	var total int64
 	if err := dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		log.Printf("[Notification/ListNotifications] failed to count notifications, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 
@@ -31,6 +33,7 @@ func (s *NotificationService) ListNotifications(ctx context.Context, userID stri
 		Offset(offset).
 		Limit(pageSize).
 		Find(&rows).Error; err != nil {
+		log.Printf("[Notification/ListNotifications] failed to list notifications, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 
@@ -45,6 +48,7 @@ func (s *NotificationService) ListNotifications(ctx context.Context, userID stri
 	if len(actorIDs) > 0 {
 		var actors []model.User
 		if err := dal.DB.WithContext(ctx).Where("id IN ?", actorIDs).Select("id", "username").Find(&actors).Error; err != nil {
+			log.Printf("[Notification/ListNotifications] failed to get actor users, actorIDs=%v, err=%v", actorIDs, err)
 			return nil, err
 		}
 		for _, a := range actors {
@@ -79,6 +83,9 @@ func (s *NotificationService) UnreadCount(ctx context.Context, userID string) (i
 	err := dal.DB.WithContext(ctx).Model(&model.Notification{}).
 		Where("user_id = ? AND read = ?", userID, false).
 		Count(&count).Error
+	if err != nil {
+		log.Printf("[Notification/UnreadCount] failed to count unread notifications, userID=%s, err=%v", userID, err)
+	}
 	return count, err
 }
 
@@ -89,19 +96,28 @@ func (s *NotificationService) MarkNotificationRead(ctx context.Context, notifID,
 		if err == gorm.ErrRecordNotFound {
 			return &NotificationError{Msg: "通知不存在", Code: 404}
 		}
+		log.Printf("[Notification/MarkNotificationRead] failed to get notification, notifID=%s, err=%v", notifID, err)
 		return err
 	}
 	if notif.UserID != userID {
 		return &NotificationError{Msg: "无权操作", Code: 403}
 	}
-	return dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("id = ?", notifID).Update("read", true).Error
+	if err := dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("id = ?", notifID).Update("read", true).Error; err != nil {
+		log.Printf("[Notification/MarkNotificationRead] failed to mark notification read, notifID=%s, err=%v", notifID, err)
+		return err
+	}
+	return nil
 }
 
 // MarkAllRead 全部标记为已读
 func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) error {
-	return dal.DB.WithContext(ctx).Model(&model.Notification{}).
+	if err := dal.DB.WithContext(ctx).Model(&model.Notification{}).
 		Where("user_id = ? AND read = ?", userID, false).
-		Update("read", true).Error
+		Update("read", true).Error; err != nil {
+		log.Printf("[Notification/MarkAllRead] failed to mark all notifications read, userID=%s, err=%v", userID, err)
+		return err
+	}
+	return nil
 }
 
 // GetPreferences 获取当前用户的通知偏好（未设置时返回默认值）
@@ -115,6 +131,7 @@ func (s *NotificationService) GetPreferences(ctx context.Context, userID string)
 		}, nil
 	}
 	if err != nil {
+		log.Printf("[Notification/GetPreferences] failed to get notification preferences, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 	return s.toPreferenceDTO(&pref), nil
@@ -162,19 +179,23 @@ func (s *NotificationService) UpdatePreferences(ctx context.Context, userID stri
 	if err == gorm.ErrRecordNotFound {
 		pref = model.NotificationPreference{UserID: userID}
 		if err := dal.DB.WithContext(ctx).Create(&pref).Error; err != nil {
+			log.Printf("[Notification/UpdatePreferences] failed to create notification preference, userID=%s, err=%v", userID, err)
 			return nil, err
 		}
 	} else if err != nil {
+		log.Printf("[Notification/UpdatePreferences] failed to get notification preference, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 
 	if err := dal.DB.WithContext(ctx).Model(&model.NotificationPreference{}).
 		Where("user_id = ?", userID).
 		Updates(updates).Error; err != nil {
+		log.Printf("[Notification/UpdatePreferences] failed to update notification preferences, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 
 	if err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error; err != nil {
+		log.Printf("[Notification/UpdatePreferences] failed to reload notification preference, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 	return s.toPreferenceDTO(&pref), nil
@@ -317,9 +338,11 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		var postRows []model.Post
 		var postTotal int64
 		if err := postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Limit(5).Find(&postRows).Error; err != nil {
+			log.Printf("[Notification/Search] failed to search posts (scope=all), q=%s, err=%v", q, err)
 			return nil, err
 		}
 		if err := postWhere().Count(&postTotal).Error; err != nil {
+			log.Printf("[Notification/Search] failed to count posts (scope=all), q=%s, err=%v", q, err)
 			return nil, err
 		}
 
@@ -329,9 +352,11 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		var commentRows []model.Comment
 		var commentTotal int64
 		if err := commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Limit(5).Find(&commentRows).Error; err != nil {
+			log.Printf("[Notification/Search] failed to search comments (scope=all), q=%s, err=%v", q, err)
 			return nil, err
 		}
 		if err := commentWhere().Count(&commentTotal).Error; err != nil {
+			log.Printf("[Notification/Search] failed to count comments (scope=all), q=%s, err=%v", q, err)
 			return nil, err
 		}
 
@@ -357,9 +382,11 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		var userTotal int64
 		if err := userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
 			Order("created_at DESC").Limit(5).Find(&userRows).Error; err != nil {
+			log.Printf("[Notification/Search] failed to search users (scope=all), q=%s, err=%v", q, err)
 			return nil, err
 		}
 		if err := userWhere().Count(&userTotal).Error; err != nil {
+			log.Printf("[Notification/Search] failed to count users (scope=all), q=%s, err=%v", q, err)
 			return nil, err
 		}
 
@@ -388,6 +415,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	if scope == "posts" {
 		var total int64
 		if err := postWhere().Count(&total).Error; err != nil {
+			log.Printf("[Notification/Search] failed to count posts (scope=posts), q=%s, err=%v", q, err)
 			return nil, err
 		}
 
@@ -400,10 +428,12 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 					like, q,
 				)).
 				Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				log.Printf("[Notification/Search] failed to search posts (scope=posts, sort=relevance), q=%s, err=%v", q, err)
 				return nil, err
 			}
 		} else {
 			if err := postWhere().Preload("Author").Preload("Tags").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				log.Printf("[Notification/Search] failed to search posts (scope=posts), q=%s, err=%v", q, err)
 				return nil, err
 			}
 		}
@@ -418,6 +448,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	if scope == "comments" {
 		var total int64
 		if err := commentWhere().Count(&total).Error; err != nil {
+			log.Printf("[Notification/Search] failed to count comments (scope=comments), q=%s, err=%v", q, err)
 			return nil, err
 		}
 
@@ -426,10 +457,12 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 			if err := commentWhere().Preload("Author").Preload("Post").
 				Order(gorm.Expr("similarity(content, ?) DESC, created_at DESC", q)).
 				Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				log.Printf("[Notification/Search] failed to search comments (scope=comments, sort=relevance), q=%s, err=%v", q, err)
 				return nil, err
 			}
 		} else {
 			if err := commentWhere().Preload("Author").Preload("Post").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+				log.Printf("[Notification/Search] failed to search comments (scope=comments), q=%s, err=%v", q, err)
 				return nil, err
 			}
 		}
@@ -460,6 +493,7 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	// scope == "users"
 	var total int64
 	if err := userWhere().Count(&total).Error; err != nil {
+		log.Printf("[Notification/Search] failed to count users (scope=users), q=%s, err=%v", q, err)
 		return nil, err
 	}
 
@@ -471,11 +505,13 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 				q, q,
 			)).
 			Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+			log.Printf("[Notification/Search] failed to search users (scope=users, sort=relevance), q=%s, err=%v", q, err)
 			return nil, err
 		}
 	} else {
 		if err := userWhere().Select("id", "username", "avatar", "bio", "display_name", "created_at").
 			Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+			log.Printf("[Notification/Search] failed to search users (scope=users), q=%s, err=%v", q, err)
 			return nil, err
 		}
 	}

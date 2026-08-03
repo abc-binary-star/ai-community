@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"regexp"
 	"time"
 
@@ -36,6 +37,7 @@ var channelNameReg = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,29}$`)
 func (s *ChannelService) ListChannels(ctx context.Context) ([]types.Channel, error) {
 	var channels []model.Channel
 	if err := dal.DB.WithContext(ctx).Order("sort_order ASC, created_at ASC").Find(&channels).Error; err != nil {
+		log.Printf("[Channel/ListChannels] failed to list channels, err=%v", err)
 		return nil, err
 	}
 	items := make([]types.Channel, 0, len(channels))
@@ -59,6 +61,7 @@ func (s *ChannelService) CreateChannel(ctx context.Context, userID string, req t
 		return nil, ErrChannelNameExists
 	}
 	if result.Error != gorm.ErrRecordNotFound {
+		log.Printf("[Channel/CreateChannel] failed to check channel name uniqueness, name=%s, err=%v", req.Name, result.Error)
 		return nil, result.Error
 	}
 
@@ -70,6 +73,7 @@ func (s *ChannelService) CreateChannel(ctx context.Context, userID string, req t
 		CreatedBy:   userID,
 	}
 	if err := dal.DB.WithContext(ctx).Create(channel).Error; err != nil {
+		log.Printf("[Channel/CreateChannel] failed to create channel, name=%s, err=%v", req.Name, err)
 		return nil, err
 	}
 
@@ -84,6 +88,7 @@ func (s *ChannelService) UpdateChannel(ctx context.Context, id string, req types
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrChannelNotFound
 		}
+		log.Printf("[Channel/UpdateChannel] failed to get channel, id=%s, err=%v", id, err)
 		return nil, err
 	}
 
@@ -103,12 +108,14 @@ func (s *ChannelService) UpdateChannel(ctx context.Context, id string, req types
 
 	if len(updates) > 0 {
 		if err := dal.DB.WithContext(ctx).Model(&channel).Updates(updates).Error; err != nil {
+			log.Printf("[Channel/UpdateChannel] failed to update channel, id=%s, err=%v", id, err)
 			return nil, err
 		}
 	}
 
 	// 重新加载
 	if err := dal.DB.WithContext(ctx).First(&channel, "id = ?", id).Error; err != nil {
+		log.Printf("[Channel/UpdateChannel] failed to reload channel, id=%s, err=%v", id, err)
 		return nil, err
 	}
 
@@ -123,6 +130,7 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, id string) error {
 		if err == gorm.ErrRecordNotFound {
 			return ErrChannelNotFound
 		}
+		log.Printf("[Channel/DeleteChannel] failed to get channel, id=%s, err=%v", id, err)
 		return err
 	}
 
@@ -133,7 +141,11 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, id string) error {
 		return ErrChannelHasPosts
 	}
 
-	return dal.DB.WithContext(ctx).Delete(&model.Channel{}, "id = ?", id).Error
+	if err := dal.DB.WithContext(ctx).Delete(&model.Channel{}, "id = ?", id).Error; err != nil {
+		log.Printf("[Channel/DeleteChannel] failed to delete channel, id=%s, err=%v", id, err)
+		return err
+	}
+	return nil
 }
 
 // channelToDTO 将 Channel model 转为 DTO

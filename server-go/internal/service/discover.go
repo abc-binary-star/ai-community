@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -22,18 +23,21 @@ func (s *DiscoverService) Discover(ctx context.Context, currentUserID string) (*
 	// 跨频道热门帖子（复用 ListPosts 的 hot 排序）
 	hotPosts, err := (&PostService{}).ListPosts(ctx, "all", "hot", "", "", "", currentUserID, 1, hotPostLimit)
 	if err != nil {
+		log.Printf("[Discover/Discover] failed to get hot posts, currentUserID=%s, err=%v", currentUserID, err)
 		return nil, err
 	}
 
 	// 趋势话题
 	tags, err := (&PostService{}).PopularTags(ctx)
 	if err != nil {
+		log.Printf("[Discover/Discover] failed to get popular tags, err=%v", err)
 		return nil, err
 	}
 
 	// 推荐用户
 	users, err := s.RecommendedUsers(ctx, currentUserID, recommendedUserLimit)
 	if err != nil {
+		log.Printf("[Discover/Discover] failed to get recommended users, currentUserID=%s, err=%v", currentUserID, err)
 		return nil, err
 	}
 
@@ -66,6 +70,7 @@ func (s *DiscoverService) RecommendedUsers(ctx context.Context, currentUserID st
 
 	var users []model.User
 	if err := dal.DB.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
+		log.Printf("[Discover/RecommendedUsers] failed to get users by IDs, ids=%v, err=%v", ids, err)
 		return nil, err
 	}
 

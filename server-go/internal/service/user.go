@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"net/url"
 	"sync"
 
@@ -108,6 +109,7 @@ func (s *UserService) GetUser(ctx context.Context, username, currentUserId strin
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrUserNotFound
 		}
+		log.Printf("[User/GetUser] 查询用户失败, username=%s, err=%v", username, err)
 		return nil, err
 	}
 
@@ -143,15 +145,19 @@ func (s *UserService) GetUser(ctx context.Context, username, currentUserId strin
 	wg.Wait()
 
 	if postErr != nil {
+		log.Printf("[User/GetUser] 查询帖子数失败, userID=%s, err=%v", u.ID, postErr)
 		return nil, postErr
 	}
 	if followerErr != nil {
+		log.Printf("[User/GetUser] 查询粉丝数失败, userID=%s, err=%v", u.ID, followerErr)
 		return nil, followerErr
 	}
 	if followingErr != nil {
+		log.Printf("[User/GetUser] 查询关注数失败, userID=%s, err=%v", u.ID, followingErr)
 		return nil, followingErr
 	}
 	if isFollowingErr != nil {
+		log.Printf("[User/GetUser] 查询关注状态失败, currentUserId=%s, targetID=%s, err=%v", currentUserId, u.ID, isFollowingErr)
 		return nil, isFollowingErr
 	}
 
@@ -167,6 +173,7 @@ func (s *UserService) GetUserPosts(ctx context.Context, username, currentUserId 
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrUserNotFound
 		}
+		log.Printf("[User/GetUserPosts] 查询用户失败, username=%s, err=%v", username, err)
 		return nil, err
 	}
 
@@ -222,11 +229,13 @@ func (s *UserService) UpdateUser(ctx context.Context, userId string, req types.U
 	}
 
 	if err := dal.DB.WithContext(ctx).Model(&model.User{}).Where("id = ?", userId).Updates(updates).Error; err != nil {
+		log.Printf("[User/UpdateUser] 更新用户资料失败, userId=%s, err=%v", userId, err)
 		return nil, err
 	}
 
 	var user model.User
 	if err := dal.DB.WithContext(ctx).First(&user, "id = ?", userId).Error; err != nil {
+		log.Printf("[User/UpdateUser] 重新查询用户失败, userId=%s, err=%v", userId, err)
 		return nil, err
 	}
 	dto := mapper.UserToDTO(&user)
@@ -245,6 +254,7 @@ func (s *UserService) UpdateUserRole(ctx context.Context, username, role, curren
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrUserNotFound
 		}
+		log.Printf("[User/UpdateUserRole] 查询用户失败, username=%s, err=%v", username, err)
 		return nil, err
 	}
 
@@ -254,11 +264,13 @@ func (s *UserService) UpdateUserRole(ctx context.Context, username, role, curren
 	}
 
 	if err := dal.DB.WithContext(ctx).Model(&model.User{}).Where("id = ?", user.ID).Update("role", role).Error; err != nil {
+		log.Printf("[User/UpdateUserRole] 更新用户角色失败, userID=%s, role=%s, err=%v", user.ID, role, err)
 		return nil, err
 	}
 
 	// 重新查询获取更新后的数据
 	if err := dal.DB.WithContext(ctx).First(&user, "id = ?", user.ID).Error; err != nil {
+		log.Printf("[User/UpdateUserRole] 重新查询用户失败, userID=%s, err=%v", user.ID, err)
 		return nil, err
 	}
 	dto := mapper.UserToDTO(&user)
@@ -275,6 +287,7 @@ func (s *UserService) FollowUser(ctx context.Context, username, followerId strin
 		if err == gorm.ErrRecordNotFound {
 			return false, ErrUserNotFound
 		}
+		log.Printf("[User/FollowUser] 查询目标用户失败, username=%s, err=%v", username, err)
 		return false, err
 	}
 	if target.ID == followerId {
@@ -290,6 +303,7 @@ func (s *UserService) FollowUser(ctx context.Context, username, followerId strin
 		return false, nil
 	}
 	if result.Error != gorm.ErrRecordNotFound {
+		log.Printf("[User/FollowUser] 查询已有关注记录失败, followerId=%s, targetID=%s, err=%v", followerId, target.ID, result.Error)
 		return false, result.Error
 	}
 
@@ -299,6 +313,7 @@ func (s *UserService) FollowUser(ctx context.Context, username, followerId strin
 		if notification.IsUniqueConstraintError(err) {
 			return false, nil
 		}
+		log.Printf("[User/FollowUser] 创建关注记录失败, followerId=%s, targetID=%s, err=%v", followerId, target.ID, err)
 		return false, err
 	}
 
@@ -320,12 +335,14 @@ func (s *UserService) UnfollowUser(ctx context.Context, username, followerId str
 		if err == gorm.ErrRecordNotFound {
 			return ErrUserNotFound
 		}
+		log.Printf("[User/UnfollowUser] 查询目标用户失败, username=%s, err=%v", username, err)
 		return err
 	}
 
 	if err := dal.DB.WithContext(ctx).
 		Where("follower_id = ? AND following_id = ?", followerId, target.ID).
 		Delete(&model.Follow{}).Error; err != nil {
+		log.Printf("[User/UnfollowUser] 删除关注记录失败, followerId=%s, targetID=%s, err=%v", followerId, target.ID, err)
 		return err
 	}
 	return nil
@@ -341,6 +358,7 @@ func (s *UserService) BlockUser(ctx context.Context, blockerID, blockedUsername 
 		if err == gorm.ErrRecordNotFound {
 			return false, ErrUserNotFound
 		}
+		log.Printf("[User/BlockUser] 查询目标用户失败, blockedUsername=%s, err=%v", blockedUsername, err)
 		return false, err
 	}
 	if target.ID == blockerID {
@@ -356,6 +374,7 @@ func (s *UserService) BlockUser(ctx context.Context, blockerID, blockedUsername 
 		return false, nil
 	}
 	if result.Error != gorm.ErrRecordNotFound {
+		log.Printf("[User/BlockUser] 查询已有屏蔽记录失败, blockerID=%s, targetID=%s, err=%v", blockerID, target.ID, result.Error)
 		return false, result.Error
 	}
 
@@ -364,6 +383,7 @@ func (s *UserService) BlockUser(ctx context.Context, blockerID, blockedUsername 
 		if notification.IsUniqueConstraintError(err) {
 			return false, nil
 		}
+		log.Printf("[User/BlockUser] 创建屏蔽记录失败, blockerID=%s, targetID=%s, err=%v", blockerID, target.ID, err)
 		return false, err
 	}
 	return true, nil
@@ -377,6 +397,7 @@ func (s *UserService) UnblockUser(ctx context.Context, blockerID, blockedUsernam
 		if err == gorm.ErrRecordNotFound {
 			return ErrUserNotFound
 		}
+		log.Printf("[User/UnblockUser] 查询目标用户失败, blockedUsername=%s, err=%v", blockedUsername, err)
 		return err
 	}
 
@@ -426,6 +447,7 @@ func (s *UserService) IsBlocked(ctx context.Context, blockerID, username string)
 		if err == gorm.ErrRecordNotFound {
 			return false, ErrUserNotFound
 		}
+		log.Printf("[User/IsBlocked] 查询目标用户失败, username=%s, err=%v", username, err)
 		return false, err
 	}
 	var cnt int64
@@ -443,6 +465,7 @@ func (s *UserService) ListFollowing(ctx context.Context, username, currentUserId
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrUserNotFound
 		}
+		log.Printf("[User/ListFollowing] 查询用户失败, username=%s, err=%v", username, err)
 		return nil, err
 	}
 
@@ -481,6 +504,7 @@ func (s *UserService) ListFollowers(ctx context.Context, username, currentUserId
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrUserNotFound
 		}
+		log.Printf("[User/ListFollowers] 查询用户失败, username=%s, err=%v", username, err)
 		return nil, err
 	}
 
@@ -521,6 +545,7 @@ func (s *UserService) BookmarkPost(ctx context.Context, postID, userId string) (
 		if err == gorm.ErrRecordNotFound {
 			return false, 0, ErrPostNotFound
 		}
+		log.Printf("[User/BookmarkPost] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return false, 0, err
 	}
 
@@ -535,6 +560,7 @@ func (s *UserService) BookmarkPost(ctx context.Context, postID, userId string) (
 		return false, int(count), nil
 	}
 	if result.Error != gorm.ErrRecordNotFound {
+		log.Printf("[User/BookmarkPost] 查询已有收藏记录失败, postID=%s, userId=%s, err=%v", postID, userId, result.Error)
 		return false, 0, result.Error
 	}
 
@@ -545,6 +571,7 @@ func (s *UserService) BookmarkPost(ctx context.Context, postID, userId string) (
 			dal.DB.WithContext(ctx).Model(&model.Bookmark{}).Where("post_id = ?", postID).Count(&count)
 			return false, int(count), nil
 		}
+		log.Printf("[User/BookmarkPost] 创建收藏记录失败, postID=%s, userId=%s, err=%v", postID, userId, err)
 		return false, 0, err
 	}
 
@@ -561,17 +588,20 @@ func (s *UserService) UnbookmarkPost(ctx context.Context, postID, userId string)
 		if err == gorm.ErrRecordNotFound {
 			return 0, ErrPostNotFound
 		}
+		log.Printf("[User/UnbookmarkPost] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return 0, err
 	}
 
 	if err := dal.DB.WithContext(ctx).
 		Where("post_id = ? AND user_id = ?", postID, userId).
 		Delete(&model.Bookmark{}).Error; err != nil {
+		log.Printf("[User/UnbookmarkPost] 删除收藏记录失败, postID=%s, userId=%s, err=%v", postID, userId, err)
 		return 0, err
 	}
 
 	var count int64
 	if err := dal.DB.WithContext(ctx).Model(&model.Bookmark{}).Where("post_id = ?", postID).Count(&count).Error; err != nil {
+		log.Printf("[User/UnbookmarkPost] 查询收藏数失败, postID=%s, err=%v", postID, err)
 		return 0, err
 	}
 	return int(count), nil

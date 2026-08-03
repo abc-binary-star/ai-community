@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
@@ -82,11 +83,13 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterID string, req
 		Status:     "pending",
 	}
 	if err := dal.DB.WithContext(ctx).Create(report).Error; err != nil {
+		log.Printf("[Report/CreateReport] failed to create report, reporterID=%s, targetID=%s, err=%v", reporterID, req.TargetID, err)
 		return nil, err
 	}
 
 	var created model.Report
 	if err := dal.DB.WithContext(ctx).Preload("Reporter").Preload("Handler").First(&created, "id = ?", report.ID).Error; err != nil {
+		log.Printf("[Report/CreateReport] failed to get created report, reportID=%s, err=%v", report.ID, err)
 		return nil, err
 	}
 	dto := s.mapReportToDTO(ctx, &created)
@@ -109,6 +112,7 @@ func (s *ReportService) ListReports(ctx context.Context, status string, page, pa
 		Order("created_at ASC").
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Find(&reports).Error; err != nil {
+		log.Printf("[Report/ListReports] failed to list reports, status=%s, err=%v", status, err)
 		return nil, err
 	}
 
@@ -136,6 +140,7 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrReportNotFound
 		}
+		log.Printf("[Report/HandleReport] failed to get report, reportID=%s, err=%v", reportID, err)
 		return nil, err
 	}
 	if report.Status != "pending" {
@@ -149,6 +154,7 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 			"handled_by": handlerID,
 			"note":       strings.TrimSpace(req.Note),
 		}).Error; err != nil {
+			log.Printf("[Report/HandleReport] failed to update report status, reportID=%s, status=%s, err=%v", reportID, req.Status, err)
 			return err
 		}
 
@@ -168,11 +174,13 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 		return nil
 	})
 	if err != nil {
+		log.Printf("[Report/HandleReport] transaction failed, reportID=%s, err=%v", reportID, err)
 		return nil, err
 	}
 
 	var updated model.Report
 	if err := dal.DB.WithContext(ctx).Preload("Reporter").Preload("Handler").First(&updated, "id = ?", reportID).Error; err != nil {
+		log.Printf("[Report/HandleReport] failed to get updated report, reportID=%s, err=%v", reportID, err)
 		return nil, err
 	}
 	s.fillTargetSnapshots(ctx, []model.Report{updated})

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 	"strconv"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
@@ -109,6 +110,7 @@ func UnreadMessageCount(ctx context.Context, c *app.RequestContext) {
 
 	count, err := messageService.UnreadCount(ctx, userID)
 	if err != nil {
+		log.Printf("[Message] 获取未读私信数失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
 		return
 	}
