@@ -194,14 +194,14 @@ export function ProfileClient({ username }: { username: string }) {
               <div className="text-lg font-semibold">{user.postCount}</div>
               <div className="text-xs text-muted-foreground">帖子</div>
             </div>
-            <div className="text-center">
+            <Link href={`/u/${encodeURIComponent(username)}/followers`} className="text-center transition-opacity hover:opacity-70">
               <div className="text-lg font-semibold">{user.followerCount}</div>
               <div className="text-xs text-muted-foreground">粉丝</div>
-            </div>
-            <div className="text-center">
+            </Link>
+            <Link href={`/u/${encodeURIComponent(username)}/following`} className="text-center transition-opacity hover:opacity-70">
               <div className="text-lg font-semibold">{user.followingCount}</div>
               <div className="text-xs text-muted-foreground">关注</div>
-            </div>
+            </Link>
           </div>
         </div>
       </Card>
