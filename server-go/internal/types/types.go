@@ -45,17 +45,18 @@ type UpdateUserRoleReq struct {
 }
 
 type SuggestTagsReq struct {
-	Title   string `json:"title" vd:"len($)>=1 && len($)<=200"`
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Title   string `json:"title" vd:"len($)>=1"`
+	Content string `json:"content" vd:"len($)>=1"`
 }
 
 type SuggestTitleReq struct {
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Content string `json:"content" vd:"len($)>=1"`
 }
 
 type RewriteReq struct {
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
-	Style   string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
+	Content   string `json:"content" vd:"len($)>=1"`
+	Selection string `json:"selection"`
+	Style     string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
 }
 
 type CreateReportReq struct {
