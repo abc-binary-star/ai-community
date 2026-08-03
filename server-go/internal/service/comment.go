@@ -307,25 +307,6 @@ func (s *CommentService) CreateComment(ctx context.Context, postID, userID strin
 	return &dto, nil
 }
 
-// DeleteComment 删除评论（仅作者；级联删除其回复和点赞）
-func (s *CommentService) DeleteComment(ctx context.Context, commentID, userID string) error {
-	var existing model.Comment
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id").First(&existing, "id = ?", commentID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return ErrCommentNotFound
-		}
-		return err
-	}
-	if existing.AuthorID != userID {
-		return ErrCommentForbidden
-	}
-
-	if err := dal.DB.WithContext(ctx).Delete(&model.Comment{}, "id = ?", commentID).Error; err != nil {
-		return err
-	}
-	return nil
-}
-
 // LikeComment 点赞评论，返回 (likeCount, alreadyLiked, error)
 func (s *CommentService) LikeComment(ctx context.Context, commentID, userID string) (int, bool, error) {
 	var comment model.Comment

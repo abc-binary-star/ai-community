@@ -71,18 +71,6 @@ func CreateComment(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, comment)
 }
 
-// DeleteComment 删除评论（仅作者）
-func DeleteComment(ctx context.Context, c *app.RequestContext) {
-	commentID := c.Param("id")
-	userID := middleware.GetCurrentUserID(c)
-
-	if err := commentService.DeleteComment(ctx, commentID, userID); err != nil {
-		handleCommentError(c, err)
-		return
-	}
-	response.OK(c)
-}
-
 // LikeComment 点赞评论
 func LikeComment(ctx context.Context, c *app.RequestContext) {
 	commentID := c.Param("id")

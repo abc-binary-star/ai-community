@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Loader2, MessageSquare, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -37,17 +37,6 @@ export function CommentItem({
 
   // 剩余未展示的回复数
   const hiddenCount = replyCount - replies.length
-
-  const handleDelete = async () => {
-    if (!window.confirm('确定删除这条评论吗？')) return
-    try {
-      await api.del(`/comments/${comment.id}`)
-      toast.success('已删除')
-      onDeleted()
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : '删除失败')
-    }
-  }
 
   // 展开回复：加载下一页回复
   const handleLoadMoreReplies = async () => {
@@ -97,17 +86,6 @@ export function CommentItem({
             </Button>
             <LikeButton target="comment" id={comment.id} likeCount={comment.likeCount} liked={comment.liked} />
             {!isAuthor && <ReportButton targetType="comment" targetId={comment.id} />}
-            {isAuthor && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                onClick={handleDelete}
-              >
-                <Trash2 className="size-3.5" />
-                删除
-              </Button>
-            )}
           </div>
         </div>
       </Card>

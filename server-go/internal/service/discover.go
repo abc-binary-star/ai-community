@@ -45,6 +45,7 @@ func (s *DiscoverService) Discover(ctx context.Context, currentUserID string) (*
 }
 
 // RecommendedUsers 推荐用户：优先按粉丝数排序，无关注数据时按发帖量兜底
+// 排除自己 + 已关注的用户，保证推荐列表始终是未关注的人
 func (s *DiscoverService) RecommendedUsers(ctx context.Context, currentUserID string, limit int) ([]types.PublicUser, error) {
 	type idRow struct {
 		ID string
@@ -72,7 +73,7 @@ func (s *DiscoverService) RecommendedUsers(ctx context.Context, currentUserID st
 	return us.mapUsersToPublic(ctx, users, currentUserID), nil
 }
 
-// topUsersByFollowers 按粉丝数取 Top 用户
+// topUsersByFollowers 按粉丝数取 Top 用户（排除自己和已关注的用户）
 func (s *DiscoverService) topUsersByFollowers(ctx context.Context, currentUserID string, limit int) []struct{ ID string } {
 	query := dal.DB.WithContext(ctx).Model(&model.Follow{}).
 		Select("following_id as id").
@@ -80,14 +81,17 @@ func (s *DiscoverService) topUsersByFollowers(ctx context.Context, currentUserID
 		Order("count(*) DESC, max(created_at) DESC").
 		Limit(limit)
 	if currentUserID != "" {
-		query = query.Where("following_id <> ?", currentUserID)
+		query = query.Where("following_id <> ? AND following_id NOT IN (?)",
+			currentUserID,
+			dal.DB.Model(&model.Follow{}).Select("following_id").Where("follower_id = ?", currentUserID),
+		)
 	}
 	var rows []struct{ ID string }
 	query.Scan(&rows)
 	return rows
 }
 
-// topUsersByPosts 按发帖量取 Top 用户（兜底策略）
+// topUsersByPosts 按发帖量取 Top 用户（兜底策略，排除自己和已关注的用户）
 func (s *DiscoverService) topUsersByPosts(ctx context.Context, currentUserID string, limit int) []struct{ ID string } {
 	query := dal.DB.WithContext(ctx).Model(&model.Post{}).
 		Select("author_id as id").
@@ -95,7 +99,10 @@ func (s *DiscoverService) topUsersByPosts(ctx context.Context, currentUserID str
 		Order("count(*) DESC, max(created_at) DESC").
 		Limit(limit)
 	if currentUserID != "" {
-		query = query.Where("author_id <> ?", currentUserID)
+		query = query.Where("author_id <> ? AND author_id NOT IN (?)",
+			currentUserID,
+			dal.DB.Model(&model.Follow{}).Select("following_id").Where("follower_id = ?", currentUserID),
+		)
 	}
 	var rows []struct{ ID string }
 	query.Scan(&rows)
