@@ -12,6 +12,8 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 
 # 3. 构建 Next.js（使用 transpilePackages 处理 shared）
+# NEXT_PUBLIC_* 变量在构建时内联到 JS 产物中，运行时设置无效，必须在此声明
+ENV NEXT_PUBLIC_API_URL=/api
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter web build
 
