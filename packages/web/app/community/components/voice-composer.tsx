@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, Loader2, Mic, MicOff, Pencil, Sparkles, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Check, Loader2, Mic, Pencil, Sparkles, Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { api, ApiError } from '@/lib/api'
-import { useSpeechRecognition } from '@/lib/use-speech-recognition'
+import { api, apiFetch, ApiError } from '@/lib/api'
+import { useAudioRecorder } from '@/lib/use-audio-recorder'
 import { toast } from 'sonner'
 
 export type VoiceTarget = 'comment' | 'paragraph'
@@ -21,46 +21,64 @@ export interface VoiceComposerProps {
 }
 
 export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps) {
-  const { supported, listening, finalTranscript, interimTranscript, error, start, stop, reset } =
-    useSpeechRecognition({ lang: 'zh-CN' })
+  const { supported, recording, duration, error, start, stop, cancel } = useAudioRecorder()
 
-  // 编辑模式：用户可手动修改转录文本
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcript, setTranscript] = useState('')
   const [editing, setEditing] = useState(false)
   const [editedText, setEditedText] = useState('')
   const [polishing, setPolishing] = useState(false)
   const [polished, setPolished] = useState<string | null>(null)
   const [style, setStyle] = useState('')
-  const sheetRef = useRef<HTMLDivElement>(null)
 
   // ESC 关闭
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (recording) cancel()
+        onClose()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [recording, cancel, onClose])
 
-  // 录音停止后自动进入编辑模式
-  const fullText = finalTranscript + interimTranscript
-  const displayText = editing ? editedText : fullText
-
-  const handleToggleListen = () => {
-    if (listening) {
-      stop()
-      if (finalTranscript) {
-        setEditedText(finalTranscript)
-        setEditing(true)
+  const handleToggleRecord = async () => {
+    if (recording) {
+      const blob = await stop()
+      if (blob && blob.size > 0) {
+        await transcribe(blob)
       }
     } else {
-      reset()
+      setTranscript('')
       setPolished(null)
+      setEditing(false)
       start()
     }
   }
 
+  const transcribe = async (blob: Blob) => {
+    setTranscribing(true)
+    try {
+      const formData = new FormData()
+      const ext = blob.type.split('/')[1] || 'webm'
+      formData.append('file', blob, `audio.${ext}`)
+
+      const data = await apiFetch<{ text: string }>('/ai/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+      setTranscript(data.text)
+      setEditedText(data.text)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '语音识别失败')
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
   const handlePolish = async () => {
-    const text = editing ? editedText : finalTranscript
+    const text = editing ? editedText : transcript
     if (!text.trim()) {
       toast.error('没有可润色的内容')
       return
@@ -82,37 +100,29 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
   }
 
   const handleConfirm = () => {
-    const text = polished || (editing ? editedText : finalTranscript)
+    const text = polished || (editing ? editedText : transcript)
     if (text.trim()) {
       onInsert(text.trim())
       onClose()
     }
   }
 
-  const handleEditToggle = () => {
-    if (!editing) {
-      setEditedText(fullText)
-      setEditing(true)
-    } else {
-      // 退出编辑模式，同步回 finalTranscript 逻辑：保持 editedText 作为最终文本
-      setEditing(false)
-    }
-  }
-
-  const hasContent = (editing ? editedText : finalTranscript).trim().length > 0
+  const hasContent = (editing ? editedText : transcript).trim().length > 0
+  const isBusy = recording || transcribing || polishing
+  const minutes = Math.floor(duration / 60)
+  const seconds = duration % 60
+  const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 
   return (
     <>
-      {/* 遮罩 */}
       <div
         className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={() => {
+          if (recording) cancel()
+          onClose()
+        }}
       />
-      {/* 底部弹出面板 */}
-      <div
-        ref={sheetRef}
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-2xl animate-in slide-in-from-bottom duration-200"
-      >
+      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-2xl animate-in slide-in-from-bottom duration-200">
         <div className="rounded-t-2xl border border-b-0 border-border bg-card shadow-2xl">
           {/* 头部 */}
           <div className="flex items-center justify-between border-b border-border px-5 py-3">
@@ -124,7 +134,10 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                if (recording) cancel()
+                onClose()
+              }}
               className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="关闭"
             >
@@ -136,38 +149,50 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
           <div className="space-y-4 px-5 py-4">
             {!supported && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-600">
-                当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器。
+                当前浏览器不支持录音功能。
               </div>
             )}
 
             {error && (
               <div className="space-y-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
-                <p className="font-medium">语音识别出错</p>
+                <p className="font-medium">录音出错</p>
                 <p className="text-xs leading-5">{error}</p>
               </div>
             )}
 
             {/* 录音状态指示 */}
-            <div className="flex items-center justify-center">
+            <div className="flex flex-col items-center gap-2">
               <button
                 type="button"
-                onClick={handleToggleListen}
-                disabled={!supported}
+                onClick={handleToggleRecord}
+                disabled={!supported || transcribing}
                 className={cn(
                   'flex size-16 items-center justify-center rounded-full transition-all',
-                  listening
+                  recording
                     ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
                     : 'bg-primary text-primary-foreground shadow-lg hover:bg-primary/90',
-                  !supported && 'cursor-not-allowed opacity-50'
+                  (!supported || transcribing) && 'cursor-not-allowed opacity-50'
                 )}
-                aria-label={listening ? '停止录音' : '开始录音'}
+                aria-label={recording ? '停止录音' : '开始录音'}
               >
-                {listening ? <MicOff className="size-6" /> : <Mic className="size-6" />}
+                {transcribing ? (
+                  <Loader2 className="size-6 animate-spin" />
+                ) : recording ? (
+                  <Square className="size-5 fill-current" />
+                ) : (
+                  <Mic className="size-6" />
+                )}
               </button>
+              <p className="text-center text-xs text-muted-foreground">
+                {transcribing
+                  ? '正在识别语音…'
+                  : recording
+                    ? `正在录音… ${timeStr}`
+                    : hasContent
+                      ? '可继续录音或润色后插入'
+                      : '点击麦克风开始说话'}
+              </p>
             </div>
-            <p className="text-center text-xs text-muted-foreground">
-              {listening ? '正在录音…点击停止' : hasContent ? '可继续录音或润色后插入' : '点击麦克风开始说话'}
-            </p>
 
             {/* 转录文本区 */}
             {hasContent && (
@@ -180,7 +205,14 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
                     {!polished && (
                       <button
                         type="button"
-                        onClick={handleEditToggle}
+                        onClick={() => {
+                          if (!editing) {
+                            setEditedText(transcript)
+                            setEditing(true)
+                          } else {
+                            setEditing(false)
+                          }
+                        }}
                         className={cn(
                           'flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors hover:bg-accent',
                           editing ? 'text-primary' : 'text-muted-foreground'
@@ -206,10 +238,7 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
                   />
                 ) : (
                   <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/30 p-3 text-sm leading-6">
-                    {finalTranscript}
-                    {interimTranscript && (
-                      <span className="text-muted-foreground">{interimTranscript}</span>
-                    )}
+                    {transcript}
                   </div>
                 )}
               </div>
@@ -283,7 +312,7 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
             )}
 
             {/* 无润色直接插入 */}
-            {hasContent && !polished && (
+            {hasContent && !polished && !isBusy && (
               <Button
                 type="button"
                 variant="outline"

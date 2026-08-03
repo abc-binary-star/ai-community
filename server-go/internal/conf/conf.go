@@ -16,6 +16,8 @@ type Config struct {
 	DeepSeekKey   string
 	DeepSeekURL   string
 	DeepSeekModel string
+	OpenAIKey     string
+	OpenAIBaseURL string
 }
 
 // Global 全局配置实例，Load 后可用
@@ -54,6 +56,8 @@ func Load() *Config {
 		DeepSeekKey:   os.Getenv("DEEPSEEK_API_KEY"),
 		DeepSeekURL:   getEnvOrDefault("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
 		DeepSeekModel: getEnvOrDefault("DEEPSEEK_MODEL", "deepseek-chat"),
+		OpenAIKey:     os.Getenv("OPENAI_API_KEY"),
+		OpenAIBaseURL: getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com"),
 	}
 	Global = cfg
 	return cfg

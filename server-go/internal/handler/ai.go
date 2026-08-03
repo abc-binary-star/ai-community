@@ -6,6 +6,7 @@ import (
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/stt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/service"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"github.com/cloudwego/hertz/pkg/app"
@@ -81,6 +82,48 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	response.JSON(c, map[string]interface{}{"result": result})
+}
+
+// Transcribe 语音转文字
+// POST /api/ai/transcribe (multipart: file=音频文件)
+func Transcribe(ctx context.Context, c *app.RequestContext) {
+	if !stt.Enabled() {
+		response.Error(c, consts.StatusServiceUnavailable, "语音识别功能未开启")
+		return
+	}
+
+	// 从 multipart 表单读取音频文件
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		response.BadRequest(c, "请上传音频文件")
+		return
+	}
+
+	// 限制文件大小 25MB（Whisper API 上限 25MB）
+	const maxAudioSize = 25 << 20
+	if fileHeader.Size > maxAudioSize {
+		response.BadRequest(c, "音频文件太大，最多 25MB")
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		response.BadRequest(c, "读取音频文件失败")
+		return
+	}
+	defer file.Close()
+
+	text, err := stt.Transcribe(ctx, stt.TranscribeRequest{
+		AudioReader: file,
+		Filename:    fileHeader.Filename,
+		Language:    "zh",
+	})
+	if err != nil {
+		log.Printf("[STT] 语音识别失败: %v", err)
+		response.Error(c, consts.StatusServiceUnavailable, err.Error())
+		return
+	}
+	response.JSON(c, map[string]interface{}{"text": text})
 }
 
 // Summarize AI 摘要生成

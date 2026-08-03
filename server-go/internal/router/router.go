@@ -60,6 +60,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	ai.POST("/rewrite", handler.Rewrite)
 	ai.POST("/summarize", handler.Summarize)
 	ai.POST("/voice-polish", handler.VoicePolish)
+	ai.POST("/transcribe", handler.Transcribe)
 
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)
