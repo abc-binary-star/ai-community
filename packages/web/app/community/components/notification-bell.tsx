@@ -102,6 +102,30 @@ export function NotificationBell() {
               <DropdownMenuItem
                 key={n.id}
                 onClick={() => {
+                  if (!n.read) {
+                    // 乐观更新：立即让红点消失、未读数减一
+                    queryClient.setQueryData<{ count: number } | undefined>(
+                      ['notifications-unread-count'],
+                      (old) => ({ count: Math.max(0, (old?.count ?? 0) - 1) }),
+                    )
+                    queryClient.setQueryData<Paginated<Notification>>(
+                      ['notifications-latest'],
+                      (old) =>
+                        old
+                          ? {
+                              ...old,
+                              items: old.items.map((item) =>
+                                item.id === n.id ? { ...item, read: true } : item,
+                              ),
+                            }
+                          : old,
+                    )
+                    // 后端标记已读，失败则回滚为真实状态
+                    api.post(`/notifications/${n.id}/read`).catch(() => {
+                      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+                      queryClient.invalidateQueries({ queryKey: ['notifications-latest'] })
+                    })
+                  }
                   if (n.postId) {
                     router.push(`/community/post/${n.postId}`)
                   } else if (n.actorName) {
