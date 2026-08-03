@@ -42,7 +42,7 @@ export default function NewPostPage() {
 
   // 编辑器高度随视口变化，尽量占满空间
   useEffect(() => {
-    const updateHeight = () => setEditorHeight(window.innerHeight - 190)
+    const updateHeight = () => setEditorHeight(window.innerHeight - 270)
     updateHeight()
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
@@ -178,43 +178,78 @@ export default function NewPostPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-3">
-      {/* 顶栏：返回 + 标题 + 操作按钮 */}
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      {/* 顶栏：返回 + 标题 */}
+      <div className="mb-3 flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={() => router.back()}
+          title="返回"
+          aria-label="返回"
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <h1 className="text-base font-semibold">发布新帖</h1>
+      </div>
+      {/* 标题 + 标签 */}
+      <div className="mb-3 space-y-2">
+        <div className="flex gap-2">
+          <Input
+            placeholder="标题"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={100}
+            className="flex-1 text-base font-semibold"
+          />
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => router.back()}
-            title="返回"
-            aria-label="返回"
+            size="sm"
+            className="h-9 shrink-0 gap-1.5 text-xs text-primary"
+            disabled={suggestingTitle}
+            onClick={handleSuggestTitle}
+            title="根据内容 AI 生成标题"
           >
-            <ArrowLeft className="size-4" />
+            {suggestingTitle ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            AI 标题
           </Button>
-          <h1 className="text-base font-semibold">发布新帖</h1>
         </div>
-        <div className="flex items-center gap-2">
+        {titleSuggestions.length > 0 && (
+          <div className="space-y-1 rounded-lg border bg-accent/50 p-2">
+            {titleSuggestions.map((t, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setTitle(t)
+                  setTitleSuggestions([])
+                }}
+                className="block w-full truncate rounded-md px-2 py-1 text-left text-sm text-accent-foreground transition-colors hover:bg-accent"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            placeholder="标签（逗号分隔，最多5个）"
+            value={tagsInput}
+            onChange={(e) => setTagsInput(e.target.value)}
+            className="flex-1"
+          />
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 gap-1.5"
-            disabled={savingDraft || !content.trim()}
-            onClick={handleSaveDraft}
+            className="h-9 shrink-0 gap-1.5 text-xs text-primary"
+            onClick={handleSuggestTags}
+            title="根据标题和内容 AI 生成标签"
           >
-            {savingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
-            保存草稿
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 gap-1.5"
-            disabled={!content.trim()}
-            onClick={() => setDialogOpen(true)}
-          >
-            <Send className="size-3.5" />
-            发布
+            <Sparkles className="size-3.5" />
+            AI 标签
           </Button>
         </div>
       </div>
@@ -224,6 +259,32 @@ export default function NewPostPage() {
         onChange={setContent}
         height={editorHeight}
         placeholder="支持 Markdown 语法，输入 @ 可提及用户，尽情写作吧…"
+        toolbarEnd={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              disabled={savingDraft || !content.trim()}
+              onClick={handleSaveDraft}
+            >
+              {savingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+              保存草稿
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 text-xs text-primary"
+              disabled={!content.trim()}
+              onClick={() => setDialogOpen(true)}
+            >
+              <Send className="size-3.5" />
+              发布
+            </Button>
+          </>
+        }
       />
 
       {/* 发布弹窗：填写标题/频道/标签 */}
