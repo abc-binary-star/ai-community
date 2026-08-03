@@ -138,7 +138,7 @@ export function PostDetailView({ id }: { id: string }) {
       <div className="py-20 text-center">
         <p className="text-muted-foreground">{errMsg}</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/community">返回社区</Link>
+          <Link href="/community/discover">返回社区</Link>
         </Button>
       </div>
     )

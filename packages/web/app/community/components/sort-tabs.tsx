@@ -8,7 +8,7 @@ const TABS = [
   { key: 'hot', label: '最热' },
 ] as const
 
-export function SortTabs({ current }: { current: string }) {
+export function SortTabs({ current, basePath = '/community' }: { current: string; basePath?: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -16,7 +16,7 @@ export function SortTabs({ current }: { current: string }) {
     const params = new URLSearchParams(searchParams.toString())
     params.set('sort', sort)
     params.delete('page')
-    router.push(`/community?${params.toString()}`)
+    router.push(`${basePath}?${params.toString()}`)
   }
 
   return (

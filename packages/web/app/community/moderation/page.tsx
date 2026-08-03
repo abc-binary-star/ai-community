@@ -75,7 +75,7 @@ export default function ModerationPage() {
         <ShieldCheck className="mx-auto mb-3 size-10 text-muted-foreground" />
         <p className="text-muted-foreground">仅管理员或版主可访问内容审核</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/community">返回社区</Link>
+          <Link href="/community/discover">返回社区</Link>
         </Button>
       </div>
     )

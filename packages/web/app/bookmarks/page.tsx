@@ -239,7 +239,7 @@ export default function BookmarksPage() {
                       {selected === 'all' ? '还没有收藏任何帖子' : '此收藏夹为空'}
                     </p>
                     <Button asChild className="mt-4">
-                      <Link href="/community">去社区看看</Link>
+                      <Link href="/community/discover">去社区看看</Link>
                     </Button>
                   </div>
                 </Card>

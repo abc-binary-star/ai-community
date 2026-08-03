@@ -86,7 +86,7 @@ function NavbarInner() {
       <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 px-4">
         <div className="flex items-center gap-8">
           {/* 品牌：蓝色圆角方块 logo */}
-          <Link href="/community" className="flex items-center gap-2 font-semibold">
+          <Link href="/community/discover" className="flex items-center gap-2 font-semibold">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               C
             </span>
