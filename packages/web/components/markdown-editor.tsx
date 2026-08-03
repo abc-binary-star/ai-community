@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, type TextareaHTMLAttributes } from 'react'
 import {
-  Bold, Code, Code2, Eraser, Heading, Image as ImageIcon, Link2,
+  Bold, Code, Code2, Eraser, Eye, EyeOff, Heading, Image as ImageIcon, Link2,
   List, ListOrdered, ListChecks, Quote, Strikethrough, Table as TableIcon,
   Sparkles, Loader2, Undo2,
 } from 'lucide-react'
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { DiffPanel } from '@/components/diff-panel'
+import { MarkdownRenderer } from '@/components/markdown-renderer'
 
 export interface MarkdownEditorProps {
   value: string
@@ -125,7 +126,10 @@ export function MarkdownEditor({
   className,
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+  const syncingRef = useRef(false)
   const [polishing, setPolishing] = useState(false)
+  const [preview, setPreview] = useState(false)
   const [diffState, setDiffState] = useState<{
     original: string
     rewritten: string
@@ -135,6 +139,27 @@ export function MarkdownEditor({
   } | null>(null)
   // 记录采纳前的原始内容，支持「恢复原稿」
   const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null)
+
+  // 同步滚动：按滚动比例在两栏间同步
+  const syncScroll = (source: 'editor' | 'preview') => {
+    if (syncingRef.current) return
+    const editor = textareaRef.current
+    const preview = previewRef.current
+    if (!editor || !preview) return
+
+    syncingRef.current = true
+    if (source === 'editor') {
+      const ratio = editor.scrollTop / Math.max(editor.scrollHeight - editor.clientHeight, 1)
+      preview.scrollTop = ratio * Math.max(preview.scrollHeight - preview.clientHeight, 1)
+    } else {
+      const ratio = preview.scrollTop / Math.max(preview.scrollHeight - preview.clientHeight, 1)
+      editor.scrollTop = ratio * Math.max(editor.scrollHeight - editor.clientHeight, 1)
+    }
+    // 下一帧释放锁，避免来回触发
+    requestAnimationFrame(() => {
+      syncingRef.current = false
+    })
+  }
 
   const handleAction = useCallback((btn: ToolbarBtn) => {
     if (textareaRef.current) {
@@ -242,6 +267,19 @@ export function MarkdownEditor({
             type="button"
             variant="ghost"
             size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setPreview((v) => !v)}
+            title={preview ? '关闭预览' : '开启分屏预览，左侧编辑右侧实时渲染'}
+            aria-pressed={preview}
+          >
+            {preview ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {preview ? '关闭预览' : '预览'}
+          </Button>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             className="h-8 gap-1.5 text-xs text-primary"
             disabled={polishing}
             onMouseDown={(e) => {
@@ -252,7 +290,7 @@ export function MarkdownEditor({
             title="选中文字后点击只润色选段，未选中润色全文"
           >
             {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-          AI 润色
+            AI 润色
           </Button>
           <div className="mx-1 h-5 w-px bg-border" />
           <Button
@@ -276,15 +314,41 @@ export function MarkdownEditor({
             清空
           </Button>
         </div>
-        {/* 编辑区 */}
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="min-h-[120px] resize-y rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
-          style={{ height }}
-        />
+        {/* 编辑区：preview 开启时分屏，左编辑右预览 */}
+        {preview ? (
+          <div className="flex h-[400px] divide-x divide-border">
+            <Textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onScroll={() => syncScroll('editor')}
+              placeholder={placeholder}
+              className="h-full w-1/2 resize-none rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
+            />
+            <div
+              ref={previewRef}
+              onScroll={() => syncScroll('preview')}
+              className="h-full w-1/2 overflow-y-auto bg-background p-4"
+            >
+              {value.trim() ? (
+                <MarkdownRenderer content={value} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  开始输入内容，这里会实时渲染效果
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="min-h-[120px] resize-y rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
+            style={{ height }}
+          />
+        )}
       </div>
       {/* 已采纳润色：轻量状态条 */}
       {originalSnapshot !== null && !diffState && (
