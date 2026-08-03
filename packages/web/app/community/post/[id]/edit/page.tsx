@@ -73,7 +73,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle>编辑帖子</CardTitle>

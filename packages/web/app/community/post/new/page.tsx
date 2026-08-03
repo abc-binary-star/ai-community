@@ -132,7 +132,7 @@ export default function NewPostPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle>发布新帖</CardTitle>
