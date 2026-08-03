@@ -51,6 +51,12 @@ func Init(cfg *conf.Config) {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
 
+	// AutoMigrate 对 SetupJoinTable 配置的关联表不会自动添加新列，
+	// 需手动确保 post_tags 表有 created_at 列
+	if err := DB.Exec("ALTER TABLE post_tags ADD COLUMN IF NOT EXISTS created_at TIMESTAMP").Error; err != nil {
+		log.Printf("Warning: 补全 post_tags.created_at 列失败: %v", err)
+	}
+
 	// 初始化默认频道数据
 	seedDefaultChannels()
 
