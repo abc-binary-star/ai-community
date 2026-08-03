@@ -124,7 +124,8 @@ type ThreadSummaryPoint struct {
 
 // ThreadSummaryDTO 讨论摘要 v2 DTO
 type ThreadSummaryDTO struct {
-	Points       []ThreadSummaryPoint `json:"points"`
+	Summary      string               `json:"summary"`      // 段落式摘要正文
+	Points       []ThreadSummaryPoint `json:"points"`       // 兼容旧数据
 	Status       string               `json:"status"`       // done | generating | none
 	Stale        bool                 `json:"stale"`
 	CommentCount int                  `json:"commentCount"`

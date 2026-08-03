@@ -11,7 +11,6 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -25,11 +24,10 @@ const (
 // ThreadSummaryService 讨论摘要 v2 服务
 type ThreadSummaryService struct{}
 
-// GetThreadSummary 获取讨论摘要
+// GetThreadSummary 获取讨论摘要（仅读取缓存，不自动触发生成）
 // - 已有缓存且未过期 -> 直接返回
-// - 已有缓存但过期 -> 返回旧数据(标记 stale) + 后台异步更新
-// - 无缓存且评论达标 -> 返回 generating 状态 + 后台异步生成
-// - 评论不达标 -> 返回 none 状态
+// - 已有缓存但过期 -> 返回旧数据(标记 stale)
+// - 无缓存 -> 返回 none 状态
 func (s *ThreadSummaryService) GetThreadSummary(ctx context.Context, postID string) (*types.ThreadSummaryDTO, error) {
 	// 帖子必须存在
 	var post model.Post
@@ -48,30 +46,55 @@ func (s *ThreadSummaryService) GetThreadSummary(ctx context.Context, postID stri
 	var cached model.ThreadSummary
 	hasCached := dal.DB.WithContext(ctx).First(&cached, "post_id = ?", postID).Error == nil
 
-	if hasCached {
+	if hasCached && cached.Summary != "" {
 		// 检查是否过期：当前评论数 - 生成时评论数 >= 阈值
 		stale := commentCount-int64(cached.CommentCount) >= int64(threadSummaryStaleDelta)
 
 		dto := threadSummaryToDTO(&cached, int(commentCount))
 		dto.Stale = stale
-
-		// 过期则后台异步更新
-		if stale {
-			go s.asyncGenerate(postID)
-		}
-
 		return dto, nil
 	}
 
 	// 无缓存
-	if commentCount < int64(threadSummaryMinComments) {
-		return &types.ThreadSummaryDTO{
-			Status:       "none",
-			CommentCount: int(commentCount),
-		}, nil
+	return &types.ThreadSummaryDTO{
+		Status:       "none",
+		CommentCount: int(commentCount),
+	}, nil
+}
+
+// GenerateThreadSummary 手动触发生成讨论摘要（跳过评论数阈值检查）
+// - 已有缓存且未过期 -> 直接返回
+// - 已有缓存但过期 -> 返回旧数据(标记 stale) + 后台异步更新
+// - 无缓存 -> 返回 generating 状态 + 后台异步生成
+func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID string) (*types.ThreadSummaryDTO, error) {
+	// 帖子必须存在
+	var post model.Post
+	if err := dal.DB.WithContext(ctx).Select("id", "title", "content").First(&post, "id = ?", postID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, &PostSummaryError{Msg: "帖子不存在", Code: 404}
+		}
+		return nil, err
 	}
 
-	// 评论达标，异步生成
+	// 当前评论数
+	var commentCount int64
+	dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("post_id = ?", postID).Count(&commentCount)
+
+	// 查已有摘要
+	var cached model.ThreadSummary
+	hasCached := dal.DB.WithContext(ctx).First(&cached, "post_id = ?", postID).Error == nil
+
+	if hasCached && cached.Summary != "" {
+		stale := commentCount-int64(cached.CommentCount) >= int64(threadSummaryStaleDelta)
+		dto := threadSummaryToDTO(&cached, int(commentCount))
+		dto.Stale = stale
+		if stale {
+			go s.asyncGenerate(postID)
+		}
+		return dto, nil
+	}
+
+	// 无缓存或旧数据（summary 为空），异步生成
 	go s.asyncGenerate(postID)
 
 	return &types.ThreadSummaryDTO{
@@ -102,13 +125,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 		return
 	}
 
-	points, err := generateThreadSummaryPoints(ctx, &post, comments)
-	if err != nil {
-		return
-	}
-
-	// 序列化为 JSON
-	pointsJSON, err := json.Marshal(points)
+	summaryText, err := generateThreadSummaryText(ctx, &post, comments)
 	if err != nil {
 		return
 	}
@@ -122,7 +139,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 	if dal.DB.First(&existing, "post_id = ?", postID).Error == nil {
 		// 更新
 		dal.DB.Model(&existing).Updates(map[string]interface{}{
-			"points":        datatypes.JSON(pointsJSON),
+			"summary":       summaryText,
 			"stale":         false,
 			"comment_count": commentCount,
 		})
@@ -130,7 +147,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 		// 创建
 		ts := model.ThreadSummary{
 			PostID:       postID,
-			Points:       datatypes.JSON(pointsJSON),
+			Summary:      summaryText,
 			CommentCount: int(commentCount),
 			Stale:        false,
 		}
@@ -138,66 +155,52 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 	}
 }
 
-// generateThreadSummaryPoints 调用 LLM 生成要点（含回链 commentId）
-func generateThreadSummaryPoints(ctx context.Context, post *model.Post, comments []model.Comment) ([]types.ThreadSummaryPoint, error) {
+// generateThreadSummaryText 调用 LLM 生成段落式讨论摘要
+func generateThreadSummaryText(ctx context.Context, post *model.Post, comments []model.Comment) (string, error) {
 	// 截断帖子内容
 	postContent := post.Content
 	if runes := []rune(postContent); len(runes) > 2000 {
 		postContent = string(runes[:2000])
 	}
 
-	// 合并评论：每条截断 300 字，带编号和 ID
+	// 合并评论：每条截断 300 字
 	var sb strings.Builder
 	for i, c := range comments {
 		content := c.Content
 		if runes := []rune(content); len(runes) > 300 {
 			content = string(runes[:300])
 		}
-		sb.WriteString(fmt.Sprintf("[%d] (commentId:%s) %s\n", i+1, c.ID, content))
+		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, content))
 	}
 	commentsText := sb.String()
 	if runes := []rune(commentsText); len(runes) > 6000 {
 		commentsText = string(runes[:6000])
 	}
 
-	systemPrompt := `你是一个社区讨论分析助手。用户会给你一篇帖子和若干条评论（每条评论前有编号和 commentId），请提炼出讨论的核心要点。
+	systemPrompt := `你是一个社区讨论分析助手。用户会给你一篇帖子和若干条评论，请用一段连贯的段落总结讨论的核心内容。
 
 要求：
-1. 提炼 3-8 个讨论要点，覆盖讨论的主要观点、结论、共识与分歧
-2. 每个要点一句话，不超过 40 字
-3. 每个要点必须关联到最相关的评论编号，格式为 JSON 数组：[{"text":"要点内容","commentId":"对应的commentId"}]
-4. 不要逐条复述评论，要归纳总结
-5. 只输出 JSON 数组，不要任何前言或后语
-6. commentId 必须从输入的评论中选取，不要编造`
+1. 用 2-4 句话写成一段连贯的段落，总结讨论的主要观点、结论、共识与分歧
+2. 不要逐条复述评论，要归纳总结
+3. 保留关键细节（如技术方案名、具体结论）
+4. 只输出摘要段落，不要任何前言、后语或标题`
 
 	userMsg := fmt.Sprintf("帖子标题：%s\n帖子内容：%s\n\n讨论评论：\n%s", post.Title, postContent, commentsText)
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
 		User:        userMsg,
-		MaxTokens:   1500,
+		MaxTokens:   800,
 		Temperature: 0.3,
 	})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-
-	// 解析 JSON
 	text = strings.TrimSpace(text)
-	// 去除可能的 markdown 代码块包裹
-	text = strings.TrimPrefix(text, "```json")
-	text = strings.TrimPrefix(text, "```")
-	text = strings.TrimSuffix(text, "```")
-	text = strings.TrimSpace(text)
-
-	var points []types.ThreadSummaryPoint
-	if err := json.Unmarshal([]byte(text), &points); err != nil {
-		return nil, fmt.Errorf("解析摘要要点失败: %v", err)
+	if text == "" {
+		return "", fmt.Errorf("摘要内容为空")
 	}
-	if len(points) == 0 {
-		return nil, fmt.Errorf("摘要要点为空")
-	}
-	return points, nil
+	return text, nil
 }
 
 // threadSummaryToDTO 将 model 转为 DTO
@@ -210,6 +213,7 @@ func threadSummaryToDTO(ts *model.ThreadSummary, commentCount int) *types.Thread
 		points = []types.ThreadSummaryPoint{}
 	}
 	return &types.ThreadSummaryDTO{
+		Summary:      ts.Summary,
 		Points:       points,
 		Status:       "done",
 		Stale:        ts.Stale,

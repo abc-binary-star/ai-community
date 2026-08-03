@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -49,15 +49,38 @@ export function PostDetailView({ id }: { id: string }) {
       ),
   })
 
-  // AI 讨论摘要 v2（评论达到阈值后异步生成，要点卡 + 回链）
+  // AI 讨论摘要 v2（按需生成：用户点击按钮才触发，不自动请求）
+  const [summaryRequested, setSummaryRequested] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+
   const summaryQuery = useQuery({
     queryKey: ['post-summary', id],
     queryFn: () => api.get<ThreadSummary>(`/posts/${id}/summary`),
+    enabled: summaryRequested,
     refetchInterval: (query) => {
-      // generating 状态时每 5 秒轮询
-      return query.state.data?.status === 'generating' ? 5000 : false
+      // generating 状态或仍在生成中时每 3 秒轮询
+      return query.state.data?.status === 'generating' || isGenerating ? 3000 : false
     },
   })
+
+  const generateSummary = async () => {
+    setSummaryRequested(true)
+    setIsGenerating(true)
+    try {
+      await api.post(`/posts/${id}/summary`)
+      queryClient.invalidateQueries({ queryKey: ['post-summary', id] })
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '生成摘要失败')
+      setIsGenerating(false)
+    }
+  }
+
+  // 摘要生成完成时，关闭 loading 状态（只有 done 才算完成）
+  useEffect(() => {
+    if (isGenerating && summaryQuery.data?.status === 'done') {
+      setIsGenerating(false)
+    }
+  }, [isGenerating, summaryQuery.data])
 
   const handleDeletePost = async () => {
     if (!window.confirm('确定删除这篇帖子吗？删除后无法恢复。')) return
@@ -205,6 +228,28 @@ export function PostDetailView({ id }: { id: string }) {
             </div>
           )}
 
+          {/* AI 讨论摘要：按需生成，用户点击按钮才触发 */}
+          {!summaryRequested && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-fit gap-1.5 text-muted-foreground"
+              onClick={generateSummary}
+            >
+              <Sparkles className="size-4" />
+              生成讨论摘要
+            </Button>
+          )}
+
+          {(isGenerating || summaryQuery.data?.status === 'generating') && (
+            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="size-4 animate-spin" />
+                正在生成讨论摘要…
+              </div>
+            </div>
+          )}
+
           {summaryQuery.data && summaryQuery.data.status === 'done' && (
             <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
               <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-primary">
@@ -219,31 +264,12 @@ export function PostDetailView({ id }: { id: string }) {
                   </span>
                 )}
               </div>
-              <ul className="space-y-1.5">
-                {summaryQuery.data.points.map((point, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm leading-6">
-                    <span className="mt-0.5 text-primary">·</span>
-                    <a
-                      href={`#comment-${point.commentId}`}
-                      className="text-foreground/80 transition-colors hover:text-primary hover:underline"
-                    >
-                      {point.text}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-muted-foreground">
-                AI 生成，仅供参考，点击要点直达原楼层
+              <p className="text-sm leading-6 text-foreground/80">
+                {summaryQuery.data.summary}
               </p>
-            </div>
-          )}
-
-          {summaryQuery.data && summaryQuery.data.status === 'generating' && (
-            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="size-4 animate-spin" />
-                正在生成讨论摘要…
-              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                AI 生成，仅供参考
+              </p>
             </div>
           )}
 

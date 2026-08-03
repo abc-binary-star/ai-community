@@ -9,9 +9,13 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/router"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// 加载 .env 文件（不存在时静默跳过，生产环境用系统环境变量）
+	_ = godotenv.Load()
+
 	// 加载配置
 	cfg := conf.Load()
 

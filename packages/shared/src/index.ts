@@ -174,6 +174,7 @@ export interface ThreadSummaryPoint {
 }
 
 export interface ThreadSummary {
+  summary: string
   points: ThreadSummaryPoint[]
   status: 'done' | 'generating' | 'none'
   stale: boolean
