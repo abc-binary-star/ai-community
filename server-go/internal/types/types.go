@@ -18,15 +18,18 @@ type RefreshReq struct {
 }
 
 type CreatePostReq struct {
-	Title   string   `json:"title" vd:"len($)>=1 && len($)<=100"`
-	Content string   `json:"content" vd:"len($)>=1 && len($)<=20000"`
+	Title   string   `json:"title" vd:"len($)<=100"` // 草稿允许为空
+	Content string   `json:"content" vd:"len($)<=20000"` // 草稿允许为空
 	Channel *string  `json:"channel"`
 	Tags    []string `json:"tags"`
+	Status  string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
 }
 
 type UpdatePostReq struct {
-	Title   *string `json:"title"`
-	Content *string `json:"content"`
+	Title   *string  `json:"title"`
+	Content *string  `json:"content"`
+	Status  *string  `json:"status"`
+	Tags    *[]string `json:"tags"`
 }
 
 type CreateCommentReq struct {
@@ -45,17 +48,18 @@ type UpdateUserRoleReq struct {
 }
 
 type SuggestTagsReq struct {
-	Title   string `json:"title" vd:"len($)>=1 && len($)<=200"`
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Title   string `json:"title" vd:"len($)>=1"`
+	Content string `json:"content" vd:"len($)>=1"`
 }
 
 type SuggestTitleReq struct {
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Content string `json:"content" vd:"len($)>=1"`
 }
 
 type RewriteReq struct {
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
-	Style   string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
+	Content   string `json:"content" vd:"len($)>=1"`
+	Selection string `json:"selection"`
+	Style     string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
 }
 
 type CreateReportReq struct {
@@ -139,6 +143,7 @@ type Post struct {
 	Title        string      `json:"title"`
 	Content      string      `json:"content"`
 	Channel      string      `json:"channel"`
+	Status       string      `json:"status"`
 	AuthorID     string      `json:"authorId"`
 	Author       PublicUser  `json:"author"`
 	CommentCount int         `json:"commentCount"`

@@ -25,6 +25,10 @@ func SuggestTitle(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短，至少 10 个字")
 		return
 	}
+	if len([]rune(req.Content)) > 5000 {
+		response.BadRequest(c, "内容太长，最多 5000 字")
+		return
+	}
 
 	titles, err := aiService.SuggestTitle(ctx, req.Content)
 	if err != nil {
@@ -50,8 +54,16 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短")
 		return
 	}
+	if len([]rune(req.Content)) > 5000 {
+		response.BadRequest(c, "内容太长，最多 5000 字")
+		return
+	}
+	if len([]rune(req.Selection)) > 5000 {
+		response.BadRequest(c, "选段太长，最多 5000 字")
+		return
+	}
 
-	result, err := aiService.Rewrite(ctx, req.Content, req.Style)
+	result, err := aiService.Rewrite(ctx, req.Content, req.Selection, req.Style)
 	if err != nil {
 		if !ai.Enabled() {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")

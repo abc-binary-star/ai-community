@@ -64,9 +64,15 @@ func (s *AIService) SuggestTitle(ctx context.Context, content string) ([]string,
 	return titles, nil
 }
 
-// Rewrite 润色文本内容
-func (s *AIService) Rewrite(ctx context.Context, content, style string) (string, error) {
-	truncated := content
+// Rewrite 润色文本内容。selection 非空时只润色选段，否则润色全文。
+func (s *AIService) Rewrite(ctx context.Context, content, selection, style string) (string, error) {
+	// 确定润色目标：有选段时润色选段，否则润色全文
+	target := selection
+	if target == "" {
+		target = content
+	}
+
+	truncated := target
 	if runes := []rune(truncated); len(runes) > 5000 {
 		truncated = string(runes[:5000])
 	}
@@ -81,14 +87,35 @@ func (s *AIService) Rewrite(ctx context.Context, content, style string) (string,
 		styleDesc = "亲和友好"
 	}
 
-	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文本，风格为%s。
+	// 选段润色和全文润色使用不同策略
+	isSelection := selection != ""
+
+	var systemPrompt string
+	if isSelection {
+		// 选段润色：只做文字层面的修正，不调整整体排版格式
+		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色选中的文字片段，风格为%s。
 
 要求：
-1. 修正错别字和语病
-2. 优化句子结构和表达流畅度
+1. 修正错别字和语病，确保用词准确
+2. 优化句子结构和表达流畅度，使行文更自然
 3. 保持原意不变，不改写事实内容
-4. 保留 Markdown 格式（代码块、链接、加粗等）
+4. 不要调整段落结构、排版格式或增加表情符号（这些在全文润色时处理）
 5. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+	} else {
+		// 全文润色：综合优化排版、格式、表情符号、加粗强调
+		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色整篇文章，风格为%s。
+
+要求：
+1. 修正错别字和语病，确保用词准确
+2. 优化句子结构和表达流畅度，使行文更自然
+3. 整理文本格式：合理使用标题、分段、列表等 Markdown 元素，使层次分明
+4. 优化排版：段落间用空行分隔，长段落适当拆分
+5. 适当增加表情符号，让内容更生动有趣，但不过度使用（每段最多 1-2 个）
+6. 适度使用加粗（**加粗**）强调重点句和重点词，让读者快速抓住核心信息，但不要整段加粗
+7. 保持原意不变，不改写事实内容
+8. 保留代码块（` + "```" + `）、链接、图片等 Markdown 元素，不修改其内容
+9. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+	}
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
@@ -103,5 +130,102 @@ func (s *AIService) Rewrite(ctx context.Context, content, style string) (string,
 	if text == "" {
 		return "", fmt.Errorf("AI 润色结果为空")
 	}
-	return text, nil
+	// 缩进由代码确定性处理，仅全文润色生效；选段润色保持原有格式
+	if isSelection {
+		return text, nil
+	}
+	return indentPlainParagraphs(text), nil
+}
+
+// indentPlainParagraphs 对纯文本段落应用首行缩进。
+// 规则：段落跨多行，且段落起始处没有列表、引用、标题、代码块等特殊 Markdown 结构时，
+// 在段落首行前加 2 个全角空格（\u3000\u3000）。
+func indentPlainParagraphs(text string) string {
+	lines := strings.Split(text, "\n")
+	var out []string
+	inParagraph := false
+	paragraphHasSpecial := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// 空行：段落结束
+		if trimmed == "" {
+			inParagraph = false
+			paragraphHasSpecial = false
+			out = append(out, line)
+			continue
+		}
+
+		// 特殊 Markdown 结构（列表、引用、标题、代码块、表格、分割线、图片、链接定义等）
+		isSpecial := isSpecialMarkdownLine(trimmed)
+
+		if isSpecial {
+			inParagraph = false
+			paragraphHasSpecial = true
+			out = append(out, line)
+			continue
+		}
+
+		if !inParagraph {
+			// 新段落开始
+			inParagraph = true
+			if paragraphHasSpecial {
+				// 前面紧跟特殊结构（如列表后面）：不缩进
+				out = append(out, line)
+			} else {
+				// 普通段落首行：缩进 2 个全角空格
+				out = append(out, "\u3000\u3000"+line)
+			}
+		} else {
+			// 段落续行：不缩进
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// isSpecialMarkdownLine 判断一行是否为特殊 Markdown 结构
+func isSpecialMarkdownLine(trimmed string) bool {
+	// 标题 # ## ###...
+	if strings.HasPrefix(trimmed, "#") {
+		return true
+	}
+	// 列表 - * + 1. 1) 或任务列表 - [ ]
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") ||
+		strings.HasPrefix(trimmed, "- [") || strings.HasPrefix(trimmed, "* [") || strings.HasPrefix(trimmed, "+ [") {
+		return true
+	}
+	// 有序列表：数字 + . 或 )
+	for i := 0; i < len(trimmed) && i < 4; i++ {
+		c := trimmed[i]
+		if c < '0' || c > '9' {
+			break
+		}
+		if (i+1 < len(trimmed)) && (trimmed[i+1] == '.' || trimmed[i+1] == ')') {
+			return true
+		}
+	}
+	// 引用
+	if strings.HasPrefix(trimmed, ">") {
+		return true
+	}
+	// 代码块
+	if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+		return true
+	}
+	// 表格分隔行 | --- |
+	if strings.HasPrefix(trimmed, "|") {
+		return true
+	}
+	// 分割线 --- *** ___
+	if trimmed == "---" || trimmed == "***" || trimmed == "___" ||
+		strings.HasPrefix(trimmed, "--- ") || strings.HasPrefix(trimmed, "*** ") {
+		return true
+	}
+	// 图片 ![]() 或链接 []() 或引用式 [text]: url
+	if strings.HasPrefix(trimmed, "![") || (strings.HasPrefix(trimmed, "[") && strings.Contains(trimmed, "]: ")) {
+		return true
+	}
+	return false
 }

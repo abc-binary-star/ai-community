@@ -34,10 +34,11 @@ func ListPosts(ctx context.Context, c *app.RequestContext) {
 	}
 	q := c.Query("q")
 	tag := c.Query("tag")
+	status := c.Query("status")
 	page, pageSize := pagination.Parse(c)
 	userID := middleware.GetCurrentUserID(c)
 
-	result, err := postService.ListPosts(ctx, channel, sort, q, tag, userID, page, pageSize)
+	result, err := postService.ListPosts(ctx, channel, sort, q, tag, status, userID, page, pageSize)
 	if err != nil {
 		handlePostError(c, err)
 		return
@@ -65,14 +66,25 @@ func CreatePost(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "输入不合法")
 		return
 	}
-	// 手动验证（确保 vd tag 未生效时也有校验）
-	if len(req.Title) < 1 || len(req.Title) > 100 {
-		response.BadRequest(c, "标题长度需在 1-100 字之间")
-		return
-	}
-	if len(req.Content) < 1 || len(req.Content) > 20000 {
-		response.BadRequest(c, "内容长度需在 1-20000 字之间")
-		return
+	// 手动验证（确保 vd tag 未生效时也有校验）；草稿允许标题/内容为空
+	if req.Status == "draft" {
+		if len(req.Title) > 100 {
+			response.BadRequest(c, "标题长度需在 100 字以内")
+			return
+		}
+		if len(req.Content) > 20000 {
+			response.BadRequest(c, "内容长度需在 20000 字以内")
+			return
+		}
+	} else {
+		if len(req.Title) < 1 || len(req.Title) > 100 {
+			response.BadRequest(c, "标题长度需在 1-100 字之间")
+			return
+		}
+		if len(req.Content) < 1 || len(req.Content) > 20000 {
+			response.BadRequest(c, "内容长度需在 1-20000 字之间")
+			return
+		}
 	}
 	if req.Tags != nil && len(req.Tags) > 5 {
 		response.BadRequest(c, "最多 5 个标签")

@@ -15,6 +15,7 @@ type Post struct {
 	AuthorID   string    `gorm:"index;not null" json:"authorId"`
 	Author     User      `gorm:"foreignKey:AuthorID;constraint:OnDelete:CASCADE" json:"author"`
 	Channel    string    `gorm:"default:general;index" json:"channel"`
+	Status     string    `gorm:"size:20;default:published;index" json:"status"` // published / draft
 	LikeCount  int       `gorm:"default:0" json:"likeCount"`
 	ViewCount  int       `gorm:"default:0" json:"viewCount"`
 	Edited     bool      `gorm:"default:false" json:"edited"`

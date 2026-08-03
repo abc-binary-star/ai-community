@@ -171,12 +171,12 @@ func (s *UserService) GetUserPosts(ctx context.Context, username, currentUserId 
 	}
 
 	var total int64
-	dal.DB.WithContext(ctx).Model(&model.Post{}).Where("author_id = ?", u.ID).Count(&total)
+	dal.DB.WithContext(ctx).Model(&model.Post{}).Where("author_id = ? AND status = ?", u.ID, "published").Count(&total)
 
 	var posts []model.Post
 	dal.DB.WithContext(ctx).
 		Preload("Author").Preload("Tags").
-		Where("author_id = ?", u.ID).
+		Where("author_id = ? AND status = ?", u.ID, "published").
 		Order("created_at DESC").
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Find(&posts)

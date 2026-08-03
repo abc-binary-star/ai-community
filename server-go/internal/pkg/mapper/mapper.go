@@ -63,6 +63,7 @@ func PostToDTO(p *model.Post, commentCount int, liked, bookmarked bool, tagNames
 		Title:        p.Title,
 		Content:      p.Content,
 		Channel:      p.Channel,
+		Status:       p.Status,
 		AuthorID:     p.AuthorID,
 		Author:       AuthorToDTO(&p.Author),
 		CommentCount: commentCount,
