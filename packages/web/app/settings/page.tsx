@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Bell, Loader2, Save, ShieldOff, User } from 'lucide-react'

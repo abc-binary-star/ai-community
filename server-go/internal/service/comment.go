@@ -45,14 +45,17 @@ const replyPreviewLimit = 3
 
 // ListComments 获取帖子的评论列表（根评论分页 + 每条根评论前 N 条回复预览）
 func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID string, page, pageSize int) (*types.Paginated[types.Comment], error) {
-	// 检查帖子是否存在
+	// 检查帖子是否存在及状态（草稿帖仅作者可见）
 	var post model.Post
-	if err := dal.DB.WithContext(ctx).Select("id").First(&post, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id", "status", "author_id").First(&post, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound
 		}
 		log.Printf("[Comment/ListComments] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
+	}
+	if post.Status == "draft" && post.AuthorID != currentUserID {
+		return nil, ErrPostNotFound
 	}
 
 	// 过滤当前用户屏蔽的评论作者
@@ -240,14 +243,18 @@ func (s *CommentService) ListReplies(ctx context.Context, commentID, currentUser
 
 // CreateComment 创建评论或回复
 func (s *CommentService) CreateComment(ctx context.Context, postID, userID string, req types.CreateCommentReq) (*types.Comment, error) {
-	// 检查帖子存在并获取作者 ID（用于通知）
+	// 检查帖子存在并获取作者 ID（用于通知），同时校验状态
 	var post model.Post
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id").First(&post, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status").First(&post, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound
 		}
 		log.Printf("[Comment/CreateComment] 查询帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
+	}
+	// 草稿帖不允许评论
+	if post.Status == "draft" {
+		return nil, ErrPostNotFound
 	}
 
 	// 若指定父评论，校验其属于同一帖子，并取出其作者用于回复通知

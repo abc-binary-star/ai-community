@@ -152,7 +152,8 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	if q != "" {
 		like := "%" + q + "%"
 		query = query.Where("title ILIKE ? OR content ILIKE ?", like, like)
-	} else if channel != "" && channel != "all" {
+	}
+	if channel != "" && channel != "all" {
 		if !validChannel(ctx, channel) {
 			channel = "general"
 		}
@@ -191,7 +192,8 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	if q != "" {
 		like := "%" + q + "%"
 		dbQuery = dbQuery.Where("title ILIKE ? OR content ILIKE ?", like, like)
-	} else if channel != "" && channel != "all" {
+	}
+	if channel != "" && channel != "all" {
 		dbQuery = dbQuery.Where("channel = ?", channel)
 	}
 	if tag != "" {
