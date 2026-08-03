@@ -34,10 +34,6 @@ for var in REGISTRY_URL REGISTRY_NAMESPACE REGISTRY_USERNAME REGISTRY_PASSWORD J
 done
 echo "✅ .env 校验通过"
 
-# 2.5 拉取最新代码（更新 docker-compose.prod.yml 等配置文件）
-echo "==> 拉取最新代码"
-git pull
-
 # 3. 登录阿里云镜像仓库
 echo "==> 登录镜像仓库 $REGISTRY_URL"
 echo "$REGISTRY_PASSWORD" | docker login -u "$REGISTRY_USERNAME" "$REGISTRY_URL" --password-stdin
