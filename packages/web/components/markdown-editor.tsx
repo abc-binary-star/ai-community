@@ -4,7 +4,7 @@ import { useRef, useState, useCallback, type TextareaHTMLAttributes } from 'reac
 import {
   Bold, Code, Code2, Heading, Image as ImageIcon, Link2,
   List, ListOrdered, ListChecks, Quote, Strikethrough, Table as TableIcon,
-  Sparkles, Loader2,
+  Sparkles, Loader2, Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -133,6 +133,8 @@ export function MarkdownEditor({
     selStart: number
     selEnd: number
   } | null>(null)
+  // 记录采纳前的原始内容，支持「恢复原稿」
+  const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null)
 
   const handleAction = useCallback((btn: ToolbarBtn) => {
     if (textareaRef.current) {
@@ -190,6 +192,8 @@ export function MarkdownEditor({
   // 采纳润色结果
   const handleAccept = () => {
     if (!diffState) return
+    // 记录采纳前的原始内容，用于「恢复原稿」
+    setOriginalSnapshot(value)
     if (diffState.isSelection) {
       // 选段润色：只替换选区部分
       const newText = value.slice(0, diffState.selStart) + diffState.rewritten + value.slice(diffState.selEnd)
@@ -199,7 +203,15 @@ export function MarkdownEditor({
       onChange(diffState.rewritten)
     }
     setDiffState(null)
-    toast.success('已采纳润色结果')
+    toast.success('已采纳润色结果，可点「恢复原稿」撤销')
+  }
+
+  // 恢复原稿
+  const handleRestore = () => {
+    if (originalSnapshot === null) return
+    onChange(originalSnapshot)
+    setOriginalSnapshot(null)
+    toast.success('已恢复原稿')
   }
 
   const handleReject = () => {
@@ -241,8 +253,22 @@ export function MarkdownEditor({
             title="选中文字后点击只润色选段，未选中润色全文"
           >
             {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            AI 润色
+          AI 润色
           </Button>
+          {/* 恢复原稿：采纳润色后可随时撤销 */}
+          {originalSnapshot !== null && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs text-muted-foreground"
+              onClick={handleRestore}
+              title="恢复润色前的原始内容"
+            >
+              <Undo2 className="size-3.5" />
+              恢复原稿
+            </Button>
+          )}
         </div>
         {/* 编辑区 */}
         <Textarea

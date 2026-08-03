@@ -87,7 +87,23 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 		styleDesc = "亲和友好"
 	}
 
-	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文本，风格为%s。
+	// 选段润色和全文润色使用不同策略
+	isSelection := selection != ""
+
+	var systemPrompt string
+	if isSelection {
+		// 选段润色：只做文字层面的修正，不调整整体排版格式
+		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色选中的文字片段，风格为%s。
+
+要求：
+1. 修正错别字和语病，确保用词准确
+2. 优化句子结构和表达流畅度，使行文更自然
+3. 保持原意不变，不改写事实内容
+4. 不要调整段落结构、排版格式或增加表情符号（这些在全文润色时处理）
+5. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+	} else {
+		// 全文润色：综合优化排版、格式、表情符号
+		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色整篇文章，风格为%s。
 
 要求：
 1. 修正错别字和语病，确保用词准确
@@ -98,6 +114,7 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 6. 保持原意不变，不改写事实内容
 7. 保留代码块（` + "```" + `）、链接、图片等 Markdown 元素，不修改其内容
 8. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+	}
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
