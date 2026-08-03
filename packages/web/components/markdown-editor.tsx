@@ -126,6 +126,8 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [polishing, setPolishing] = useState(false)
+  // 持续追踪 textarea 的选区位置，避免点击按钮时选区丢失
+  const selRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 })
   const [diffState, setDiffState] = useState<{
     original: string
     rewritten: string
@@ -133,6 +135,13 @@ export function MarkdownEditor({
     selStart: number
     selEnd: number
   } | null>(null)
+
+  // 记录选区变化
+  const handleSelect = () => {
+    const ta = textareaRef.current
+    if (!ta) return
+    selRef.current = { start: ta.selectionStart, end: ta.selectionEnd }
+  }
 
   const handleAction = useCallback((btn: ToolbarBtn) => {
     if (textareaRef.current) {
@@ -151,11 +160,8 @@ export function MarkdownEditor({
       return
     }
 
-    // 重新聚焦 textarea 以获取正确的选区
-    ta.focus()
-
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
+    // 从 ref 中读取最后记录的选区位置
+    const { start, end } = selRef.current
     const selection = start !== end ? value.slice(start, end) : ''
 
     if (!selection && !value.trim()) {
@@ -247,6 +253,9 @@ export function MarkdownEditor({
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onSelect={handleSelect}
+          onClick={handleSelect}
+          onKeyUp={handleSelect}
           placeholder={placeholder}
           className="min-h-[120px] resize-y rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
           style={{ height }}
