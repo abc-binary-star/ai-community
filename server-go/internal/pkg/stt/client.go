@@ -157,8 +157,9 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 	}
 
 	// 3. 分批发送音频数据（每包约 200ms = 16000 * 2 * 0.2 = 6400 bytes）
+	// sequence 从 2 开始（full client request 占用 seq=1）
 	const chunkSize = 6400
-	seq := 1
+	seq := 2
 	for offset := 0; offset < len(audioData); offset += chunkSize {
 		end := offset + chunkSize
 		if end > len(audioData) {
@@ -173,7 +174,8 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 	}
 
 	// 4. 发送最后一包（负包，空 payload）
-	if err := sendBinaryMessage(conn, msgAudioOnly, flagLastNoSeq, serializeRaw, compressNone, 0, nil); err != nil {
+	// flags=0x3：header 后有 sequence number 且为负数（表示最后一包）
+	if err := sendBinaryMessage(conn, msgAudioOnly, flagSeqNeg, serializeRaw, compressNone, int32(-seq), nil); err != nil {
 		return "", fmt.Errorf("发送结束标记失败: %v", err)
 	}
 
@@ -188,7 +190,7 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 			return "", fmt.Errorf("读取响应失败: %v", err)
 		}
 		if len(data) < 4 {
-			return "", fmt.Errorf("响应数据太短")
+			break
 		}
 
 		// 解析 header
@@ -197,16 +199,23 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 
 		// 计算 payload 起始位置
 		payloadStart := 4 // header
-		if flags == flagSeqPos || flags == flagSeqNeg {
+		hasSeq := flags == flagSeqPos || flags == flagSeqNeg
+		if hasSeq {
 			payloadStart += 4 // sequence number
 		}
+
 		if len(data) < payloadStart+4 {
-			return "", fmt.Errorf("响应数据不完整")
+			break
 		}
 		payloadLen := binary.BigEndian.Uint32(data[payloadStart : payloadStart+4])
 		payloadStart += 4
 		if uint32(len(data)-payloadStart) < payloadLen {
-			return "", fmt.Errorf("payload 长度不匹配")
+			// 错误消息可能直接就是文本，尝试把 header 后的全部数据当作 payload
+			if msgType == msgServerError {
+				errMsg := string(data[4:])
+				return "", fmt.Errorf("服务端错误: %s", errMsg)
+			}
+			return "", fmt.Errorf("payload 长度不匹配: payloadLen=%d, remaining=%d", payloadLen, len(data)-payloadStart)
 		}
 		payload := data[payloadStart : payloadStart+int(payloadLen)]
 
@@ -219,12 +228,10 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 				Result struct {
 					Text string `json:"text"`
 				} `json:"result"`
-				// 兼容其他可能的响应格式
 				Text     string `json:"text"`
 				Definite bool   `json:"definite"`
 			}
 			if err := json.Unmarshal(payload, &resp); err != nil {
-				log.Printf("[STT] 解析响应 JSON 失败: %v, payload=%s", err, string(payload))
 				continue
 			}
 			if resp.Result.Text != "" {
@@ -254,7 +261,7 @@ func sendBinaryMessage(conn *websocket.Conn, msgType, flags, serialization, comp
 	// 如果有 sequence number，追加 4 字节
 	if flags == flagSeqPos || flags == flagSeqNeg {
 		seqBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(seqBytes, uint32(seq))
+		binary.BigEndian.PutUint32(seqBytes, uint32(seq)) // 负数 int32 转 uint32 保持位模式
 		buf = append(buf, seqBytes...)
 	}
 
