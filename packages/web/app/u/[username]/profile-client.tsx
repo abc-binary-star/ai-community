@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Loader2, MessageCircle, Settings, UserPlus, UserCheck, Ban } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Heart, Loader2, MessageCircle, Settings, UserPlus, UserCheck, Ban } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,8 +12,9 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
+import { useChannels } from '@/lib/use-channels'
 import { toast } from 'sonner'
-import { type Paginated, type Post, type PublicUser } from 'shared'
+import { type Paginated, type Post, type PublicUser, getChannelLabel } from 'shared'
 import { PostCard } from '@/app/community/components/post-card'
 
 export function ProfileClient({ username }: { username: string }) {
@@ -24,6 +25,7 @@ export function ProfileClient({ username }: { username: string }) {
   const token = useAuthStore((s) => s.token)
   const hydrated = useHydrated()
   const postPage = Math.max(1, Math.floor(Number(searchParams.get('page')) || 1))
+  const { data: channels } = useChannels()
 
   const userQuery = useQuery({
     queryKey: ['user', username],
@@ -189,10 +191,17 @@ export function ProfileClient({ username }: { username: string }) {
             </div>
           </div>
 
-          <div className="mt-6 flex items-center gap-6 border-t border-border pt-4 text-sm">
+          <div className="mt-6 flex flex-wrap items-center gap-6 border-t border-border pt-4 text-sm">
             <div className="text-center">
               <div className="text-lg font-semibold">{user.postCount}</div>
               <div className="text-xs text-muted-foreground">帖子</div>
+            </div>
+            <div className="text-center">
+              <div className="flex items-center gap-1 text-lg font-semibold">
+                <Heart className="size-3.5 text-red-500" />
+                {user.likeCount}
+              </div>
+              <div className="text-xs text-muted-foreground">获赞</div>
             </div>
             <Link href={`/u/${encodeURIComponent(username)}/followers`} className="text-center transition-opacity hover:opacity-70">
               <div className="text-lg font-semibold">{user.followerCount}</div>
@@ -203,6 +212,21 @@ export function ProfileClient({ username }: { username: string }) {
               <div className="text-xs text-muted-foreground">关注</div>
             </Link>
           </div>
+
+          {user.channels && user.channels.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">活跃频道：</span>
+              {user.channels.map((ch) => (
+                <Link
+                  key={ch}
+                  href={`/community?channel=${encodeURIComponent(ch)}`}
+                  className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium transition-colors hover:bg-accent hover:text-primary"
+                >
+                  {getChannelLabel(channels, ch)}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </Card>
 

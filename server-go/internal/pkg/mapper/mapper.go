@@ -23,7 +23,10 @@ func UserToDTO(u *model.User) types.User {
 }
 
 // PublicUserToDTO 将 User model 转为带统计的 PublicUser DTO
-func PublicUserToDTO(u *model.User, postCount, followerCount, followingCount int, isFollowing bool) types.PublicUser {
+func PublicUserToDTO(u *model.User, postCount, followerCount, followingCount, likeCount int, channels []string, isFollowing bool) types.PublicUser {
+	if channels == nil {
+		channels = []string{}
+	}
 	return types.PublicUser{
 		ID:            u.ID,
 		Username:      u.Username,
@@ -34,6 +37,8 @@ func PublicUserToDTO(u *model.User, postCount, followerCount, followingCount int
 		PostCount:     postCount,
 		FollowerCount: followerCount,
 		FollowingCount: followingCount,
+		LikeCount:     likeCount,
+		Channels:      channels,
 		IsFollowing:   isFollowing,
 		CreatedAt:     u.CreatedAt.Format(time.RFC3339),
 	}
@@ -48,6 +53,7 @@ func AuthorToDTO(u *model.User) types.PublicUser {
 		Bio:         u.Bio,
 		DisplayName: u.DisplayName,
 		Role:        u.Role,
+		Channels:    []string{},
 		CreatedAt:   u.CreatedAt.Format(time.RFC3339),
 	}
 }

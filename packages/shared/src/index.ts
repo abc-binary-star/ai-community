@@ -20,6 +20,8 @@ export interface PublicUser {
   postCount: number
   followerCount: number
   followingCount: number
+  likeCount: number
+  channels: string[]
   isFollowing: boolean
   createdAt: string
 }
@@ -197,5 +199,17 @@ export function getChannelLabel(channels: Channel[] | undefined, name: string): 
   const ch = channels?.find((c) => c.name === name)
   if (ch) return ch.label
   return CHANNEL_LABELS[name] || name
+}
+
+export interface BookmarkFolder {
+  id: string
+  name: string
+  createdAt: string
+}
+
+export interface FollowGroup {
+  id: string
+  name: string
+  createdAt: string
 }
 

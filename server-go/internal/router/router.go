@@ -71,6 +71,10 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/posts/:id/bookmark", middleware.Auth(), handler.BookmarkPost)
 	h.DELETE("/api/posts/:id/bookmark", middleware.Auth(), handler.UnbookmarkPost)
 	h.GET("/api/bookmarks", middleware.Auth(), handler.ListBookmarks)
+	h.GET("/api/bookmarks/folders", middleware.Auth(), handler.ListBookmarkFolders)
+	h.POST("/api/bookmarks/folders", middleware.Auth(), handler.CreateBookmarkFolder)
+	h.PUT("/api/bookmarks/folders/:id", middleware.Auth(), handler.UpdateBookmarkFolder)
+	h.DELETE("/api/bookmarks/folders/:id", middleware.Auth(), handler.DeleteBookmarkFolder)
 
 	// --- 用户路由 ---
 	users := h.Group("/api/users")
@@ -88,6 +92,12 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// --- 关注列表 ---
 	h.GET("/api/following/:username", middleware.OptionalAuth(), handler.ListFollowing)
 	h.GET("/api/followers/:username", middleware.OptionalAuth(), handler.ListFollowers)
+
+	// --- 关注分组 ---
+	h.GET("/api/follow-groups", middleware.Auth(), handler.ListFollowGroups)
+	h.POST("/api/follow-groups", middleware.Auth(), handler.CreateFollowGroup)
+	h.PUT("/api/follow-groups/:id", middleware.Auth(), handler.UpdateFollowGroup)
+	h.DELETE("/api/follow-groups/:id", middleware.Auth(), handler.DeleteFollowGroup)
 
 	// --- 通知路由 ---
 	// 注意：前端请求 /api/notifications（不带尾部斜杠）

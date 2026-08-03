@@ -108,6 +108,36 @@ type SendMessageReq struct {
 	Content string `json:"content" vd:"len($)>=1 && len($)<=15000"` // 5000中文字符=15000字节
 }
 
+// --- 收藏夹分组 ---
+type CreateBookmarkFolderReq struct {
+	Name string `json:"name" vd:"len($)>=1 && len($)<=50"`
+}
+
+type UpdateBookmarkFolderReq struct {
+	Name string `json:"name" vd:"len($)>=1 && len($)<=50"`
+}
+
+type BookmarkFolder struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// --- 关注分组 ---
+type CreateFollowGroupReq struct {
+	Name string `json:"name" vd:"len($)>=1 && len($)<=50"`
+}
+
+type UpdateFollowGroupReq struct {
+	Name string `json:"name" vd:"len($)>=1 && len($)<=50"`
+}
+
+type FollowGroup struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
+}
+
 // PostSummary 帖子讨论摘要 DTO
 type PostSummary struct {
 	Summary      string `json:"summary"`
@@ -147,17 +177,19 @@ type User struct {
 }
 
 type PublicUser struct {
-	ID            string  `json:"id"`
-	Username      string  `json:"username"`
-	Avatar        *string `json:"avatar"`
-	Bio           *string `json:"bio"`
-	DisplayName   *string `json:"displayName"`
-	Role          string  `json:"role"`
-	PostCount     int     `json:"postCount"`
-	FollowerCount int     `json:"followerCount"`
-	FollowingCount int    `json:"followingCount"`
-	IsFollowing   bool    `json:"isFollowing"`
-	CreatedAt     string  `json:"createdAt"`
+	ID            string   `json:"id"`
+	Username      string   `json:"username"`
+	Avatar        *string  `json:"avatar"`
+	Bio           *string  `json:"bio"`
+	DisplayName   *string  `json:"displayName"`
+	Role          string   `json:"role"`
+	PostCount     int      `json:"postCount"`
+	FollowerCount int      `json:"followerCount"`
+	FollowingCount int     `json:"followingCount"`
+	LikeCount     int      `json:"likeCount"`
+	Channels      []string `json:"channels"`
+	IsFollowing   bool     `json:"isFollowing"`
+	CreatedAt     string   `json:"createdAt"`
 }
 
 type Post struct {

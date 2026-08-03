@@ -128,7 +128,10 @@ func FollowUser(ctx context.Context, c *app.RequestContext) {
 	username := c.Param("username")
 	userID := middleware.GetCurrentUserID(c)
 
-	created, err := userService.FollowUser(ctx, username, userID)
+	// 从 query 参数获取可选的 groupId
+	groupId := c.Query("groupId")
+
+	created, err := userService.FollowUser(ctx, username, userID, groupId)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -237,12 +240,13 @@ func ListFollowers(ctx context.Context, c *app.RequestContext) {
 // ========== Bookmark Handlers ==========
 
 // BookmarkPost 收藏帖子
-// POST /api/posts/:id/bookmark
+// POST /api/posts/:id/bookmark?folderId=xxx
 func BookmarkPost(ctx context.Context, c *app.RequestContext) {
 	id := c.Param("id")
 	userID := middleware.GetCurrentUserID(c)
+	folderId := c.Query("folderId")
 
-	created, count, err := userService.BookmarkPost(ctx, id, userID)
+	created, count, err := userService.BookmarkPost(ctx, id, userID, folderId)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -278,12 +282,13 @@ func UnbookmarkPost(ctx context.Context, c *app.RequestContext) {
 }
 
 // ListBookmarks 获取当前用户的收藏列表
-// GET /api/bookmarks
+// GET /api/bookmarks?folderId=xxx
 func ListBookmarks(ctx context.Context, c *app.RequestContext) {
 	page, pageSize := pagination.Parse(c)
 	userID := middleware.GetCurrentUserID(c)
+	folderId := c.Query("folderId")
 
-	result, err := userService.ListBookmarks(ctx, userID, page, pageSize)
+	result, err := userService.ListBookmarks(ctx, userID, folderId, page, pageSize)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -403,4 +408,134 @@ func Search(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	response.JSON(c, result)
+}
+
+// ========== Bookmark Folder Handlers ==========
+
+// ListBookmarkFolders 获取收藏夹列表
+// GET /api/bookmarks/folders
+func ListBookmarkFolders(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+
+	folders, err := userService.ListBookmarkFolders(ctx, userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]interface{}{"items": folders})
+}
+
+// CreateBookmarkFolder 创建收藏夹
+// POST /api/bookmarks/folders
+func CreateBookmarkFolder(ctx context.Context, c *app.RequestContext) {
+	var req types.CreateBookmarkFolderReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+
+	folder, err := userService.CreateBookmarkFolder(ctx, userID, req.Name)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, folder)
+}
+
+// UpdateBookmarkFolder 更新收藏夹
+// PUT /api/bookmarks/folders/:id
+func UpdateBookmarkFolder(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+	var req types.UpdateBookmarkFolderReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+
+	folder, err := userService.UpdateBookmarkFolder(ctx, id, userID, req.Name)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, folder)
+}
+
+// DeleteBookmarkFolder 删除收藏夹
+// DELETE /api/bookmarks/folders/:id
+func DeleteBookmarkFolder(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+	userID := middleware.GetCurrentUserID(c)
+
+	if err := userService.DeleteBookmarkFolder(ctx, id, userID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c)
+}
+
+// ========== Follow Group Handlers ==========
+
+// ListFollowGroups 获取关注分组列表
+// GET /api/follow-groups
+func ListFollowGroups(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+
+	groups, err := userService.ListFollowGroups(ctx, userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]interface{}{"items": groups})
+}
+
+// CreateFollowGroup 创建关注分组
+// POST /api/follow-groups
+func CreateFollowGroup(ctx context.Context, c *app.RequestContext) {
+	var req types.CreateFollowGroupReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+
+	group, err := userService.CreateFollowGroup(ctx, userID, req.Name)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, group)
+}
+
+// UpdateFollowGroup 更新关注分组
+// PUT /api/follow-groups/:id
+func UpdateFollowGroup(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+	var req types.UpdateFollowGroupReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+
+	group, err := userService.UpdateFollowGroup(ctx, id, userID, req.Name)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, group)
+}
+
+// DeleteFollowGroup 删除关注分组
+// DELETE /api/follow-groups/:id
+func DeleteFollowGroup(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+	userID := middleware.GetCurrentUserID(c)
+
+	if err := userService.DeleteFollowGroup(ctx, id, userID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c)
 }

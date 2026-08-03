@@ -11,6 +11,7 @@ import { useChannels } from '@/lib/use-channels'
 import { getChannelLabel, type Post } from 'shared'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
+import { ShareButton } from './share-button'
 import { TagBadge } from './tag-badge'
 
 export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args: unknown[]) => void }) {
@@ -73,6 +74,9 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
             </div>
             <div className="inline-flex">
               <LikeButton target="post" id={post.id} likeCount={post.likeCount} liked={post.liked} onChanged={onChanged} />
+            </div>
+            <div className="inline-flex">
+              <ShareButton postId={post.id} title={post.title} />
             </div>
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <MessageCircle className="size-3.5" />

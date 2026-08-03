@@ -20,6 +20,7 @@ import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
+import { ShareButton } from './share-button'
 import { TagBadge } from './tag-badge'
 import { ReportButton } from './report-button'
 import { toast } from 'sonner'
@@ -376,6 +377,7 @@ export function PostDetailView({ id }: { id: string }) {
               size="md"
               onChanged={handleBookmarkChanged}
             />
+            <ShareButton postId={post.id} title={post.title} size="md" />
             {!isAuthor && <ReportButton targetType="post" targetId={post.id} />}
           </div>
         </div>

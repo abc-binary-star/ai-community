@@ -14,6 +14,7 @@ type Bookmark struct {
 	Post      Post      `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
 	UserID    string    `gorm:"uniqueIndex:idx_bookmark_post_user;not null;index" json:"userId"`
 	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	FolderID  *string   `gorm:"index" json:"folderId"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

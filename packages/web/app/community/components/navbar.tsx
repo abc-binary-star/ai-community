@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, Compass, FileText, LogOut, MessageCircle, PenLine, Settings, ShieldCheck } from 'lucide-react'
+import { Bookmark, ChevronDown, Compass, FileText, LogOut, MessageCircle, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -201,6 +201,12 @@ function NavbarInner() {
                     <Link href="/settings">
                       <Settings />
                       设置
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/community/guidelines">
+                      <ScrollText />
+                      社区公约
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

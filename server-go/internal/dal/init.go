@@ -46,7 +46,9 @@ func Init(cfg *conf.Config) {
 	&model.Conversation{},
 	&model.Message{},
 	&model.PostSummary{},
-	&model.ThreadSummary{},
+		&model.ThreadSummary{},
+		&model.BookmarkFolder{},
+		&model.FollowGroup{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

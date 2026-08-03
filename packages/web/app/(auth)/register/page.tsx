@@ -93,6 +93,12 @@ export default function RegisterPage() {
               去登录
             </Link>
           </p>
+          <p className="text-center text-xs text-muted-foreground">
+            注册即表示同意{' '}
+            <Link href="/community/guidelines" className="font-medium text-primary hover:underline">
+              社区公约
+            </Link>
+          </p>
         </form>
       </CardContent>
     </Card>

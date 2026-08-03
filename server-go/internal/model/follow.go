@@ -14,6 +14,7 @@ type Follow struct {
 	Follower    User      `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE" json:"-"`
 	FollowingID string    `gorm:"uniqueIndex:idx_follow_follower_following;not null;index" json:"followingId"`
 	Following   User      `gorm:"foreignKey:FollowingID;constraint:OnDelete:CASCADE" json:"-"`
+	GroupID     *string   `gorm:"index" json:"groupId"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 

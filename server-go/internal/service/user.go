@@ -113,12 +113,13 @@ func (s *UserService) GetUser(ctx context.Context, username, currentUserId strin
 		return nil, err
 	}
 
-	var postCount, followerCount, followingCount int64
+	var postCount, followerCount, followingCount, likeCount int64
 	isFollowing := false
+	var channels []string
 
 	var wg sync.WaitGroup
-	var postErr, followerErr, followingErr, isFollowingErr error
-	wg.Add(4)
+	var postErr, followerErr, followingErr, isFollowingErr, likeErr, channelErr error
+	wg.Add(6)
 
 	go func() {
 		defer wg.Done()
@@ -142,6 +143,21 @@ func (s *UserService) GetUser(ctx context.Context, username, currentUserId strin
 			isFollowing = cnt > 0
 		}
 	}()
+	go func() {
+		defer wg.Done()
+		// 获赞总数：该用户所有帖子的 like_count 之和
+		likeErr = dal.DB.WithContext(ctx).Model(&model.Post{}).
+			Where("author_id = ? AND status = ?", u.ID, "published").
+			Select("COALESCE(SUM(like_count), 0)").Scan(&likeCount).Error
+	}()
+	go func() {
+		defer wg.Done()
+		// 参与的频道列表（去重）
+		channelErr = dal.DB.WithContext(ctx).Model(&model.Post{}).
+			Where("author_id = ? AND status = ?", u.ID, "published").
+			Distinct("channel").
+			Pluck("channel", &channels).Error
+	}()
 	wg.Wait()
 
 	if postErr != nil {
@@ -160,8 +176,16 @@ func (s *UserService) GetUser(ctx context.Context, username, currentUserId strin
 		log.Printf("[User/GetUser] 查询关注状态失败, currentUserId=%s, targetID=%s, err=%v", currentUserId, u.ID, isFollowingErr)
 		return nil, isFollowingErr
 	}
+	if likeErr != nil {
+		log.Printf("[User/GetUser] 查询获赞数失败, userID=%s, err=%v", u.ID, likeErr)
+		return nil, likeErr
+	}
+	if channelErr != nil {
+		log.Printf("[User/GetUser] 查询频道列表失败, userID=%s, err=%v", u.ID, channelErr)
+		return nil, channelErr
+	}
 
-	dto := mapper.PublicUserToDTO(&u, int(postCount), int(followerCount), int(followingCount), isFollowing)
+	dto := mapper.PublicUserToDTO(&u, int(postCount), int(followerCount), int(followingCount), int(likeCount), channels, isFollowing)
 	return &dto, nil
 }
 
@@ -280,7 +304,7 @@ func (s *UserService) UpdateUserRole(ctx context.Context, username, role, curren
 // ========== Follow Module ==========
 
 // FollowUser 关注某用户。created=true 表示新建关注(201)，false 表示已关注(200)
-func (s *UserService) FollowUser(ctx context.Context, username, followerId string) (created bool, err error) {
+func (s *UserService) FollowUser(ctx context.Context, username, followerId, groupId string) (created bool, err error) {
 	var target model.User
 	err = dal.DB.WithContext(ctx).Select("id").Where("username = ?", username).First(&target).Error
 	if err != nil {
@@ -300,6 +324,10 @@ func (s *UserService) FollowUser(ctx context.Context, username, followerId strin
 		Where("follower_id = ? AND following_id = ?", followerId, target.ID).
 		First(&existing)
 	if result.Error == nil {
+		// 已关注：如果传了 groupId 则更新分组
+		if groupId != "" && (existing.GroupID == nil || *existing.GroupID != groupId) {
+			dal.DB.WithContext(ctx).Model(&existing).Update("group_id", groupId)
+		}
 		return false, nil
 	}
 	if result.Error != gorm.ErrRecordNotFound {
@@ -309,6 +337,9 @@ func (s *UserService) FollowUser(ctx context.Context, username, followerId strin
 
 	// 创建关注，捕获并发下的唯一约束冲突
 	follow := &model.Follow{FollowerID: followerId, FollowingID: target.ID}
+	if groupId != "" {
+		follow.GroupID = &groupId
+	}
 	if err := dal.DB.WithContext(ctx).Create(follow).Error; err != nil {
 		if notification.IsUniqueConstraintError(err) {
 			return false, nil
@@ -538,7 +569,7 @@ func (s *UserService) ListFollowers(ctx context.Context, username, currentUserId
 // ========== Bookmark Module ==========
 
 // BookmarkPost 收藏帖子。created=true 表示新建收藏(201)，false 表示已收藏(200)
-func (s *UserService) BookmarkPost(ctx context.Context, postID, userId string) (created bool, bookmarkCount int, err error) {
+func (s *UserService) BookmarkPost(ctx context.Context, postID, userId, folderId string) (created bool, bookmarkCount int, err error) {
 	var post model.Post
 	err = dal.DB.WithContext(ctx).Select("id").First(&post, "id = ?", postID).Error
 	if err != nil {
@@ -555,6 +586,10 @@ func (s *UserService) BookmarkPost(ctx context.Context, postID, userId string) (
 		Where("post_id = ? AND user_id = ?", postID, userId).
 		First(&existing)
 	if result.Error == nil {
+		// 已收藏：如果传了 folderId 则更新归属
+		if folderId != "" && (existing.FolderID == nil || *existing.FolderID != folderId) {
+			dal.DB.WithContext(ctx).Model(&existing).Update("folder_id", folderId)
+		}
 		var count int64
 		dal.DB.WithContext(ctx).Model(&model.Bookmark{}).Where("post_id = ?", postID).Count(&count)
 		return false, int(count), nil
@@ -565,6 +600,9 @@ func (s *UserService) BookmarkPost(ctx context.Context, postID, userId string) (
 	}
 
 	bookmark := &model.Bookmark{PostID: postID, UserID: userId}
+	if folderId != "" {
+		bookmark.FolderID = &folderId
+	}
 	if err := dal.DB.WithContext(ctx).Create(bookmark).Error; err != nil {
 		if notification.IsUniqueConstraintError(err) {
 			var count int64
@@ -607,12 +645,17 @@ func (s *UserService) UnbookmarkPost(ctx context.Context, postID, userId string)
 	return int(count), nil
 }
 
-// ListBookmarks 分页获取当前用户的收藏列表
-func (s *UserService) ListBookmarks(ctx context.Context, userId string, page, pageSize int) (*types.Paginated[types.Post], error) {
+// ListBookmarks 分页获取当前用户的收藏列表，支持按收藏夹筛选
+func (s *UserService) ListBookmarks(ctx context.Context, userId string, folderId string, page, pageSize int) (*types.Paginated[types.Post], error) {
 	bookmarkSubquery := dal.DB.WithContext(ctx).
 		Model(&model.Bookmark{}).
 		Select("post_id").
 		Where("user_id = ?", userId)
+	if folderId != "" {
+		bookmarkSubquery = bookmarkSubquery.Where("folder_id = ?", folderId)
+	} else if folderId == "uncategorized" {
+		bookmarkSubquery = bookmarkSubquery.Where("folder_id IS NULL")
+	}
 
 	var total int64
 	dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id IN (?)", bookmarkSubquery).Count(&total)
@@ -643,6 +686,8 @@ type userStats struct {
 	PostCount      int
 	FollowerCount  int
 	FollowingCount int
+	LikeCount      int
+	Channels       []string
 	IsFollowing    bool
 }
 
@@ -709,11 +754,49 @@ func (s *UserService) batchPublicUserStats(ctx context.Context, userIDs []string
 		}
 	}
 
+	// 获赞总数（批量）
+	type likeRow struct {
+		ID     string `gorm:"column:author_id"`
+		Likes  int    `gorm:"column:sum_likes"`
+	}
+	var likeRows []likeRow
+	dal.DB.WithContext(ctx).Model(&model.Post{}).
+		Select("author_id, COALESCE(SUM(like_count), 0) as sum_likes").
+		Where("author_id IN ? AND status = ?", userIDs, "published").
+		Group("author_id").
+		Scan(&likeRows)
+	likeMap := make(map[string]int, len(likeRows))
+	for _, r := range likeRows {
+		likeMap[r.ID] = r.Likes
+	}
+
+	// 频道列表（批量：每个用户的 distinct channel）
+	type channelRow struct {
+		ID      string `gorm:"column:author_id"`
+		Channel string `gorm:"column:channel"`
+	}
+	var channelRows []channelRow
+	dal.DB.WithContext(ctx).Model(&model.Post{}).
+		Select("author_id, channel").
+		Where("author_id IN ? AND status = ?", userIDs, "published").
+		Distinct("author_id, channel").
+		Scan(&channelRows)
+	channelMap := make(map[string][]string)
+	for _, r := range channelRows {
+		channelMap[r.ID] = append(channelMap[r.ID], r.Channel)
+	}
+
 	for _, id := range userIDs {
+		ch := channelMap[id]
+		if ch == nil {
+			ch = []string{}
+		}
 		result[id] = userStats{
 			PostCount:      postMap[id],
 			FollowerCount:  followerMap[id],
 			FollowingCount: followingMap[id],
+			LikeCount:      likeMap[id],
+			Channels:       ch,
 			IsFollowing:    followingSet[id],
 		}
 	}
@@ -735,7 +818,7 @@ func (s *UserService) mapUsersToPublic(ctx context.Context, users []model.User, 
 	for i := range users {
 		u := &users[i]
 		st := stats[u.ID]
-		items = append(items, mapper.PublicUserToDTO(u, st.PostCount, st.FollowerCount, st.FollowingCount, st.IsFollowing))
+		items = append(items, mapper.PublicUserToDTO(u, st.PostCount, st.FollowerCount, st.FollowingCount, st.LikeCount, st.Channels, st.IsFollowing))
 	}
 	return items
 }
@@ -819,4 +902,164 @@ func (s *UserService) batchBookmarkedPostIDs(ctx context.Context, postIDs []stri
 		result[b.PostID] = true
 	}
 	return result
+}
+
+// ========== Bookmark Folder Module ==========
+
+// ListBookmarkFolders 获取用户的收藏夹列表
+func (s *UserService) ListBookmarkFolders(ctx context.Context, userId string) ([]types.BookmarkFolder, error) {
+	var folders []model.BookmarkFolder
+	dal.DB.WithContext(ctx).
+		Where("user_id = ?", userId).
+		Order("created_at ASC").
+		Find(&folders)
+
+	items := make([]types.BookmarkFolder, 0, len(folders))
+	for _, f := range folders {
+		items = append(items, types.BookmarkFolder{
+			ID:        f.ID,
+			Name:      f.Name,
+			CreatedAt: f.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+	return items, nil
+}
+
+// CreateBookmarkFolder 创建收藏夹
+func (s *UserService) CreateBookmarkFolder(ctx context.Context, userId, name string) (*types.BookmarkFolder, error) {
+	folder := &model.BookmarkFolder{Name: name, UserID: userId}
+	if err := dal.DB.WithContext(ctx).Create(folder).Error; err != nil {
+		log.Printf("[BookmarkFolder/Create] 创建失败, userId=%s, err=%v", userId, err)
+		return nil, err
+	}
+	dto := types.BookmarkFolder{
+		ID:        folder.ID,
+		Name:      folder.Name,
+		CreatedAt: folder.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	return &dto, nil
+}
+
+// UpdateBookmarkFolder 更新收藏夹名称
+func (s *UserService) UpdateBookmarkFolder(ctx context.Context, folderId, userId, name string) (*types.BookmarkFolder, error) {
+	result := dal.DB.WithContext(ctx).
+		Model(&model.BookmarkFolder{}).
+		Where("id = ? AND user_id = ?", folderId, userId).
+		Update("name", name)
+	if result.Error != nil {
+		log.Printf("[BookmarkFolder/Update] 更新失败, folderId=%s, err=%v", folderId, result.Error)
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, &ServiceError{Msg: "收藏夹不存在", Code: 404}
+	}
+
+	var folder model.BookmarkFolder
+	dal.DB.WithContext(ctx).First(&folder, "id = ?", folderId)
+	dto := types.BookmarkFolder{
+		ID:        folder.ID,
+		Name:      folder.Name,
+		CreatedAt: folder.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	return &dto, nil
+}
+
+// DeleteBookmarkFolder 删除收藏夹（收藏记录的 folder_id 置为 NULL）
+func (s *UserService) DeleteBookmarkFolder(ctx context.Context, folderId, userId string) error {
+	result := dal.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", folderId, userId).
+		Delete(&model.BookmarkFolder{})
+	if result.Error != nil {
+		log.Printf("[BookmarkFolder/Delete] 删除失败, folderId=%s, err=%v", folderId, result.Error)
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return &ServiceError{Msg: "收藏夹不存在", Code: 404}
+	}
+	// 解除收藏记录的关联
+	dal.DB.WithContext(ctx).
+		Model(&model.Bookmark{}).
+		Where("user_id = ? AND folder_id = ?", userId, folderId).
+		Update("folder_id", nil)
+	return nil
+}
+
+// ========== Follow Group Module ==========
+
+// ListFollowGroups 获取用户的关注分组列表
+func (s *UserService) ListFollowGroups(ctx context.Context, userId string) ([]types.FollowGroup, error) {
+	var groups []model.FollowGroup
+	dal.DB.WithContext(ctx).
+		Where("user_id = ?", userId).
+		Order("created_at ASC").
+		Find(&groups)
+
+	items := make([]types.FollowGroup, 0, len(groups))
+	for _, g := range groups {
+		items = append(items, types.FollowGroup{
+			ID:        g.ID,
+			Name:      g.Name,
+			CreatedAt: g.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+	return items, nil
+}
+
+// CreateFollowGroup 创建关注分组
+func (s *UserService) CreateFollowGroup(ctx context.Context, userId, name string) (*types.FollowGroup, error) {
+	group := &model.FollowGroup{Name: name, UserID: userId}
+	if err := dal.DB.WithContext(ctx).Create(group).Error; err != nil {
+		log.Printf("[FollowGroup/Create] 创建失败, userId=%s, err=%v", userId, err)
+		return nil, err
+	}
+	dto := types.FollowGroup{
+		ID:        group.ID,
+		Name:      group.Name,
+		CreatedAt: group.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	return &dto, nil
+}
+
+// UpdateFollowGroup 更新关注分组名称
+func (s *UserService) UpdateFollowGroup(ctx context.Context, groupId, userId, name string) (*types.FollowGroup, error) {
+	result := dal.DB.WithContext(ctx).
+		Model(&model.FollowGroup{}).
+		Where("id = ? AND user_id = ?", groupId, userId).
+		Update("name", name)
+	if result.Error != nil {
+		log.Printf("[FollowGroup/Update] 更新失败, groupId=%s, err=%v", groupId, result.Error)
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, &ServiceError{Msg: "分组不存在", Code: 404}
+	}
+
+	var group model.FollowGroup
+	dal.DB.WithContext(ctx).First(&group, "id = ?", groupId)
+	dto := types.FollowGroup{
+		ID:        group.ID,
+		Name:      group.Name,
+		CreatedAt: group.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	return &dto, nil
+}
+
+// DeleteFollowGroup 删除关注分组（关注记录的 group_id 置为 NULL）
+func (s *UserService) DeleteFollowGroup(ctx context.Context, groupId, userId string) error {
+	result := dal.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", groupId, userId).
+		Delete(&model.FollowGroup{})
+	if result.Error != nil {
+		log.Printf("[FollowGroup/Delete] 删除失败, groupId=%s, err=%v", groupId, result.Error)
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return &ServiceError{Msg: "分组不存在", Code: 404}
+	}
+	// 解除关注记录的关联
+	dal.DB.WithContext(ctx).
+		Model(&model.Follow{}).
+		Where("follower_id = ? AND group_id = ?", userId, groupId).
+		Update("group_id", nil)
+	return nil
 }
