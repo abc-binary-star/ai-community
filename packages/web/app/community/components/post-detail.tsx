@@ -228,8 +228,8 @@ export function PostDetailView({ id }: { id: string }) {
             </div>
           )}
 
-          {/* AI 讨论摘要：按需生成，用户点击按钮才触发 */}
-          {!summaryRequested && (
+          {/* AI 讨论摘要：按需生成，用户点击按钮才触发；评论数需 >= 10 */}
+          {!summaryRequested && post.commentCount >= 10 && (
             <Button
               variant="outline"
               size="sm"
