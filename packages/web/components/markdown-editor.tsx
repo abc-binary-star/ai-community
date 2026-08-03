@@ -1,13 +1,17 @@
 'use client'
 
-import { useRef, useCallback, type TextareaHTMLAttributes } from 'react'
+import { useRef, useState, useCallback, type TextareaHTMLAttributes } from 'react'
 import {
   Bold, Code, Code2, Heading, Image as ImageIcon, Link2,
   List, ListOrdered, ListChecks, Quote, Strikethrough, Table as TableIcon,
+  Sparkles, Loader2,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { api, ApiError } from '@/lib/api'
+import { DiffPanel } from '@/components/diff-panel'
 
 export interface MarkdownEditorProps {
   value: string
@@ -121,6 +125,14 @@ export function MarkdownEditor({
   className,
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [polishing, setPolishing] = useState(false)
+  const [diffState, setDiffState] = useState<{
+    original: string
+    rewritten: string
+    selection: string
+    selStart: number
+    selEnd: number
+  } | null>(null)
 
   const handleAction = useCallback((btn: ToolbarBtn) => {
     if (textareaRef.current) {
@@ -128,34 +140,127 @@ export function MarkdownEditor({
     }
   }, [value, onChange])
 
+  // AI 润色：有选区时润色选段，否则润色全文
+  const handlePolish = async () => {
+    const ta = textareaRef.current
+    if (!ta) return
+
+    // 如果 diff 面板已打开，先关闭（避免重复润色已采纳的内容）
+    if (diffState) {
+      setDiffState(null)
+      return
+    }
+
+    // 重新聚焦 textarea 以获取正确的选区
+    ta.focus()
+
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const selection = start !== end ? value.slice(start, end) : ''
+
+    if (!selection && !value.trim()) {
+      toast.error('请先输入内容')
+      return
+    }
+    if (selection && selection.trim().length < 2) {
+      toast.error('选段内容太短')
+      return
+    }
+
+    setPolishing(true)
+    try {
+      const data = await api.post<{ result: string }>('/ai/rewrite', {
+        content: value,
+        selection: selection || undefined,
+        style: '',
+      })
+      setDiffState({
+        original: selection || value,
+        rewritten: data.result,
+        selection,
+        selStart: start,
+        selEnd: end,
+      })
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'AI 润色失败')
+    } finally {
+      setPolishing(false)
+    }
+  }
+
+  // 采纳润色结果
+  const handleAccept = () => {
+    if (!diffState) return
+    if (diffState.selection) {
+      // 选段润色：替换选区部分
+      const newText = value.slice(0, diffState.selStart) + diffState.rewritten + value.slice(diffState.selEnd)
+      onChange(newText)
+    } else {
+      // 全文润色：替换全部
+      onChange(diffState.rewritten)
+    }
+    setDiffState(null)
+    toast.success('已采纳润色结果')
+  }
+
+  const handleReject = () => {
+    setDiffState(null)
+  }
+
   return (
-    <div className={cn('w-full rounded-lg border border-input bg-card overflow-hidden', className)}>
-      {/* 工具栏 */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5">
-        {TOOLBAR.map((btn) => (
+    <div className={cn('w-full space-y-2', className)}>
+      <div className="rounded-lg border border-input bg-card overflow-hidden">
+        {/* 工具栏 */}
+        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5">
+          {TOOLBAR.map((btn) => (
+            <Button
+              key={btn.label}
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => handleAction(btn)}
+              title={btn.label}
+              aria-label={btn.label}
+            >
+              {btn.icon}
+            </Button>
+          ))}
+          {/* 分隔线 + AI 润色按钮 */}
+          <div className="mx-1 h-5 w-px bg-border" />
           <Button
-            key={btn.label}
             type="button"
             variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => handleAction(btn)}
-            title={btn.label}
-            aria-label={btn.label}
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-primary"
+            disabled={polishing}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handlePolish}
+            title="选中文字后点击只润色选段，未选中润色全文"
           >
-            {btn.icon}
+            {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            AI 润色
           </Button>
-        ))}
+        </div>
+        {/* 编辑区 */}
+        <Textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="min-h-[120px] resize-y rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
+          style={{ height }}
+        />
       </div>
-      {/* 编辑区 */}
-      <Textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="min-h-[120px] resize-y rounded-none border-0 font-mono text-sm leading-6 focus-visible:ring-0"
-        style={{ height }}
-      />
+      {/* diff 面板 */}
+      {diffState && (
+        <DiffPanel
+          original={diffState.original}
+          rewritten={diffState.rewritten}
+          onAccept={handleAccept}
+          onReject={handleReject}
+        />
+      )}
     </div>
   )
 }
