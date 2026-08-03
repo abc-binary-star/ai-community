@@ -91,8 +91,8 @@ func Summarize(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "输入不合法")
 		return
 	}
-	if len([]rune(req.Content)) > 20000 {
-		response.BadRequest(c, "内容太长，最多 20000 字")
+	if len([]rune(req.Content)) > 30000 {
+		response.BadRequest(c, "内容太长，最多 30000 字")
 		return
 	}
 

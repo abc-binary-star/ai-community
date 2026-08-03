@@ -19,7 +19,7 @@ type RefreshReq struct {
 
 type CreatePostReq struct {
 	Title     string   `json:"title" vd:"len($)<=300"` // 100中文字符=300字节
-	Content   string   `json:"content" vd:"len($)<=60000"` // 20000中文字符=60000字节
+	Content   string   `json:"content" vd:"len($)<=90000"` // 30000中文字符=90000字节
 	Channel   *string  `json:"channel"`
 	Tags      []string `json:"tags"`
 	Status    string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
