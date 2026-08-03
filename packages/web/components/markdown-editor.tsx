@@ -221,12 +221,8 @@ export function MarkdownEditor({
   return (
     <div className={cn('w-full space-y-2', className)}>
       <div className="rounded-lg border border-input bg-card overflow-hidden">
-        {/* 工具栏：AI 功能区绝对定位右上角，格式按钮不受挤压 */}
-        <div
-          className={`relative flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5 ${
-            originalSnapshot !== null ? 'pr-56' : 'pr-32'
-          }`}
-        >
+        {/* 工具栏 */}
+        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5">
           {TOOLBAR.map((btn) => (
             <Button
               key={btn.label}
@@ -241,45 +237,23 @@ export function MarkdownEditor({
               {btn.icon}
             </Button>
           ))}
-          {/* AI 功能区：绝对定位右上角，始终第一行 */}
-          <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap">
-            {/* 左侧渐变遮罩：格式按钮溢出换行时被平滑遮住 */}
-            <div className="pointer-events-none absolute -left-8 top-0 h-full w-8 bg-gradient-to-r from-transparent to-muted/50" />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5 text-xs text-primary"
-              disabled={polishing}
-              onMouseDown={(e) => {
-                // 阻止默认行为：防止 textarea 失焦，保持选区有效
-                e.preventDefault()
-              }}
-              onClick={handlePolish}
-              title="选中文字后点击只润色选段，未选中润色全文"
-            >
-              {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-              AI 润色
-            </Button>
-            {/* 恢复原稿：采纳润色后显示，无边框融入工具栏 */}
-            {originalSnapshot !== null && (
-              <>
-                <div className="mx-1 h-5 w-px bg-border" />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={handleRestore}
-                  title="恢复润色前的原始内容"
-                >
-                  <Undo2 className="size-3.5" />
-                  恢复原稿
-                </Button>
-              </>
-            )}
-          </div>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-primary"
+            disabled={polishing}
+            onMouseDown={(e) => {
+              // 阻止默认行为：防止 textarea 失焦，保持选区有效
+              e.preventDefault()
+            }}
+            onClick={handlePolish}
+            title="选中文字后点击只润色选段，未选中润色全文"
+          >
+            {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            AI 润色
+          </Button>
         </div>
         {/* 编辑区 */}
         <Textarea
@@ -291,6 +265,25 @@ export function MarkdownEditor({
           style={{ height }}
         />
       </div>
+      {/* 已采纳润色：轻量状态条 */}
+      {originalSnapshot !== null && !diffState && (
+        <div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
+          <span className="flex items-center gap-1.5 text-xs text-primary">
+            <Sparkles className="size-3" />
+            已应用 AI 润色
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleRestore}
+          >
+            <Undo2 className="size-3" />
+            恢复原稿
+          </Button>
+        </div>
+      )}
       {/* diff 面板 */}
       {diffState && (
         <DiffPanel
