@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
-import { DiffPanel } from '@/components/diff-panel'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 
 export interface MarkdownEditorProps {
@@ -132,13 +131,6 @@ export function MarkdownEditor({
   const syncingRef = useRef(false)
   const [polishing, setPolishing] = useState(false)
   const [preview, setPreview] = useState(false)
-  const [diffState, setDiffState] = useState<{
-    original: string
-    rewritten: string
-    isSelection: boolean
-    selStart: number
-    selEnd: number
-  } | null>(null)
   // 记录采纳前的原始内容，支持「恢复原稿」
   const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null)
 
@@ -169,17 +161,11 @@ export function MarkdownEditor({
     }
   }, [value, onChange])
 
-  // AI 润色：有选区时润色选段，否则润色全文
+  // AI 润色：有选区时润色选段，否则润色全文，完成后直接应用结果
   // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
   const handlePolish = async () => {
     const ta = textareaRef.current
     if (!ta) return
-
-    // 如果 diff 面板已打开，先关闭
-    if (diffState) {
-      setDiffState(null)
-      return
-    }
 
     // 因为 onMouseDown preventDefault 了，textarea 没有失焦，直接读取选区
     const start = ta.selectionStart
@@ -202,35 +188,19 @@ export function MarkdownEditor({
         selection: selection || undefined,
         style: '',
       })
-      setDiffState({
-        original: selection || value,
-        rewritten: data.result,
-        isSelection: !!selection,
-        selStart: start,
-        selEnd: end,
-      })
+      // 记录润色前的内容，支持「恢复原稿」
+      setOriginalSnapshot(value)
+      if (selection) {
+        onChange(value.slice(0, start) + data.result + value.slice(end))
+      } else {
+        onChange(data.result)
+      }
+      toast.success('已应用 AI 润色，可点「恢复原稿」撤销')
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'AI 润色失败')
     } finally {
       setPolishing(false)
     }
-  }
-
-  // 采纳润色结果
-  const handleAccept = () => {
-    if (!diffState) return
-    // 记录采纳前的原始内容，用于「恢复原稿」
-    setOriginalSnapshot(value)
-    if (diffState.isSelection) {
-      // 选段润色：只替换选区部分
-      const newText = value.slice(0, diffState.selStart) + diffState.rewritten + value.slice(diffState.selEnd)
-      onChange(newText)
-    } else {
-      // 全文润色：替换全部
-      onChange(diffState.rewritten)
-    }
-    setDiffState(null)
-    toast.success('已采纳润色结果，可点「恢复原稿」撤销')
   }
 
   // 恢复原稿
@@ -239,10 +209,6 @@ export function MarkdownEditor({
     onChange(originalSnapshot)
     setOriginalSnapshot(null)
     toast.success('已恢复原稿')
-  }
-
-  const handleReject = () => {
-    setDiffState(null)
   }
 
   return (
@@ -305,7 +271,6 @@ export function MarkdownEditor({
               if (!value.trim()) return
               if (window.confirm('确定要清空全部内容吗？此操作不可撤销。')) {
                 onChange('')
-                setDiffState(null)
                 setOriginalSnapshot(null)
                 toast.success('已清空')
               }
@@ -357,8 +322,8 @@ export function MarkdownEditor({
           />
         )}
       </div>
-      {/* 已采纳润色：轻量状态条 */}
-      {originalSnapshot !== null && !diffState && (
+      {/* 已应用润色：轻量状态条 */}
+      {originalSnapshot !== null && (
         <div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
           <span className="flex items-center gap-1.5 text-xs text-primary">
             <Sparkles className="size-3" />
@@ -375,15 +340,6 @@ export function MarkdownEditor({
             恢复原稿
           </Button>
         </div>
-      )}
-      {/* diff 面板 */}
-      {diffState && (
-        <DiffPanel
-          original={diffState.original}
-          rewritten={diffState.rewritten}
-          onAccept={handleAccept}
-          onReject={handleReject}
-        />
       )}
     </div>
   )
