@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, type TextareaHTMLAttributes } from 'react'
 import {
-  Bold, Code, Code2, Heading, Image as ImageIcon, Link2,
+  Bold, Code, Code2, Eraser, Heading, Image as ImageIcon, Link2,
   List, ListOrdered, ListChecks, Quote, Strikethrough, Table as TableIcon,
   Sparkles, Loader2, Undo2,
 } from 'lucide-react'
@@ -252,7 +252,28 @@ export function MarkdownEditor({
             title="选中文字后点击只润色选段，未选中润色全文"
           >
             {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            AI 润色
+          AI 润色
+          </Button>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+            disabled={!value.trim()}
+            onClick={() => {
+              if (!value.trim()) return
+              if (window.confirm('确定要清空全部内容吗？此操作不可撤销。')) {
+                onChange('')
+                setDiffState(null)
+                setOriginalSnapshot(null)
+                toast.success('已清空')
+              }
+            }}
+            title="清空全部内容"
+          >
+            <Eraser className="size-3.5" />
+            清空
           </Button>
         </div>
         {/* 编辑区 */}
