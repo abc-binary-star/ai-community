@@ -64,9 +64,15 @@ func (s *AIService) SuggestTitle(ctx context.Context, content string) ([]string,
 	return titles, nil
 }
 
-// Rewrite 润色文本内容
-func (s *AIService) Rewrite(ctx context.Context, content, style string) (string, error) {
-	truncated := content
+// Rewrite 润色文本内容。selection 非空时只润色选段，否则润色全文。
+func (s *AIService) Rewrite(ctx context.Context, content, selection, style string) (string, error) {
+	// 确定润色目标：有选段时润色选段，否则润色全文
+	target := selection
+	if target == "" {
+		target = content
+	}
+
+	truncated := target
 	if runes := []rune(truncated); len(runes) > 5000 {
 		truncated = string(runes[:5000])
 	}
@@ -84,11 +90,14 @@ func (s *AIService) Rewrite(ctx context.Context, content, style string) (string,
 	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文本，风格为%s。
 
 要求：
-1. 修正错别字和语病
-2. 优化句子结构和表达流畅度
-3. 保持原意不变，不改写事实内容
-4. 保留 Markdown 格式（代码块、链接、加粗等）
-5. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+1. 修正错别字和语病，确保用词准确
+2. 优化句子结构和表达流畅度，使行文更自然
+3. 整理文本格式：合理使用标题、分段、列表等 Markdown 元素，使层次分明
+4. 优化排版：段落间用空行分隔，长段落适当拆分，提升可读性
+5. 适当增加表情符号，让内容更生动有趣，但不过度使用（每段最多 1-2 个）
+6. 保持原意不变，不改写事实内容
+7. 保留代码块（` + "```" + `）、链接、图片等 Markdown 元素，不修改其内容
+8. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
