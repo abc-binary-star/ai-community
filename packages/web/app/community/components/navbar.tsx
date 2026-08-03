@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, Compass, LogOut, MessageCircle, PenLine, Settings, ShieldCheck } from 'lucide-react'
+import { Bookmark, ChevronDown, Compass, LogOut, MessageCircle, PenLine, Settings, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -161,6 +161,18 @@ function NavbarInner() {
                         <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
                       </Avatar>
                       我的主页
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/u/${encodeURIComponent(user.username)}/following`}>
+                      <UserCheck />
+                      我的关注
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/u/${encodeURIComponent(user.username)}/followers`}>
+                      <Users />
+                      我的粉丝
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
