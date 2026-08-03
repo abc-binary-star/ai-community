@@ -72,8 +72,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const makeRequest = async (): Promise<Response> => {
     const token = useAuthStore.getState().token
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string> | undefined),
+    }
+    // FormData 时让浏览器自动设置 Content-Type（含 boundary），不手动覆盖
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json'
     }
     if (token) {
       headers['Authorization'] = `Bearer ${token}`

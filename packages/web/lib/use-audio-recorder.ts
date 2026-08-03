@@ -103,8 +103,13 @@ export function useAudioRecorder() {
         chunksRef.current.push(pcm16)
       }
 
+      // ScriptProcessorNode 必须连接 destination 才能触发 onaudioprocess
+      // 但直接连接会播放声音到扬声器，用一个零增益 GainNode 避免回声
+      const silentGain = audioContext.createGain()
+      silentGain.gain.value = 0
       source.connect(processor)
-      processor.connect(audioContext.destination)
+      processor.connect(silentGain)
+      silentGain.connect(audioContext.destination)
 
       setRecording(true)
 
@@ -126,7 +131,8 @@ export function useAudioRecorder() {
 
   const stop = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      if (!audioContextRef.current || !recording) {
+      const ctx = audioContextRef.current
+      if (!ctx) {
         cleanup()
         setRecording(false)
         resolve(null)
@@ -136,6 +142,13 @@ export function useAudioRecorder() {
       // 合并所有 PCM chunks
       const chunks = chunksRef.current
       const totalLength = chunks.reduce((sum, c) => sum + c.length, 0)
+      if (totalLength === 0) {
+        cleanup()
+        setRecording(false)
+        resolve(null)
+        return
+      }
+
       const merged = new Int16Array(totalLength)
       let offset = 0
       for (const chunk of chunks) {
@@ -150,7 +163,7 @@ export function useAudioRecorder() {
       setRecording(false)
       resolve(blob)
     })
-  }, [recording, cleanup])
+  }, [cleanup])
 
   /** 取消录音，不返回音频 */
   const cancel = useCallback(() => {

@@ -123,6 +123,9 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 	}
 	defer conn.Close()
 
+	// 设置读写超时，防止永久阻塞
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
 	logID := resp.Header.Get("X-Tt-Logid")
 	log.Printf("[STT] WebSocket connected, logid=%s", logID)
 
