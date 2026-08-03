@@ -651,10 +651,10 @@ func (s *UserService) ListBookmarks(ctx context.Context, userId string, folderId
 		Model(&model.Bookmark{}).
 		Select("post_id").
 		Where("user_id = ?", userId)
-	if folderId != "" {
-		bookmarkSubquery = bookmarkSubquery.Where("folder_id = ?", folderId)
-	} else if folderId == "uncategorized" {
+	if folderId == "uncategorized" {
 		bookmarkSubquery = bookmarkSubquery.Where("folder_id IS NULL")
+	} else if folderId != "" {
+		bookmarkSubquery = bookmarkSubquery.Where("folder_id = ?", folderId)
 	}
 
 	var total int64

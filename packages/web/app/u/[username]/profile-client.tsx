@@ -16,6 +16,7 @@ import { useChannels } from '@/lib/use-channels'
 import { toast } from 'sonner'
 import { type Paginated, type Post, type PublicUser, getChannelLabel } from 'shared'
 import { PostCard } from '@/app/community/components/post-card'
+import { FollowButton } from '@/app/community/components/follow-button'
 
 export function ProfileClient({ username }: { username: string }) {
   const router = useRouter()
@@ -63,6 +64,16 @@ export function ProfileClient({ username }: { username: string }) {
       toast.error(e instanceof ApiError ? e.message : '操作失败')
     },
   })
+
+  // 统一关注按钮：关注时可选分组，成功后乐观更新用户缓存
+  const handleFollowChanged = ({ isFollowing }: { isFollowing: boolean }) => {
+    queryClient.setQueryData(['user', username], (old: PublicUser | undefined) => {
+      if (!old) return old
+      return { ...old, isFollowing, followerCount: old.followerCount + (isFollowing ? 1 : -1) }
+    })
+    queryClient.invalidateQueries({ queryKey: ['user', username] })
+    queryClient.invalidateQueries({ queryKey: ['user-posts', username] })
+  }
 
   const blockMutation = useMutation({
     mutationFn: () => api.post<void>(`/users/${encodeURIComponent(username)}/block`),
@@ -161,21 +172,11 @@ export function ProfileClient({ username }: { username: string }) {
                     <MessageCircle />
                     发私信
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={user.isFollowing ? 'outline' : 'default'}
-                    disabled={followMutation.isPending}
-                    onClick={() => followMutation.mutate(!user.isFollowing)}
-                  >
-                    {followMutation.isPending ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : user.isFollowing ? (
-                      <UserCheck />
-                    ) : (
-                      <UserPlus />
-                    )}
-                    {user.isFollowing ? '取消关注' : '关注'}
-                  </Button>
+                  <FollowButton
+                    username={username}
+                    isFollowing={user.isFollowing}
+                    onChanged={handleFollowChanged}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"

@@ -3,17 +3,17 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, UserPlus } from 'lucide-react'
-import { toast } from 'sonner'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import type { Paginated, PublicUser } from 'shared'
+import { FollowButton } from '@/app/community/components/follow-button'
 
 function UserListItem({ user }: { user: PublicUser }) {
   const queryClient = useQueryClient()
@@ -21,17 +21,10 @@ function UserListItem({ user }: { user: PublicUser }) {
   const { username: rawUsername } = useParams<{ username: string }>()
   const username = decodeURIComponent(rawUsername)
 
-  const followMutation = useMutation({
-    mutationFn: (following: boolean) =>
-      following
-        ? api.post<void>(`/users/${encodeURIComponent(user.username)}/follow`)
-        : api.del<void>(`/users/${encodeURIComponent(user.username)}/follow`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['followers', username] })
-      queryClient.invalidateQueries({ queryKey: ['user', username] })
-    },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '操作失败'),
-  })
+  const handleFollowChanged = () => {
+    queryClient.invalidateQueries({ queryKey: ['followers', username] })
+    queryClient.invalidateQueries({ queryKey: ['user', username] })
+  }
 
   return (
     <div className="flex items-center gap-3 py-3">
@@ -46,16 +39,11 @@ function UserListItem({ user }: { user: PublicUser }) {
         <p className="text-xs text-muted-foreground">{user.followerCount} 粉丝 · {user.postCount} 帖子</p>
       </div>
       {token && (
-        <Button
-          variant={user.isFollowing ? 'outline' : 'default'}
-          size="sm"
-          className="h-7 px-3 text-xs"
-          disabled={followMutation.isPending}
-          onClick={() => followMutation.mutate(!user.isFollowing)}
-        >
-          {followMutation.isPending ? <Loader2 className="size-3 animate-spin" /> : <UserPlus className="size-3" />}
-          {user.isFollowing ? '已关注' : '关注'}
-        </Button>
+        <FollowButton
+          username={user.username}
+          isFollowing={user.isFollowing}
+          onChanged={handleFollowChanged}
+        />
       )}
     </div>
   )

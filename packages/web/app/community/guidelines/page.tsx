@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { Navbar } from '../components/navbar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollText, Heart, MessageCircle, ShieldCheck, Users, Sparkles, Ban, AlertTriangle } from 'lucide-react'
 
@@ -69,11 +68,8 @@ const penalties = [
 
 export default function GuidelinesPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Navbar />
-      <main className="container flex-1 py-8">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div className="text-center">
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="text-center">
             <div className="mb-3 flex justify-center">
               <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10">
                 <ScrollText className="size-7 text-primary" />
@@ -142,8 +138,6 @@ export default function GuidelinesPage() {
           <p className="text-center text-xs text-muted-foreground">
             最后更新：2026 年 8 月 · Commons 社区团队保留对本公约的最终解释权
           </p>
-        </div>
-      </main>
     </div>
   )
 }
