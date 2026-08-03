@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Sparkles, X } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import type { Comment } from 'shared'
-import { MarkdownEditor } from '@/components/markdown-editor'
 
 export function CommentForm({
   postId,
@@ -21,7 +21,6 @@ export function CommentForm({
 }) {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [polishing, setPolishing] = useState(false)
 
   const submit = async () => {
     const text = content.trim()
@@ -36,24 +35,6 @@ export function CommentForm({
       toast.error(e instanceof ApiError ? e.message : '提交失败')
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  // AI 润色评论内容
-  const handlePolish = async () => {
-    if (!content.trim()) {
-      toast.error('请先输入内容')
-      return
-    }
-    setPolishing(true)
-    try {
-      const data = await api.post<{ result: string }>('/ai/rewrite', { content, style: 'casual' })
-      setContent(data.result)
-      toast.success('已润色')
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'AI 润色失败')
-    } finally {
-      setPolishing(false)
     }
   }
 
@@ -72,24 +53,11 @@ export function CommentForm({
           </button>
         </div>
       )}
-      <div className="flex items-center justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          disabled={polishing}
-          onClick={handlePolish}
-        >
-          {polishing ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-          {polishing ? '润色中…' : 'AI 润色'}
-        </Button>
-      </div>
-      <MarkdownEditor
+      <Textarea
         value={content}
-        onChange={setContent}
-        height={120}
-        placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论，支持 Markdown 语法…'}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论…'}
+        className="min-h-[100px] resize-y"
       />
       <div className="flex justify-end">
         <Button onClick={submit} disabled={submitting || !content.trim()}>
