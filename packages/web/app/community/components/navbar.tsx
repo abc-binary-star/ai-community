@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, Compass, LogOut, MessageCircle, PenLine, Settings, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { Bookmark, ChevronDown, Compass, LogOut, MessageCircle, PenLine, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,7 @@ import { useChannels } from '@/lib/use-channels'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import { api } from '@/lib/api'
+import type { PublicUser } from 'shared'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { NotificationBell } from './notification-bell'
 import { SearchBar } from './search-bar'
@@ -61,6 +62,14 @@ function NavbarInner() {
   const hydrated = useHydrated()
   const activeChannel = searchParams.get('channel') || 'general'
   const { data: channels } = useChannels()
+
+  // 拉取当前用户的统计数据（帖子数、粉丝数、关注数）
+  const profileQuery = useQuery({
+    queryKey: ['user', user?.username],
+    queryFn: () => api.get<PublicUser>(`/users/${encodeURIComponent(user!.username)}`),
+    enabled: !!user,
+  })
+  const stats = profileQuery.data
 
   // 频道列表，API 加载前使用 fallback
   const channelItems: { name: string; label: string }[] = (channels && channels.length > 0)
@@ -152,8 +161,33 @@ function NavbarInner() {
                     <ChevronDown className="size-4 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="truncate">已登录：{user.username}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {/* 统计按钮：动态 / 关注 / 粉丝，横向排列 */}
+                  <div className="flex items-stretch gap-1 px-1 py-1">
+                    <Link
+                      href={`/u/${encodeURIComponent(user.username)}`}
+                      className="flex flex-1 flex-col items-center rounded-md py-2 transition-colors hover:bg-accent"
+                    >
+                      <span className="text-base font-semibold">{stats?.postCount ?? '-'}</span>
+                      <span className="text-xs text-muted-foreground">动态</span>
+                    </Link>
+                    <Link
+                      href={`/u/${encodeURIComponent(user.username)}/following`}
+                      className="flex flex-1 flex-col items-center rounded-md py-2 transition-colors hover:bg-accent"
+                    >
+                      <span className="text-base font-semibold">{stats?.followingCount ?? '-'}</span>
+                      <span className="text-xs text-muted-foreground">关注</span>
+                    </Link>
+                    <Link
+                      href={`/u/${encodeURIComponent(user.username)}/followers`}
+                      className="flex flex-1 flex-col items-center rounded-md py-2 transition-colors hover:bg-accent"
+                    >
+                      <span className="text-base font-semibold">{stats?.followerCount ?? '-'}</span>
+                      <span className="text-xs text-muted-foreground">粉丝</span>
+                    </Link>
+                  </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href={`/u/${encodeURIComponent(user.username)}`}>
@@ -161,18 +195,6 @@ function NavbarInner() {
                         <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
                       </Avatar>
                       我的主页
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/u/${encodeURIComponent(user.username)}/following`}>
-                      <UserCheck />
-                      我的关注
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/u/${encodeURIComponent(user.username)}/followers`}>
-                      <Users />
-                      我的粉丝
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
