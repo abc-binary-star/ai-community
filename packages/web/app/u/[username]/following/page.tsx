@@ -19,7 +19,8 @@ import type { FollowGroup, Paginated, PublicUser } from 'shared'
 function UserListItem({ user }: { user: PublicUser }) {
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
-  const { username } = useParams<{ username: string }>()
+  const { username: rawUsername } = useParams<{ username: string }>()
+  const username = decodeURIComponent(rawUsername)
 
   const followMutation = useMutation({
     mutationFn: (following: boolean) =>
@@ -177,7 +178,8 @@ function FollowGroupManager() {
 }
 
 export default function FollowingPage() {
-  const { username } = useParams<{ username: string }>()
+  const { username: rawUsername } = useParams<{ username: string }>()
+  const username = decodeURIComponent(rawUsername)
   const hydrated = useHydrated()
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
