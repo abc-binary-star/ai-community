@@ -13,15 +13,22 @@ export interface AudioRecorderState {
   error: string | null
 }
 
+/**
+ * PCM 录音 hook
+ * 使用 AudioContext + ScriptProcessorNode 采集原始 PCM 数据（16kHz, 16-bit, mono）
+ * 输出 Blob 可直接传给火山引擎 ASR API
+ */
 export function useAudioRecorder() {
   const [supported, setSupported] = useState(false)
   const [recording, setRecording] = useState(false)
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const chunksRef = useRef<Int16Array[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -29,7 +36,8 @@ export function useAudioRecorder() {
       typeof navigator !== 'undefined' &&
         !!navigator.mediaDevices &&
         typeof navigator.mediaDevices.getUserMedia === 'function' &&
-        typeof MediaRecorder !== 'undefined'
+        typeof AudioContext !== 'undefined' &&
+        typeof ScriptProcessorNode !== 'undefined'
     )
   }, [])
 
@@ -38,11 +46,22 @@ export function useAudioRecorder() {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
+    if (processorRef.current) {
+      processorRef.current.disconnect()
+      processorRef.current = null
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect()
+      sourceRef.current = null
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
-    mediaRecorderRef.current = null
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current = null
+    }
   }, [])
 
   const start = useCallback(async () => {
@@ -51,23 +70,42 @@ export function useAudioRecorder() {
     chunksRef.current = []
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
       streamRef.current = stream
 
-      // 选择浏览器支持的音频格式
-      const mimeTypes = ['audio/webm', 'audio/mp4', 'audio/ogg']
-      const mimeType = mimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || ''
+      // 创建 AudioContext，指定 16kHz 采样率
+      const audioContext = new AudioContext({ sampleRate: 16000 })
+      audioContextRef.current = audioContext
 
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      mediaRecorderRef.current = recorder
+      // 如果实际采样率不是 16000，需要后续重采样（但 AudioContext 通常会尊重指定值）
+      const source = audioContext.createMediaStreamSource(stream)
+      sourceRef.current = source
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
+      // ScriptProcessorNode，bufferSize 4096
+      const processor = audioContext.createScriptProcessor(4096, 1, 1)
+      processorRef.current = processor
+
+      processor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0)
+        // Float32 -> Int16 PCM 转换
+        const pcm16 = new Int16Array(inputData.length)
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]))
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
         }
+        chunksRef.current.push(pcm16)
       }
 
-      recorder.start()
+      source.connect(processor)
+      processor.connect(audioContext.destination)
+
       setRecording(true)
 
       // 计时器
@@ -88,33 +126,34 @@ export function useAudioRecorder() {
 
   const stop = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      const recorder = mediaRecorderRef.current
-      if (!recorder || recorder.state === 'inactive') {
+      if (!audioContextRef.current || !recording) {
         cleanup()
         setRecording(false)
         resolve(null)
         return
       }
 
-      recorder.onstop = () => {
-        const mimeType = recorder.mimeType || 'audio/webm'
-        const blob = new Blob(chunksRef.current, { type: mimeType })
-        cleanup()
-        setRecording(false)
-        resolve(blob)
+      // 合并所有 PCM chunks
+      const chunks = chunksRef.current
+      const totalLength = chunks.reduce((sum, c) => sum + c.length, 0)
+      const merged = new Int16Array(totalLength)
+      let offset = 0
+      for (const chunk of chunks) {
+        merged.set(chunk, offset)
+        offset += chunk.length
       }
 
-      recorder.stop()
+      // 转为 Blob（Int16Array 的 buffer 就是 raw PCM）
+      const blob = new Blob([merged.buffer], { type: 'audio/pcm' })
+
+      cleanup()
+      setRecording(false)
+      resolve(blob)
     })
-  }, [cleanup])
+  }, [recording, cleanup])
 
   /** 取消录音，不返回音频 */
   const cancel = useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (recorder && recorder.state !== 'inactive') {
-      recorder.onstop = null
-      recorder.stop()
-    }
     cleanup()
     setRecording(false)
     setDuration(0)

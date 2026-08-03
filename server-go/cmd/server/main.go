@@ -30,7 +30,7 @@ func main() {
 	ai.Init(cfg.DeepSeekKey, cfg.DeepSeekURL, cfg.DeepSeekModel)
 
 	// 初始化语音转文字客户端（未配置 API Key 时语音功能降级）
-	stt.Init(cfg.OpenAIKey, cfg.OpenAIBaseURL)
+	stt.Init(cfg.VolcASRKey, cfg.VolcASRResID)
 
 	// 创建 Hertz 服务器
 	h := server.Default(server.WithHostPorts(":" + cfg.Port))

@@ -61,8 +61,7 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
     setTranscribing(true)
     try {
       const formData = new FormData()
-      const ext = blob.type.split('/')[1] || 'webm'
-      formData.append('file', blob, `audio.${ext}`)
+      formData.append('file', blob, 'audio.pcm')
 
       const data = await apiFetch<{ text: string }>('/ai/transcribe', {
         method: 'POST',

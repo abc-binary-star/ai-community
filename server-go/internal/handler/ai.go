@@ -99,7 +99,7 @@ func Transcribe(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 限制文件大小 25MB（Whisper API 上限 25MB）
+	// 限制文件大小 25MB（PCM 16kHz 16bit mono 约 32KB/s，25MB ≈ 13分钟）
 	const maxAudioSize = 25 << 20
 	if fileHeader.Size > maxAudioSize {
 		response.BadRequest(c, "音频文件太大，最多 25MB")

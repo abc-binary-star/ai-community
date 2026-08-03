@@ -16,8 +16,8 @@ type Config struct {
 	DeepSeekKey   string
 	DeepSeekURL   string
 	DeepSeekModel string
-	OpenAIKey     string
-	OpenAIBaseURL string
+	VolcASRKey    string
+	VolcASRResID  string
 }
 
 // Global 全局配置实例，Load 后可用
@@ -56,8 +56,8 @@ func Load() *Config {
 		DeepSeekKey:   os.Getenv("DEEPSEEK_API_KEY"),
 		DeepSeekURL:   getEnvOrDefault("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
 		DeepSeekModel: getEnvOrDefault("DEEPSEEK_MODEL", "deepseek-chat"),
-		OpenAIKey:     os.Getenv("OPENAI_API_KEY"),
-		OpenAIBaseURL: getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com"),
+		VolcASRKey:    os.Getenv("VOLC_ASR_API_KEY"),
+		VolcASRResID:  getEnvOrDefault("VOLC_ASR_RESOURCE_ID", "volc.bigasr.sauc.duration"),
 	}
 	Global = cfg
 	return cfg
