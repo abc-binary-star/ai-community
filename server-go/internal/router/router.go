@@ -49,7 +49,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.PUT("/api/posts/:id", middleware.Auth(), handler.UpdatePost)
 	h.DELETE("/api/posts/:id", middleware.Auth(), handler.DeletePost)
 	h.PUT("/api/posts/:id/status", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.SetPostStatus)
-	h.GET("/api/posts/:id/summary", handler.GetPostSummary)
+	h.GET("/api/posts/:id/summary", handler.GetThreadSummary)
 	h.POST("/api/posts/:id/like", middleware.Auth(), handler.LikePost)
 	h.DELETE("/api/posts/:id/like", middleware.Auth(), handler.UnlikePost)
 
@@ -57,6 +57,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	ai := h.Group("/api/ai", middleware.Auth())
 	ai.POST("/suggest-title", handler.SuggestTitle)
 	ai.POST("/rewrite", handler.Rewrite)
+	ai.POST("/summarize", handler.Summarize)
 
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)

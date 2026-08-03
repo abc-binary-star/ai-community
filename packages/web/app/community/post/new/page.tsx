@@ -25,6 +25,8 @@ export default function NewPostPage() {
   const [savingDraft, setSavingDraft] = useState(false)
   const [suggestingTitle, setSuggestingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
+  const [aiSummary, setAiSummary] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
   const [editorHeight, setEditorHeight] = useState(600)
   const { data: channels } = useChannels()
 
@@ -92,6 +94,24 @@ export default function NewPostPage() {
     }
   }, [title, content, tagsInput])
 
+  // AI 生成摘要
+  const handleSummarize = async () => {
+    if (!content || content.trim().length < 10) {
+      toast.error('内容至少 10 个字才能生成摘要')
+      return
+    }
+    setSummarizing(true)
+    try {
+      const data = await api.post<{ summary: string }>('/ai/summarize', { content })
+      setAiSummary(data.summary)
+      toast.success('摘要已生成')
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'AI 摘要生成失败')
+    } finally {
+      setSummarizing(false)
+    }
+  }
+
   // 保存草稿（不发布）
   const handleSaveDraft = async () => {
     if (!content.trim()) {
@@ -107,6 +127,7 @@ export default function NewPostPage() {
         channel,
         tags: tags.length > 0 ? tags : undefined,
         status: 'draft',
+        aiSummary: aiSummary.trim() || undefined,
       })
       toast.success('草稿已保存')
       router.replace(`/community/post/${post.id}/edit`)
@@ -136,6 +157,7 @@ export default function NewPostPage() {
         channel,
         tags: tags.length > 0 ? tags : undefined,
         status: 'published',
+        aiSummary: aiSummary.trim() || undefined,
       })
       toast.success('发布成功')
       router.push(`/community/post/${post.id}`)
@@ -299,6 +321,32 @@ export default function NewPostPage() {
                 placeholder="用逗号或空格分隔，最多 5 个标签"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="pub-summary">AI 摘要（可选）</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  disabled={summarizing}
+                  onClick={handleSummarize}
+                >
+                  {summarizing ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                  {summarizing ? '生成中…' : '生成摘要'}
+                </Button>
+              </div>
+              <textarea
+                id="pub-summary"
+                className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                rows={2}
+                placeholder="点击「生成摘要」自动生成，或手动输入。用于列表卡片展示。"
+                value={aiSummary}
+                onChange={(e) => setAiSummary(e.target.value)}
+                maxLength={200}
               />
             </div>
 

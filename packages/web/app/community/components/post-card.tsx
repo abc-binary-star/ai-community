@@ -44,7 +44,9 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
         <Link href={`/community/post/${post.id}`} className="text-lg font-semibold leading-snug hover:text-primary">
           {post.title}
         </Link>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{truncateMarkdown(post.content, 160)}</p>
+        <p className="line-clamp-2 text-sm text-muted-foreground">
+          {post.aiSummary || truncateMarkdown(post.content, 160)}
+        </p>
 
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>

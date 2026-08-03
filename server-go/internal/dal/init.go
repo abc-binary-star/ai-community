@@ -46,6 +46,7 @@ func Init(cfg *conf.Config) {
 	&model.Conversation{},
 	&model.Message{},
 	&model.PostSummary{},
+	&model.ThreadSummary{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

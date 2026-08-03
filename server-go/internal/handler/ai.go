@@ -74,3 +74,28 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 	}
 	response.JSON(c, map[string]interface{}{"result": result})
 }
+
+// Summarize AI 摘要生成
+// POST /api/ai/summarize
+func Summarize(ctx context.Context, c *app.RequestContext) {
+	var req types.SummarizeReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	if len([]rune(req.Content)) > 20000 {
+		response.BadRequest(c, "内容太长，最多 20000 字")
+		return
+	}
+
+	summary, err := aiService.Summarize(ctx, req.Content)
+	if err != nil {
+		if !ai.Enabled() {
+			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
+			return
+		}
+		response.Error(c, consts.StatusServiceUnavailable, err.Error())
+		return
+	}
+	response.JSON(c, map[string]interface{}{"summary": summary})
+}

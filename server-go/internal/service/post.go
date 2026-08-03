@@ -2,9 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -335,11 +339,12 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			status = "published"
 		}
 		post := &model.Post{
-			Title:    req.Title,
-			Content:  req.Content,
-			Channel:  channel,
-			AuthorID: userID,
-			Status:   status,
+			Title:     req.Title,
+			Content:   req.Content,
+			Channel:   channel,
+			AuthorID:  userID,
+			Status:    status,
+			AiSummary: req.AiSummary,
 		}
 		if err := tx.Create(post).Error; err != nil {
 			return err
@@ -426,6 +431,9 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	}
 	if req.Status != nil {
 		updates["status"] = *req.Status
+	}
+	if req.AiSummary != nil {
+		updates["ai_summary"] = *req.AiSummary
 	}
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
 		return nil, err
@@ -620,12 +628,35 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 	return items, nil
 }
 
-// SuggestTags AI 标签推荐
+// tagCacheEntry 标签缓存条目
+type tagCacheEntry struct {
+	tags      []string
+	expiresAt time.Time
+}
+
+// tagCache 标签推荐内存缓存（TTL 7 天）
+var tagCache sync.Map
+
+// tagCacheTTL 缓存有效期
+const tagCacheTTL = 7 * 24 * time.Hour
+
+// SuggestTags AI 标签推荐（含缓存 + 失败降级）
 func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([]string, error) {
+	// 构造缓存 key
+	key := tagCacheKey(title, content)
+
+	// 查缓存
+	if cached, ok := tagCache.Load(key); ok {
+		if entry, ok := cached.(*tagCacheEntry); ok && time.Now().Before(entry.expiresAt) {
+			return entry.tags, nil
+		}
+	}
+
 	truncatedTitle := title
 	if runes := []rune(truncatedTitle); len(runes) > 200 {
 		truncatedTitle = string(runes[:200])
 	}
+
 	truncatedContent := content
 	if runes := []rune(truncatedContent); len(runes) > 2000 {
 		truncatedContent = string(runes[:2000])
@@ -655,7 +686,8 @@ func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([
 		Temperature: 0.3,
 	})
 	if err != nil {
-		return nil, err
+		// 降级：返回空标签数组，不阻塞发帖
+		return []string{}, nil
 	}
 
 	// 解析逗号分隔标签
@@ -675,5 +707,18 @@ func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([
 			break
 		}
 	}
+
+	// 写入缓存（即使结果为空也缓存，避免重复调用）
+	tagCache.Store(key, &tagCacheEntry{
+		tags:      tags,
+		expiresAt: time.Now().Add(tagCacheTTL),
+	})
+
 	return tags, nil
+}
+
+// tagCacheKey 根据标题和内容生成缓存 key
+func tagCacheKey(title, content string) string {
+	h := md5.Sum([]byte(title + "\x00" + content))
+	return hex.EncodeToString(h[:])
 }

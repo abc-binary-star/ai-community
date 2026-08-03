@@ -137,6 +137,36 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 	return indentPlainParagraphs(text), nil
 }
 
+// Summarize 根据帖子内容生成摘要（1-2 句话，供列表卡片展示）
+func (s *AIService) Summarize(ctx context.Context, content string) (string, error) {
+	truncated := content
+	if runes := []rune(truncated); len(runes) > 5000 {
+		truncated = string(runes[:5000])
+	}
+
+	systemPrompt := `你是一个社区帖子摘要助手。根据帖子内容，生成一句话摘要。
+
+要求：
+1. 30-80 个字，概括帖子的核心主题或关键信息
+2. 客观陈述，不加主观评价
+3. 不要加引号、序号或前言后语
+4. 只输出摘要文本`
+
+	text, err := ai.Chat(ctx, ai.ChatRequest{
+		System:      systemPrompt,
+		User:        truncated,
+		MaxTokens:   200,
+		Temperature: 0.3,
+	})
+	if err != nil {
+		return "", err
+	}
+	if text == "" {
+		return "", fmt.Errorf("AI 摘要结果为空")
+	}
+	return text, nil
+}
+
 // indentPlainParagraphs 对纯文本段落应用首行缩进。
 // 规则：段落跨多行，且段落起始处没有列表、引用、标题、代码块等特殊 Markdown 结构时，
 // 在段落首行前加 2 个全角空格（\u3000\u3000）。

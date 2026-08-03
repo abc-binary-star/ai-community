@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ChevronDown, Eye, Loader2, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import { getChannelLabel, type Comment, type Paginated, type Post, type PostSummary } from 'shared'
+import { getChannelLabel, type Comment, type Paginated, type Post, type ThreadSummary } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
 import { LikeButton } from './like-button'
@@ -34,6 +34,7 @@ export function PostDetailView({ id }: { id: string }) {
   const hydrated = useHydrated()
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [commentPage, setCommentPage] = useState(1)
+  const [contentExpanded, setContentExpanded] = useState(false)
   const { data: channels } = useChannels()
 
   const postQuery = useQuery({
@@ -48,10 +49,14 @@ export function PostDetailView({ id }: { id: string }) {
       ),
   })
 
-  // AI 讨论摘要（评论达到阈值后由后端自动生成并缓存）
+  // AI 讨论摘要 v2（评论达到阈值后异步生成，要点卡 + 回链）
   const summaryQuery = useQuery({
     queryKey: ['post-summary', id],
-    queryFn: () => api.get<PostSummary | null>(`/posts/${id}/summary`),
+    queryFn: () => api.get<ThreadSummary>(`/posts/${id}/summary`),
+    refetchInterval: (query) => {
+      // generating 状态时每 5 秒轮询
+      return query.state.data?.status === 'generating' ? 5000 : false
+    },
   })
 
   const handleDeletePost = async () => {
@@ -151,6 +156,10 @@ export function PostDetailView({ id }: { id: string }) {
   const commentsData = commentsQuery.data
   const hasMoreComments = commentsData ? commentPage < commentsData.totalPages : false
 
+  // 长文折叠：超过 2000 字默认折叠
+  const isLongContent = post.content.length > 2000
+  const showCollapsed = isLongContent && !contentExpanded
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.back()}>
@@ -186,7 +195,17 @@ export function PostDetailView({ id }: { id: string }) {
           </div>
           <h1 className="text-2xl font-semibold leading-snug">{post.title}</h1>
 
-          {summaryQuery.data && (
+          {post.aiSummary && (
+            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-primary">
+                <Sparkles className="size-4" />
+                AI 摘要
+              </div>
+              <p className="text-sm leading-6 text-foreground/80">{post.aiSummary}</p>
+            </div>
+          )}
+
+          {summaryQuery.data && summaryQuery.data.status === 'done' && (
             <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
               <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-primary">
                 <Sparkles className="size-4" />
@@ -194,9 +213,36 @@ export function PostDetailView({ id }: { id: string }) {
                 <span className="text-xs font-normal text-muted-foreground">
                   基于 {summaryQuery.data.commentCount} 条评论
                 </span>
+                {summaryQuery.data.stale && (
+                  <span className="text-xs font-normal text-amber-600">
+                    · 摘要可能不完整
+                  </span>
+                )}
               </div>
-              <div className="text-sm leading-6">
-                <MarkdownRenderer content={summaryQuery.data.summary} />
+              <ul className="space-y-1.5">
+                {summaryQuery.data.points.map((point, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm leading-6">
+                    <span className="mt-0.5 text-primary">·</span>
+                    <a
+                      href={`#comment-${point.commentId}`}
+                      className="text-foreground/80 transition-colors hover:text-primary hover:underline"
+                    >
+                      {point.text}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-muted-foreground">
+                AI 生成，仅供参考，点击要点直达原楼层
+              </p>
+            </div>
+          )}
+
+          {summaryQuery.data && summaryQuery.data.status === 'generating' && (
+            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="size-4 animate-spin" />
+                正在生成讨论摘要…
               </div>
             </div>
           )}
@@ -252,7 +298,39 @@ export function PostDetailView({ id }: { id: string }) {
             )}
           </div>
           <div className="break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
-            <MarkdownRenderer content={post.content} />
+            {showCollapsed ? (
+              <div className="relative">
+                <div className="max-h-96 overflow-hidden">
+                  <MarkdownRenderer content={post.content.slice(0, 800) + '…'} />
+                </div>
+                <div className="mt-3 flex items-center justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setContentExpanded(true)}
+                  >
+                    <ChevronDown className="size-4" />
+                    展开全文
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <MarkdownRenderer content={post.content} />
+                {isLongContent && (
+                  <div className="mt-3 flex items-center justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setContentExpanded(false)}
+                    >
+                      <ChevronUp className="size-4" />
+                      收起
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           {post.edited && (
             <p className="text-xs text-muted-foreground">已编辑于 {formatEditedTime(post.updatedAt)}</p>

@@ -40,6 +40,7 @@ export interface Post {
   edited: boolean
   isPinned: boolean
   isFeatured: boolean
+  aiSummary?: string
   tags: string[]
   createdAt: string
   updatedAt: string
@@ -165,6 +166,19 @@ export interface PostSummary {
   commentCount: number
   generatedAt: string
   eligible: boolean
+}
+
+export interface ThreadSummaryPoint {
+  text: string
+  commentId: string
+}
+
+export interface ThreadSummary {
+  points: ThreadSummaryPoint[]
+  status: 'done' | 'generating' | 'none'
+  stale: boolean
+  commentCount: number
+  generatedAt: string
 }
 
 export const CHANNELS: string[] = ['general', 'tech', 'design', 'gaming', 'life']

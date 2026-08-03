@@ -8,21 +8,20 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
-var postSummaryService = &service.PostSummaryService{}
+var threadSummaryService = &service.ThreadSummaryService{}
 
-// GetPostSummary 获取帖子讨论摘要（AI 生成）
+// GetThreadSummary 获取讨论摘要 v2（要点卡 + 回链）
 // GET /api/posts/:id/summary
-func GetPostSummary(ctx context.Context, c *app.RequestContext) {
+func GetThreadSummary(ctx context.Context, c *app.RequestContext) {
 	postID := c.Param("id")
 
-	result, err := postSummaryService.GetSummary(ctx, postID)
+	result, err := threadSummaryService.GetThreadSummary(ctx, postID)
 	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	// 未达到生成条件时返回 null，前端不展示
-	if result == nil || !result.Eligible {
-		response.JSON(c, nil)
+		if pe, ok := err.(*service.PostSummaryError); ok {
+			response.Error(c, pe.Code, pe.Msg)
+			return
+		}
+		response.Error(c, 500, "服务器内部错误")
 		return
 	}
 	response.JSON(c, result)

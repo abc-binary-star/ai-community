@@ -18,18 +18,20 @@ type RefreshReq struct {
 }
 
 type CreatePostReq struct {
-	Title   string   `json:"title" vd:"len($)<=100"` // 草稿允许为空
-	Content string   `json:"content" vd:"len($)<=20000"` // 草稿允许为空
-	Channel *string  `json:"channel"`
-	Tags    []string `json:"tags"`
-	Status  string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
+	Title     string   `json:"title" vd:"len($)<=100"` // 草稿允许为空
+	Content   string   `json:"content" vd:"len($)<=20000"` // 草稿允许为空
+	Channel   *string  `json:"channel"`
+	Tags      []string `json:"tags"`
+	Status    string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
+	AiSummary *string  `json:"aiSummary"` // AI 生成的帖子摘要，可选
 }
 
 type UpdatePostReq struct {
-	Title   *string  `json:"title"`
-	Content *string  `json:"content"`
-	Status  *string  `json:"status"`
-	Tags    *[]string `json:"tags"`
+	Title     *string  `json:"title"`
+	Content   *string  `json:"content"`
+	Status    *string  `json:"status"`
+	Tags      *[]string `json:"tags"`
+	AiSummary *string  `json:"aiSummary"`
 }
 
 type CreateCommentReq struct {
@@ -60,6 +62,10 @@ type RewriteReq struct {
 	Content   string `json:"content" vd:"len($)>=1"`
 	Selection string `json:"selection"`
 	Style     string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
+}
+
+type SummarizeReq struct {
+	Content string `json:"content" vd:"len($)>=10"`
 }
 
 type CreateReportReq struct {
@@ -110,6 +116,21 @@ type PostSummary struct {
 	Eligible     bool   `json:"eligible"` // 是否达到生成条件（评论数阈值）
 }
 
+// ThreadSummaryPoint 讨论摘要要点（含回链）
+type ThreadSummaryPoint struct {
+	Text      string `json:"text"`
+	CommentID string `json:"commentId"`
+}
+
+// ThreadSummaryDTO 讨论摘要 v2 DTO
+type ThreadSummaryDTO struct {
+	Points       []ThreadSummaryPoint `json:"points"`
+	Status       string               `json:"status"`       // done | generating | none
+	Stale        bool                 `json:"stale"`
+	CommentCount int                  `json:"commentCount"`
+	GeneratedAt  string               `json:"generatedAt"`
+}
+
 // --- 响应 DTO ---
 
 type User struct {
@@ -154,6 +175,7 @@ type Post struct {
 	Edited       bool        `json:"edited"`
 	IsPinned     bool        `json:"isPinned"`
 	IsFeatured   bool        `json:"isFeatured"`
+	AiSummary    *string     `json:"aiSummary,omitempty"`
 	Tags         []string    `json:"tags"`
 	CreatedAt    string      `json:"createdAt"`
 	UpdatedAt    string      `json:"updatedAt"`
