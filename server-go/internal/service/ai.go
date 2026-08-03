@@ -73,8 +73,8 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 	}
 
 	truncated := target
-	if runes := []rune(truncated); len(runes) > 5000 {
-		truncated = string(runes[:5000])
+	if runes := []rune(truncated); len(runes) > 15000 {
+		truncated = string(runes[:15000])
 	}
 
 	styleDesc := "简洁自然"
@@ -120,7 +120,7 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
 		User:        truncated,
-		MaxTokens:   2000,
+		MaxTokens:   8000,
 		Temperature: 0.3,
 	})
 	if err != nil {
@@ -140,8 +140,8 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 // Summarize 根据帖子内容生成摘要（1-2 句话，供列表卡片展示）
 func (s *AIService) Summarize(ctx context.Context, content string) (string, error) {
 	truncated := content
-	if runes := []rune(truncated); len(runes) > 5000 {
-		truncated = string(runes[:5000])
+	if runes := []rune(truncated); len(runes) > 15000 {
+		truncated = string(runes[:15000])
 	}
 
 	systemPrompt := `你是一个社区帖子摘要助手。根据帖子内容，生成一句话摘要。

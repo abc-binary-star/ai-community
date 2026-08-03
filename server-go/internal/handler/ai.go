@@ -25,8 +25,13 @@ func SuggestTitle(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短，至少 10 个字")
 		return
 	}
-	if len([]rune(req.Content)) > 5000 {
-		response.BadRequest(c, "内容太长，最多 5000 字")
+	if len([]rune(req.Content)) > 15000 {
+		response.BadRequest(c, "内容太长，最多 15000 字")
+		return
+	}
+
+	if !ai.Enabled() {
+		response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
 		return
 	}
 
@@ -54,12 +59,12 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短")
 		return
 	}
-	if len([]rune(req.Content)) > 5000 {
-		response.BadRequest(c, "内容太长，最多 5000 字")
+	if len([]rune(req.Content)) > 15000 {
+		response.BadRequest(c, "内容太长，最多 15000 字")
 		return
 	}
-	if len([]rune(req.Selection)) > 5000 {
-		response.BadRequest(c, "选段太长，最多 5000 字")
+	if len([]rune(req.Selection)) > 15000 {
+		response.BadRequest(c, "选段太长，最多 15000 字")
 		return
 	}
 
