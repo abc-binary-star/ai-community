@@ -36,8 +36,7 @@ export function useAudioRecorder() {
       typeof navigator !== 'undefined' &&
         !!navigator.mediaDevices &&
         typeof navigator.mediaDevices.getUserMedia === 'function' &&
-        typeof AudioContext !== 'undefined' &&
-        typeof ScriptProcessorNode !== 'undefined'
+        (typeof AudioContext !== 'undefined' || typeof (window as unknown as Record<string, unknown>).webkitAudioContext !== 'undefined')
     )
   }, [])
 
@@ -80,8 +79,9 @@ export function useAudioRecorder() {
       })
       streamRef.current = stream
 
-      // 创建 AudioContext，指定 16kHz 采样率
-      const audioContext = new AudioContext({ sampleRate: 16000 })
+      // 创建 AudioContext，指定 16kHz 采样率（兼容 Safari 的 webkit 前缀）
+      const AudioContextCtor = AudioContext || (window as unknown as Record<string, unknown>).webkitAudioContext as typeof AudioContext
+      const audioContext = new AudioContextCtor({ sampleRate: 16000 })
       audioContextRef.current = audioContext
 
       // 如果实际采样率不是 16000，需要后续重采样（但 AudioContext 通常会尊重指定值）
