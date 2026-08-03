@@ -237,41 +237,43 @@ export function MarkdownEditor({
               {btn.icon}
             </Button>
           ))}
-          {/* 分隔线 + AI 润色按钮 */}
-          <div className="mx-1 h-5 w-px bg-border" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-primary"
-            disabled={polishing}
-            onMouseDown={(e) => {
-              // 阻止默认行为：防止 textarea 失焦，保持选区有效
-              e.preventDefault()
-            }}
-            onClick={handlePolish}
-            title="选中文字后点击只润色选段，未选中润色全文"
-          >
-            {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-          AI 润色
-          </Button>
-          {/* 恢复原稿：采纳润色后显示，无边框融入工具栏 */}
-          {originalSnapshot !== null && (
-            <>
-              <div className="mx-1 h-5 w-px bg-border" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                onClick={handleRestore}
-                title="恢复润色前的原始内容"
-              >
-                <Undo2 className="size-3.5" />
-                恢复原稿
-              </Button>
-            </>
-          )}
+          {/* AI 功能区：固定在右侧，不参与换行 */}
+          <div className="ml-auto flex items-center gap-1 whitespace-nowrap">
+            <div className="mx-1 h-5 w-px bg-border" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 text-xs text-primary"
+              disabled={polishing}
+              onMouseDown={(e) => {
+                // 阻止默认行为：防止 textarea 失焦，保持选区有效
+                e.preventDefault()
+              }}
+              onClick={handlePolish}
+              title="选中文字后点击只润色选段，未选中润色全文"
+            >
+              {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+              AI 润色
+            </Button>
+            {/* 恢复原稿：采纳润色后显示，无边框融入工具栏 */}
+            {originalSnapshot !== null && (
+              <>
+                <div className="mx-1 h-5 w-px bg-border" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={handleRestore}
+                  title="恢复润色前的原始内容"
+                >
+                  <Undo2 className="size-3.5" />
+                  恢复原稿
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         {/* 编辑区 */}
         <Textarea
