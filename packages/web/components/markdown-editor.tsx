@@ -20,6 +20,7 @@ export interface MarkdownEditorProps {
   placeholder?: string
   height?: number
   className?: string
+  toolbarEnd?: React.ReactNode
 }
 
 interface ToolbarBtn {
@@ -124,6 +125,7 @@ export function MarkdownEditor({
   placeholder = '支持 Markdown 语法，输入 @ 可提及用户',
   height = 400,
   className,
+  toolbarEnd,
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
@@ -313,10 +315,15 @@ export function MarkdownEditor({
             <Eraser className="size-3.5" />
             清空
           </Button>
+          {toolbarEnd && (
+            <div className="ml-auto flex items-center gap-2 pl-2">
+              {toolbarEnd}
+            </div>
+          )}
         </div>
         {/* 编辑区：preview 开启时分屏，左编辑右预览 */}
         {preview ? (
-          <div className="flex h-[400px] divide-x divide-border">
+          <div className="flex divide-x divide-border" style={{ height }}>
             <Textarea
               ref={textareaRef}
               value={value}

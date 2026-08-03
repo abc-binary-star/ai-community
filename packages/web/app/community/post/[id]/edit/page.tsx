@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Check, Loader2, Send, Sparkles, FileText } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Send, Sparkles, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,7 +59,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   }, [token, params.id, router])
 
   useEffect(() => {
-    const updateHeight = () => setEditorHeight(window.innerHeight - 190)
+    const updateHeight = () => setEditorHeight(window.innerHeight - 270)
     updateHeight()
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
@@ -200,33 +200,98 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-3">
-      {/* 顶栏：返回 + 状态 + 操作按钮 */}
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      {/* 顶栏：返回 + 标题 */}
+      <div className="mb-3 flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={() => router.back()}
+          title="返回"
+          aria-label="返回"
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <h1 className="text-base font-semibold">{isDraft ? '编辑草稿' : '编辑帖子'}</h1>
+        {isDraft && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">草稿</span>
+        )}
+      </div>
+      {/* 标题 + 标签 */}
+      <div className="mb-3 space-y-2">
+        <div className="flex gap-2">
+          <Input
+            placeholder="标题"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={100}
+            className="flex-1 text-base font-semibold"
+          />
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => router.back()}
-            title="返回"
-            aria-label="返回"
+            size="sm"
+            className="h-9 shrink-0 gap-1.5 text-xs text-primary"
+            disabled={suggestingTitle}
+            onClick={handleSuggestTitle}
+            title="根据内容 AI 生成标题"
           >
-            <ArrowLeft className="size-4" />
+            {suggestingTitle ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            AI 标题
           </Button>
-          <h1 className="text-base font-semibold">{isDraft ? '编辑草稿' : '编辑帖子'}</h1>
-          {isDraft && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">草稿</span>
-          )}
         </div>
-        <div className="flex items-center gap-2">
-          {isDraft ? (
+        {titleSuggestions.length > 0 && (
+          <div className="space-y-1 rounded-lg border bg-accent/50 p-2">
+            {titleSuggestions.map((t, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setTitle(t)
+                  setTitleSuggestions([])
+                }}
+                className="block w-full truncate rounded-md px-2 py-1 text-left text-sm text-accent-foreground transition-colors hover:bg-accent"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            placeholder="标签（逗号分隔，最多5个）"
+            value={tagsInput}
+            onChange={(e) => setTagsInput(e.target.value)}
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 shrink-0 gap-1.5 text-xs text-primary"
+            onClick={handleSuggestTags}
+            title="根据标题和内容 AI 生成标签"
+          >
+            <Sparkles className="size-3.5" />
+            AI 标签
+          </Button>
+        </div>
+      </div>
+      {/* 编辑器占满剩余空间 */}
+      <MarkdownEditor
+        value={content}
+        onChange={setContent}
+        height={editorHeight}
+        placeholder="支持 Markdown 语法，输入 @ 可提及用户…"
+        toolbarEnd={
+          isDraft ? (
             <>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="h-8 gap-1.5"
+                className="h-8 gap-1.5 text-xs"
                 disabled={submitting || !content.trim()}
                 onClick={() => handleSave('draft')}
               >
@@ -235,8 +300,9 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
               </Button>
               <Button
                 type="button"
+                variant="ghost"
                 size="sm"
-                className="h-8 gap-1.5"
+                className="h-8 gap-1.5 text-xs text-primary"
                 disabled={!content.trim()}
                 onClick={() => setDialogOpen(true)}
               >
@@ -247,23 +313,17 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
           ) : (
             <Button
               type="button"
+              variant="ghost"
               size="sm"
-              className="h-8 gap-1.5"
+              className="h-8 gap-1.5 text-xs text-primary"
               disabled={submitting || !content.trim()}
               onClick={() => handleSave('published')}
             >
-              {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+              {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
               保存
             </Button>
-          )}
-        </div>
-      </div>
-      {/* 编辑器占满剩余空间 */}
-      <MarkdownEditor
-        value={content}
-        onChange={setContent}
-        height={editorHeight}
-        placeholder="支持 Markdown 语法，输入 @ 可提及用户…"
+          )
+        }
       />
 
       {/* 发布弹窗（草稿转发布）：确认标题/频道/标签 */}
