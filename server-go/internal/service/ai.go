@@ -146,7 +146,7 @@ func indentPlainParagraphs(text string) string {
 	inParagraph := false
 	paragraphHasSpecial := false
 
-	for i, line := range lines {
+	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
 		// 空行：段落结束
@@ -170,8 +170,8 @@ func indentPlainParagraphs(text string) string {
 		if !inParagraph {
 			// 新段落开始
 			inParagraph = true
-			if paragraphHasSpecial || i == 0 {
-				// 前面紧跟特殊结构（如列表后面）或全文第一行：不缩进
+			if paragraphHasSpecial {
+				// 前面紧跟特殊结构（如列表后面）：不缩进
 				out = append(out, line)
 			} else {
 				// 普通段落首行：缩进 2 个全角空格
