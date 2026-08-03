@@ -255,19 +255,22 @@ export function MarkdownEditor({
             {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
           AI 润色
           </Button>
-          {/* 恢复原稿：采纳润色后可随时撤销 */}
+          {/* 恢复原稿：采纳润色后显示，无边框融入工具栏 */}
           {originalSnapshot !== null && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs text-muted-foreground"
-              onClick={handleRestore}
-              title="恢复润色前的原始内容"
-            >
-              <Undo2 className="size-3.5" />
-              恢复原稿
-            </Button>
+            <>
+              <div className="mx-1 h-5 w-px bg-border" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                onClick={handleRestore}
+                title="恢复润色前的原始内容"
+              >
+                <Undo2 className="size-3.5" />
+                恢复原稿
+              </Button>
+            </>
           )}
         </div>
         {/* 编辑区 */}
