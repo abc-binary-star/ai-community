@@ -3,7 +3,7 @@ package types
 // --- 请求 DTO ---
 
 type RegisterReq struct {
-	Username string `json:"username" vd:"len($)>=2 && len($)<=20"`
+	Username string `json:"username" vd:"len($)>=2 && len($)<=60"` // 20中文字符=60字节
 	Email    string `json:"email" vd:"email($)"`
 	Password string `json:"password" vd:"len($)>=6 && len($)<=64"`
 }
@@ -18,8 +18,8 @@ type RefreshReq struct {
 }
 
 type CreatePostReq struct {
-	Title     string   `json:"title" vd:"len($)<=100"` // 草稿允许为空
-	Content   string   `json:"content" vd:"len($)<=20000"` // 草稿允许为空
+	Title     string   `json:"title" vd:"len($)<=300"` // 100中文字符=300字节
+	Content   string   `json:"content" vd:"len($)<=60000"` // 20000中文字符=60000字节
 	Channel   *string  `json:"channel"`
 	Tags      []string `json:"tags"`
 	Status    string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
@@ -35,7 +35,7 @@ type UpdatePostReq struct {
 }
 
 type CreateCommentReq struct {
-	Content  string  `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Content  string  `json:"content" vd:"len($)>=1 && len($)<=15000"` // 5000中文字符=15000字节
 	ParentID *string `json:"parentId"`
 }
 
@@ -71,7 +71,7 @@ type SummarizeReq struct {
 type CreateReportReq struct {
 	TargetType string `json:"targetType" vd:"in($, 'post', 'comment')"`
 	TargetID   string `json:"targetId" vd:"len($)>=1 && len($)<=64"`
-	Reason     string `json:"reason" vd:"len($)>=2 && len($)<=500"`
+	Reason     string `json:"reason" vd:"len($)>=2 && len($)<=1500"` // 500中文字符=1500字节
 }
 
 type HandleReportReq struct {
@@ -80,8 +80,8 @@ type HandleReportReq struct {
 }
 
 type CreateChannelReq struct {
-	Name        string `json:"name" vd:"len($)>=2 && len($)<=30"`
-	Label       string `json:"label" vd:"len($)>=1 && len($)<=50"`
+	Name        string `json:"name" vd:"len($)>=2 && len($)<=90"`   // 30中文字符=90字节
+	Label       string `json:"label" vd:"len($)>=1 && len($)<=150"` // 50中文字符=150字节
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 }
@@ -105,7 +105,7 @@ type CreateConversationReq struct {
 
 // 私信：发送消息
 type SendMessageReq struct {
-	Content string `json:"content" vd:"len($)>=1 && len($)<=5000"`
+	Content string `json:"content" vd:"len($)>=1 && len($)<=15000"` // 5000中文字符=15000字节
 }
 
 // PostSummary 帖子讨论摘要 DTO
