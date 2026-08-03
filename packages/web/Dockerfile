@@ -2,16 +2,18 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# 1. 复制整个项目
+# 安装 pnpm（版本与仓库 packageManager 对齐）
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+# 1. 复制整个项目（含 workspace 的 shared 包）
 COPY . .
 
-# 2. 在 web 目录安装全部依赖
-WORKDIR /app/packages/web
-RUN npm install
+# 2. 在仓库根目录安装全部依赖（pnpm workspace 才能解析 workspace:*）
+RUN pnpm install --frozen-lockfile
 
 # 3. 构建 Next.js（使用 transpilePackages 处理 shared）
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN pnpm --filter web build
 
 # ---- 运行时镜像（最小化）----
 FROM node:20-alpine AS runner
