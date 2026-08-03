@@ -1,54 +1,36 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { toast } from 'sonner'
-import { Loader2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, Sparkles, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
 import { MarkdownEditor } from '@/components/markdown-editor'
 
-const schema = z.object({
-  title: z.string().min(1, '请输入标题').max(100, '标题最多 100 字'),
-  content: z.string().min(1, '请输入内容').max(20000, '内容过长'),
-  channel: z.string(),
-  tags: z.array(z.string().trim().min(1).max(20)).max(5).optional(),
-})
-type FormValues = z.infer<typeof schema>
-
 export default function NewPostPage() {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
+  const [content, setContent] = useState('')
+  const [title, setTitle] = useState('')
+  const [channel, setChannel] = useState('general')
   const [tagsInput, setTagsInput] = useState('')
-  const [suggesting, setSuggesting] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
   const [suggestingTitle, setSuggestingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
+  const [editorHeight, setEditorHeight] = useState(600)
   const { data: channels } = useChannels()
 
-  // 频道列表，API 加载前使用 fallback
   const channelItems = (channels && channels.length > 0)
     ? channels
     : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    getValues,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { channel: 'general' },
-  })
 
   useEffect(() => {
     if (!token) {
@@ -56,11 +38,19 @@ export default function NewPostPage() {
     }
   }, [token, router])
 
-  const selectedChannel = watch('channel')
+  // 编辑器高度随视口变化，尽量占满空间
+  useEffect(() => {
+    const updateHeight = () => setEditorHeight(window.innerHeight - 190)
+    updateHeight()
+    window.addEventListener('resize', updateHeight)
+    return () => window.removeEventListener('resize', updateHeight)
+  }, [])
+
+  const parseTags = () =>
+    tagsInput.split(/[,，\s]+/).map((t) => t.trim()).filter(Boolean).slice(0, 5)
 
   // AI 建议标题
   const handleSuggestTitle = async () => {
-    const content = getValues('content')
     if (!content || content.trim().length < 10) {
       toast.error('内容至少 10 个字才能生成标题')
       return
@@ -82,44 +72,77 @@ export default function NewPostPage() {
   }
 
   // AI 生成标签
-  const handleSuggestTags = async () => {
-    const title = getValues('title')
-    const content = getValues('content')
-    if (!title || !content) {
+  const handleSuggestTags = useCallback(async () => {
+    if (!title.trim() || !content.trim()) {
       toast.error('请先填写标题和内容')
       return
     }
-    setSuggesting(true)
     try {
-      const data = await api.post<{ tags: string[] }>('/posts/suggest-tags', { title, content })
+      const data = await api.post<{ tags: string[] }>('/posts/suggest-tags', { title: title.trim(), content })
       if (data.tags.length === 0) {
         toast.error('未能生成标签，请手动输入')
         return
       }
-      // 合并已有标签和 AI 标签，去重，最多 5 个
-      const existing = tagsInput.split(/[,，\s]+/).map((t) => t.trim()).filter(Boolean)
+      const existing = parseTags()
       const merged = [...new Set([...existing, ...data.tags])].slice(0, 5)
       setTagsInput(merged.join(', '))
       toast.success(`AI 生成了 ${data.tags.length} 个标签`)
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'AI 生成失败，请手动输入')
+    }
+  }, [title, content, tagsInput])
+
+  // 保存草稿（不发布）
+  const handleSaveDraft = async () => {
+    if (!content.trim()) {
+      toast.error('内容为空，无法保存草稿')
+      return
+    }
+    setSavingDraft(true)
+    try {
+      const tags = parseTags()
+      const post = await api.post<Post>('/posts', {
+        title: title.trim(),
+        content,
+        channel,
+        tags: tags.length > 0 ? tags : undefined,
+        status: 'draft',
+      })
+      toast.success('草稿已保存')
+      router.replace(`/community/post/${post.id}/edit`)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '保存草稿失败')
     } finally {
-      setSuggesting(false)
+      setSavingDraft(false)
     }
   }
 
-  const onSubmit = async (values: FormValues) => {
-    const tags = tagsInput
-      .split(/[,，\s]+/)
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .slice(0, 5)
+  // 发布
+  const handlePublish = async () => {
+    if (!title.trim()) {
+      toast.error('请填写标题')
+      return
+    }
+    if (!content.trim()) {
+      toast.error('内容不能为空')
+      return
+    }
+    setPublishing(true)
     try {
-      const post = await api.post<Post>('/posts', { ...values, tags: tags.length > 0 ? tags : undefined })
+      const tags = parseTags()
+      const post = await api.post<Post>('/posts', {
+        title: title.trim(),
+        content,
+        channel,
+        tags: tags.length > 0 ? tags : undefined,
+        status: 'published',
+      })
       toast.success('发布成功')
       router.push(`/community/post/${post.id}`)
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '发布失败，请重试')
+    } finally {
+      setPublishing(false)
     }
   }
 
@@ -132,16 +155,70 @@ export default function NewPostPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <Card>
-        <CardHeader>
-          <CardTitle>发布新帖</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <div className="mx-auto flex h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-3">
+      {/* 顶栏：返回 + 标题 + 操作按钮 */}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => router.back()}
+            title="返回"
+            aria-label="返回"
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+          <h1 className="text-base font-semibold">发布新帖</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            disabled={savingDraft || !content.trim()}
+            onClick={handleSaveDraft}
+          >
+            {savingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+            保存草稿
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 gap-1.5"
+            disabled={!content.trim()}
+            onClick={() => setDialogOpen(true)}
+          >
+            <Send className="size-3.5" />
+            发布
+          </Button>
+        </div>
+      </div>
+      {/* 编辑器占满剩余空间 */}
+      <MarkdownEditor
+        value={content}
+        onChange={setContent}
+        height={editorHeight}
+        placeholder="支持 Markdown 语法，输入 @ 可提及用户，尽情写作吧…"
+      />
+
+      {/* 发布弹窗：填写标题/频道/标签 */}
+      {dialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !publishing && setDialogOpen(false)}
+        >
+          <div
+            className="w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold">发布帖子</h2>
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="title">标题</Label>
+                <Label htmlFor="pub-title">标题</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -154,8 +231,13 @@ export default function NewPostPage() {
                   {suggestingTitle ? '生成中…' : 'AI 建议标题'}
                 </Button>
               </div>
-              <Input id="title" placeholder="一句话概括你的想法" {...register('title')} />
-              {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+              <Input
+                id="pub-title"
+                placeholder="一句话概括你的想法"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={100}
+              />
               {titleSuggestions.length > 0 && (
                 <div className="space-y-1 rounded-lg border bg-accent/50 p-2">
                   {titleSuggestions.map((t, i) => (
@@ -163,7 +245,7 @@ export default function NewPostPage() {
                       key={i}
                       type="button"
                       onClick={() => {
-                        setValue('title', t, { shouldValidate: true })
+                        setTitle(t)
                         setTitleSuggestions([])
                       }}
                       className="block w-full truncate rounded-md px-2 py-1 text-left text-sm text-accent-foreground transition-colors hover:bg-accent"
@@ -174,16 +256,17 @@ export default function NewPostPage() {
                 </div>
               )}
             </div>
+
             <div className="space-y-2">
               <Label>频道</Label>
               <div className="flex flex-wrap gap-2">
                 {channelItems.map((ch) => {
-                  const active = selectedChannel === ch.name
+                  const active = channel === ch.name
                   return (
                     <button
                       key={ch.name}
                       type="button"
-                      onClick={() => setValue('channel', ch.name, { shouldValidate: true })}
+                      onClick={() => setChannel(ch.name)}
                       className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                         active
                           ? 'border-primary bg-primary/10 text-primary'
@@ -196,50 +279,41 @@ export default function NewPostPage() {
                 })}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="content">内容</Label>
-              <MarkdownEditor
-                value={watch('content') || ''}
-                onChange={(val) => setValue('content', val, { shouldValidate: true })}
-                placeholder="支持 Markdown 语法，输入 @ 可提及用户"
-              />
-              {errors.content && <p className="text-xs text-destructive">{errors.content.message}</p>}
-            </div>
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="tags">标签</Label>
+                <Label htmlFor="pub-tags">标签</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-7 gap-1.5 text-xs"
-                  disabled={suggesting}
                   onClick={handleSuggestTags}
                 >
-                  {suggesting ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-                  {suggesting ? '生成中…' : 'AI 生成标签'}
+                  <Sparkles className="size-3" />
+                  AI 生成标签
                 </Button>
               </div>
               <Input
-                id="tags"
+                id="pub-tags"
                 placeholder="用逗号或空格分隔，最多 5 个标签"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">用逗号或空格分隔，不需要加 # 号，例如：AI, 前端 开源</p>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => router.back()}>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" disabled={publishing} onClick={() => setDialogOpen(false)}>
                 取消
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="animate-spin" />}
-                发布
+              <Button type="button" onClick={handlePublish} disabled={publishing || !title.trim()}>
+                {publishing && <Loader2 className="animate-spin" />}
+                确认发布
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

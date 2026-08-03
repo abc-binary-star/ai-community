@@ -29,6 +29,7 @@ export interface Post {
   title: string
   content: string
   channel: string
+  status: 'published' | 'draft'
   authorId: string
   author: PublicUser
   commentCount: number

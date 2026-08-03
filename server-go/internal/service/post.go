@@ -118,7 +118,8 @@ func mapPostsToDTOs(ctx context.Context, posts []model.Post, userID string) []ty
 }
 
 // ListPosts 帖子列表
-func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag, userID string, page, pageSize int) (*types.Paginated[types.Post], error) {
+// status: 空或 published=公开列表；draft=仅当前用户自己的草稿
+func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag, status, userID string, page, pageSize int) (*types.Paginated[types.Post], error) {
 	// 校验 channel，无效时回退到 general
 	if channel != "all" && !validChannel(ctx, channel) {
 		channel = "general"
@@ -126,8 +127,18 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 
 	query := dal.DB.WithContext(ctx).Model(&model.Post{})
 
+	// 状态过滤：草稿仅本人可见，公开列表只显示已发布
+	if status == "draft" {
+		if userID == "" {
+			return &types.Paginated[types.Post]{Items: []types.Post{}, Total: 0, Page: page, PageSize: pageSize, TotalPages: 0}, nil
+		}
+		query = query.Where("status = ? AND author_id = ?", "draft", userID)
+	} else {
+		query = query.Where("status = ?", "published")
+	}
+
 	// 过滤当前用户屏蔽的作者
-	if userID != "" {
+	if userID != "" && status != "draft" {
 		if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
 			query = query.Where("author_id NOT IN ?", blocked)
 		}
@@ -158,10 +169,17 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		Preload("Tags")
 
 	// 过滤当前用户屏蔽的作者
-	if userID != "" {
+	if userID != "" && status != "draft" {
 		if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
 			dbQuery = dbQuery.Where("author_id NOT IN ?", blocked)
 		}
+	}
+
+	// 状态过滤同步到 dbQuery
+	if status == "draft" {
+		dbQuery = dbQuery.Where("status = ? AND author_id = ?", "draft", userID)
+	} else {
+		dbQuery = dbQuery.Where("status = ?", "published")
 	}
 
 	// 复用相同的 where 条件
@@ -237,17 +255,6 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 
 // GetPost 帖子详情（浏览量 +1）
 func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*types.Post, error) {
-	// 浏览量 +1，同时检查帖子是否存在
-	result := dal.DB.WithContext(ctx).Model(&model.Post{}).
-		Where("id = ?", postID).
-		UpdateColumn("view_count", gorm.Expr("view_count + 1"))
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.RowsAffected == 0 {
-		return nil, ErrPostNotFound_Post
-	}
-
 	var post model.Post
 	if err := dal.DB.WithContext(ctx).
 		Preload("Author").
@@ -259,6 +266,20 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 		return nil, err
 	}
 
+	// 草稿仅作者可见，且不增加浏览量
+	if post.Status == "draft" {
+		if userID == "" || post.AuthorID != userID {
+			return nil, ErrPostNotFound_Post
+		}
+	} else {
+		// 已发布帖子浏览量 +1
+		if err := dal.DB.WithContext(ctx).Model(&model.Post{}).
+			Where("id = ?", postID).
+			UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err != nil {
+			return nil, err
+		}
+	}
+
 	commentCounts := batchCommentCount(ctx, []string{postID})
 	likedSet := batchLikedPostIDs(ctx, []string{postID}, userID)
 	bookmarkedSet := batchBookmarkedPostIDs(ctx, []string{postID}, userID)
@@ -266,6 +287,38 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 	tagNames := mapper.ExtractTagNames(post.Tags)
 	dto := mapper.PostToDTO(&post, commentCounts[postID], likedSet[postID], bookmarkedSet[postID], tagNames)
 	return &dto, nil
+}
+
+// replacePostTags 全量替换帖子的标签关联
+func replacePostTags(ctx context.Context, postID string, rawTags []string) error {
+	// 删除旧关联
+	if err := dal.DB.WithContext(ctx).Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
+		return err
+	}
+	seen := make(map[string]bool)
+	for _, rawTag := range rawTags {
+		tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
+		if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
+			continue
+		}
+		seen[tagName] = true
+
+		var tag model.Tag
+		if err := dal.DB.WithContext(ctx).Where("name = ?", tagName).First(&tag).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				tag = model.Tag{Name: tagName}
+				if err := dal.DB.WithContext(ctx).Create(&tag).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+		if err := dal.DB.WithContext(ctx).Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreatePost 创建帖子（支持 tags）
@@ -277,11 +330,16 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 
 	var created model.Post
 	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		status := req.Status
+		if status == "" {
+			status = "published"
+		}
 		post := &model.Post{
 			Title:    req.Title,
 			Content:  req.Content,
 			Channel:  channel,
 			AuthorID: userID,
+			Status:   status,
 		}
 		if err := tx.Create(post).Error; err != nil {
 			return err
@@ -333,22 +391,8 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 
 // UpdatePost 更新帖子
 func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req types.UpdatePostReq) (*types.Post, error) {
-	// 字段长度校验
-	if req.Title != nil {
-		titleLen := len([]rune(*req.Title))
-		if titleLen < 1 || titleLen > 100 {
-			return nil, ErrPostInvalidInput
-		}
-	}
-	if req.Content != nil {
-		contentLen := len([]rune(*req.Content))
-		if contentLen < 1 || contentLen > 20000 {
-			return nil, ErrPostInvalidInput
-		}
-	}
-
 	var existing model.Post
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id").First(&existing, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status").First(&existing, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound_Post
 		}
@@ -358,6 +402,21 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 		return nil, ErrPostForbidden
 	}
 
+	// 字段长度校验：草稿允许标题/内容为空
+	isDraft := existing.Status == "draft" || (req.Status != nil && *req.Status == "draft")
+	if req.Title != nil {
+		titleLen := len([]rune(*req.Title))
+		if titleLen > 100 || (titleLen < 1 && !isDraft) {
+			return nil, ErrPostInvalidInput
+		}
+	}
+	if req.Content != nil {
+		contentLen := len([]rune(*req.Content))
+		if contentLen > 20000 || (contentLen < 1 && !isDraft) {
+			return nil, ErrPostInvalidInput
+		}
+	}
+
 	updates := map[string]interface{}{"edited": true}
 	if req.Title != nil {
 		updates["title"] = *req.Title
@@ -365,8 +424,18 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	if req.Content != nil {
 		updates["content"] = *req.Content
 	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
 		return nil, err
+	}
+
+	// 标签更新：全量替换
+	if req.Tags != nil {
+		if err := replacePostTags(ctx, postID, *req.Tags); err != nil {
+			return nil, err
+		}
 	}
 
 	var updated model.Post
