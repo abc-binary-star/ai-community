@@ -18,6 +18,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   const token = useAuthStore((s) => s.token)
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
+  const [font, setFont] = useState('default')
   const [channel, setChannel] = useState('general')
   const [tagsInput, setTagsInput] = useState('')
   const [status, setStatus] = useState<'published' | 'draft'>('published')
@@ -46,6 +47,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
       .then((p) => {
         setTitle(p.title)
         setContent(p.content)
+        setFont(p.font || 'default')
         setChannel(p.channel)
         setStatus(p.status)
         setTagsInput(p.tags.join(', '))
@@ -144,6 +146,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         status: targetStatus,
         tags: tags.length > 0 ? tags : undefined,
         aiSummary: aiSummary.trim() || undefined,
+        font,
       })
       if (targetStatus === 'draft') {
         toast.success('草稿已保存')
@@ -180,6 +183,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         status: 'published',
         tags: tags.length > 0 ? tags : undefined,
         aiSummary: aiSummary.trim() || undefined,
+        font,
       })
       toast.success('发布成功')
       router.push(`/community/post/${params.id}`)
@@ -283,6 +287,8 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         value={content}
         onChange={setContent}
         height={editorHeight}
+        font={font}
+        onFontChange={setFont}
         placeholder="支持 Markdown 语法，输入 @ 可提及用户…"
         toolbarEnd={
           isDraft ? (

@@ -24,6 +24,7 @@ type CreatePostReq struct {
 	Tags      []string `json:"tags"`
 	Status    string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
 	AiSummary *string  `json:"aiSummary"` // AI 生成的帖子摘要，可选
+	Font      string   `json:"font"`      // 全文字体 key，默认 default
 }
 
 type UpdatePostReq struct {
@@ -32,6 +33,7 @@ type UpdatePostReq struct {
 	Status    *string  `json:"status"`
 	Tags      *[]string `json:"tags"`
 	AiSummary *string  `json:"aiSummary"`
+	Font      *string  `json:"font"`
 }
 
 type CreateCommentReq struct {
@@ -209,6 +211,7 @@ type Post struct {
 	IsPinned     bool        `json:"isPinned"`
 	IsFeatured   bool        `json:"isFeatured"`
 	AiSummary    *string     `json:"aiSummary,omitempty"`
+	Font         string      `json:"font,omitempty"`
 	Tags         []string    `json:"tags"`
 	CreatedAt    string      `json:"createdAt"`
 	UpdatedAt    string      `json:"updatedAt"`

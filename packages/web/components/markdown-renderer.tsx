@@ -126,9 +126,11 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
 export function MarkdownRenderer({
   content,
   className,
+  fontFamily,
 }: {
   content: string
   className?: string
+  fontFamily?: string
 }) {
   return (
     <div
@@ -139,6 +141,7 @@ export function MarkdownRenderer({
         'prose-code:before:content-none prose-code:after:content-none',
         className,
       )}
+      style={fontFamily ? { fontFamily } : undefined}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}

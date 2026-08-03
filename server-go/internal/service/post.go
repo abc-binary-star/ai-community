@@ -346,6 +346,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			AuthorID:  userID,
 			Status:    status,
 			AiSummary: req.AiSummary,
+			Font:      req.Font,
 		}
 		if err := tx.Create(post).Error; err != nil {
 			log.Printf("[CreatePost] 创建帖子失败, userID=%s, title=%s, err=%v", userID, req.Title, err)
@@ -444,6 +445,9 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	}
 	if req.AiSummary != nil {
 		updates["ai_summary"] = *req.AiSummary
+	}
+	if req.Font != nil {
+		updates["font"] = *req.Font
 	}
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
 		log.Printf("[UpdatePost] 更新帖子失败, postID=%s, err=%v", postID, err)

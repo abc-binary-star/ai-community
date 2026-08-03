@@ -15,6 +15,7 @@ import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
+import { fontFamily } from '@/lib/font-options'
 import { getChannelLabel, type Comment, type Paginated, type Post, type ThreadSummary } from 'shared'
 import { CommentTree } from './comment-tree'
 import { CommentForm } from './comment-form'
@@ -328,7 +329,7 @@ export function PostDetailView({ id }: { id: string }) {
             {showCollapsed ? (
               <div className="relative">
                 <div className="max-h-96 overflow-hidden">
-                  <MarkdownRenderer content={post.content.slice(0, 800) + '…'} />
+                  <MarkdownRenderer content={post.content.slice(0, 800) + '…'} fontFamily={fontFamily(post.font)} />
                 </div>
                 <div className="mt-3 flex items-center justify-center">
                   <Button
@@ -343,7 +344,7 @@ export function PostDetailView({ id }: { id: string }) {
               </div>
             ) : (
               <>
-                <MarkdownRenderer content={post.content} />
+                <MarkdownRenderer content={post.content} fontFamily={fontFamily(post.font)} />
                 {isLongContent && (
                   <div className="mt-3 flex items-center justify-center">
                     <Button

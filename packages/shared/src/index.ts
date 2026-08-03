@@ -43,6 +43,7 @@ export interface Post {
   isPinned: boolean
   isFeatured: boolean
   aiSummary?: string
+  font?: string
   tags: string[]
   createdAt: string
   updatedAt: string

@@ -18,6 +18,7 @@ export default function NewPostPage() {
   const token = useAuthStore((s) => s.token)
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
+  const [font, setFont] = useState('default')
   const [channel, setChannel] = useState('general')
   const [tagsInput, setTagsInput] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -128,6 +129,7 @@ export default function NewPostPage() {
         tags: tags.length > 0 ? tags : undefined,
         status: 'draft',
         aiSummary: aiSummary.trim() || undefined,
+        font,
       })
       toast.success('草稿已保存')
       router.replace(`/community/post/${post.id}/edit`)
@@ -158,6 +160,7 @@ export default function NewPostPage() {
         tags: tags.length > 0 ? tags : undefined,
         status: 'published',
         aiSummary: aiSummary.trim() || undefined,
+        font,
       })
       toast.success('发布成功')
       router.push(`/community/post/${post.id}`)
@@ -258,6 +261,8 @@ export default function NewPostPage() {
         value={content}
         onChange={setContent}
         height={editorHeight}
+        font={font}
+        onFontChange={setFont}
         placeholder="支持 Markdown 语法，输入 @ 可提及用户，尽情写作吧…"
         toolbarEnd={
           <>
