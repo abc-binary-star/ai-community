@@ -122,7 +122,19 @@ export function useSpeechRecognition(options: SpeechRecognitionOptions = {}) {
 
     rec.onerror = (event: SpeechRecognitionErrorEvent) => {
       // no-speech 是正常超时，不当作错误
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      if (event.error === 'no-speech' || event.error === 'aborted') return
+
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        // 麦克风权限被拒绝：可能是非安全上下文（非 HTTPS / 非 localhost）或用户拒绝授权
+        const isSecure = typeof window !== 'undefined' &&
+          (window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+        setError(isSecure
+          ? '麦克风权限被拒绝，请在浏览器地址栏点击锁形图标，允许麦克风权限后重试'
+          : '语音识别需要 HTTPS 或 localhost 访问，当前页面非安全上下文')
+        // 权限被拒后停止自动续接
+        shouldListenRef.current = false
+        setListening(false)
+      } else {
         setError(event.error || '识别错误')
       }
     }

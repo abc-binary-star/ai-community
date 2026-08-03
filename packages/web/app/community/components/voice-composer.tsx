@@ -141,8 +141,9 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
             )}
 
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                语音识别出错：{error}
+              <div className="space-y-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+                <p className="font-medium">语音识别出错</p>
+                <p className="text-xs leading-5">{error}</p>
               </div>
             )}
 
