@@ -3,12 +3,20 @@
 import { useRef, useState, useCallback, type TextareaHTMLAttributes } from 'react'
 import {
   Bold, Code, Code2, Eraser, Eye, EyeOff, Heading, Image as ImageIcon, Link2,
-  List, ListOrdered, ListChecks, Quote, Strikethrough, Table as TableIcon,
-  Sparkles, Loader2, Undo2,
+  List, ListOrdered, ListChecks, Palette, Quote, Sparkles, Loader2, Strikethrough,
+  Table as TableIcon, Type, Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
@@ -118,6 +126,28 @@ const TOOLBAR: ToolbarBtn[] = [
   },
 ]
 
+// 文字颜色预设（安全色板，值用于内联 style）
+const COLOR_OPTIONS = [
+  { name: '红色', value: '#e5484d' },
+  { name: '橙色', value: '#f76b15' },
+  { name: '黄色', value: '#f5a524' },
+  { name: '绿色', value: '#30a46c' },
+  { name: '青色', value: '#12a594' },
+  { name: '蓝色', value: '#3e63dd' },
+  { name: '紫色', value: '#8e4ec6' },
+  { name: '粉色', value: '#d6409f' },
+  { name: '灰色', value: '#6f6f6f' },
+  { name: '黑色', value: '#1a1a1a' },
+]
+
+// 免费可商用中文字体（SIL OFL / 免费商用授权），对应 layout 中 next/font 加载的变量
+const FONT_OPTIONS = [
+  { name: '默认字体', value: 'var(--font-sans)', hint: '界面默认' },
+  { name: '思源宋体', value: 'var(--font-noto-serif)', hint: 'Serif 衬线体' },
+  { name: '得意黑', value: 'var(--font-smiley)', hint: '展示标题体' },
+  { name: '站酷快乐体', value: 'var(--font-zcool)', hint: '圆润活泼体' },
+]
+
 export function MarkdownEditor({
   value,
   onChange,
@@ -160,6 +190,13 @@ export function MarkdownEditor({
       btn.action(textareaRef.current, value, onChange)
     }
   }, [value, onChange])
+
+  // 用内联 span 包裹选中文本（颜色/字体），未选中时插入占位文本
+  const wrapWithSpan = (before: string, after: string, placeholder: string) => {
+    const ta = textareaRef.current
+    if (!ta) return
+    insertText(ta, value, onChange, before, after, placeholder)
+  }
 
   // AI 润色：有选区时润色选段，否则润色全文，完成后直接应用结果
   // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
@@ -230,6 +267,78 @@ export function MarkdownEditor({
               {btn.icon}
             </Button>
           ))}
+          {/* 文字颜色：选中文本后选择颜色，用内联 span 包裹 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                title="文字颜色"
+                aria-label="文字颜色"
+                // 阻止 textarea 失焦，保证点击选项时选区仍有效
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <Palette className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="p-1.5">
+              <DropdownMenuLabel className="px-1.5 py-1 text-xs font-medium text-muted-foreground">
+                文字颜色
+              </DropdownMenuLabel>
+              <div className="grid grid-cols-5 gap-1.5 px-1.5 pb-1.5">
+                {COLOR_OPTIONS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={c.name}
+                    aria-label={c.name}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => wrapWithSpan(`<span style="color:${c.value}">`, '</span>', '彩色文字')}
+                    className="size-6 rounded-md border border-border/60 transition-transform hover:scale-110"
+                    style={{ backgroundColor: c.value }}
+                  />
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* 字体：选中文本后选择字体，用内联 span 包裹 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                title="字体"
+                aria-label="字体"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <Type className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48 p-1.5">
+              <DropdownMenuLabel className="px-1.5 py-1 text-xs font-medium text-muted-foreground">
+                字体 · 全部免费商用授权
+              </DropdownMenuLabel>
+              {FONT_OPTIONS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => wrapWithSpan(`<span style="font-family:${f.value}">`, '</span>', '示例文字')}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                  style={{ fontFamily: f.value }}
+                >
+                  <span>{f.name}</span>
+                  <span className="text-[11px] text-muted-foreground" style={{ fontFamily: 'var(--font-sans)' }}>
+                    {f.hint}
+                  </span>
+                </button>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="mx-1 h-5 w-px bg-border" />
           <Button
             type="button"

@@ -4,6 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import rehypePrism from 'rehype-prism-plus'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { cn } from '@/lib/utils'
@@ -12,12 +13,17 @@ import { cn } from '@/lib/utils'
 const MENTION_REGEX = /@([a-zA-Z0-9_\u4e00-\u9fff]{2,20})/g
 
 // 允许 code 上添加 className（rehype-prism 的高亮需要）
+// 允许 span 上的 className 与 style（编辑器颜色/字体功能），
+// style 值仅放行安全 CSS（拒绝 url()/expression/javascript: 防注入）
+const safeStyleValue = (_node: unknown, key: string, value: unknown) =>
+  key !== 'style' || (typeof value === 'string' && !/url\s*\(|expression|javascript:/i.test(value))
+
 const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
     code: [...(defaultSchema.attributes?.code || []), 'className'],
-    span: [...(defaultSchema.attributes?.span || []), 'className'],
+    span: [...(defaultSchema.attributes?.span || []), 'className', 'style', safeStyleValue],
     pre: [...(defaultSchema.attributes?.pre || []), 'className'],
   },
 }
@@ -136,7 +142,7 @@ export function MarkdownRenderer({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypePrism, { ignoreMissing: true }], [rehypeSanitize, sanitizeSchema]]}
+        rehypePlugins={[[rehypeRaw], [rehypePrism, { ignoreMissing: true }], [rehypeSanitize, sanitizeSchema]]}
         components={components}
       >
         {content}
