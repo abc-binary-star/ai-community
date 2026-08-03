@@ -181,8 +181,8 @@ export function PostDetailView({ id }: { id: string }) {
   const commentsData = commentsQuery.data
   const hasMoreComments = commentsData ? commentPage < commentsData.totalPages : false
 
-  // 长文折叠：超过 2000 字默认折叠
-  const isLongContent = post.content.length > 2000
+  // 长文折叠：超过 3000 字默认折叠
+  const isLongContent = post.content.length > 3000
   const showCollapsed = isLongContent && !contentExpanded
 
   return (
@@ -328,8 +328,8 @@ export function PostDetailView({ id }: { id: string }) {
           <div className="break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
             {showCollapsed ? (
               <div className="relative">
-                <div className="max-h-96 overflow-hidden">
-                  <MarkdownRenderer content={post.content.slice(0, 800) + '…'} fontFamily={fontFamily(post.font)} />
+                <div className="max-h-[32rem] overflow-hidden">
+                  <MarkdownRenderer content={post.content.slice(0, 1500) + '…'} fontFamily={fontFamily(post.font)} />
                 </div>
                 <div className="mt-3 flex items-center justify-center">
                   <Button
