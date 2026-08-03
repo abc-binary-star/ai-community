@@ -1,9 +1,10 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Flame, Loader2, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -12,8 +13,9 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
-import type { DiscoverResponse, PublicUser } from 'shared'
+import type { DiscoverResponse, Paginated, Post, PublicUser } from 'shared'
 import { PostCard } from '../components/post-card'
+import { SortTabs } from '../components/sort-tabs'
 import { TagBadge } from '../components/tag-badge'
 
 function RecommendedUserItem({ user }: { user: PublicUser }) {
@@ -56,18 +58,41 @@ function RecommendedUserItem({ user }: { user: PublicUser }) {
   )
 }
 
-export default function DiscoverPage() {
+function DiscoverPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
-  const hydrated = useHydrated()
-  const token = useAuthStore((s) => s.token)
 
+  const sort = searchParams.get('sort') || 'hot'
+  const page = Math.max(1, Math.floor(Number(searchParams.get('page')) || 1))
+
+  // 帖子列表（支持热门/最新排序切换）
+  const postsQuery = useQuery({
+    queryKey: ['discover-posts', sort, page],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      params.set('channel', 'all')
+      params.set('sort', sort)
+      params.set('page', String(page))
+      return api.get<Paginated<Post>>(`/posts?${params.toString()}&pageSize=20`)
+    },
+  })
+
+  // 发现页侧栏数据：趋势话题 + 推荐用户
   const discoverQuery = useQuery({
     queryKey: ['discover'],
     queryFn: () => api.get<DiscoverResponse>('/discover'),
   })
 
-  if (discoverQuery.isLoading) {
+  const totalPages = postsQuery.data?.totalPages ?? 0
+
+  const goPage = (n: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('page', String(n))
+    router.push(`/community/discover?${params.toString()}`)
+  }
+
+  if (postsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
         <Loader2 className="animate-spin" />
@@ -75,26 +100,23 @@ export default function DiscoverPage() {
       </div>
     )
   }
-  if (discoverQuery.isError || !discoverQuery.data) {
+  if (postsQuery.isError || !postsQuery.data) {
     return (
       <div className="py-20 text-center">
         <p className="text-muted-foreground">加载失败，请稍后重试</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/community">返回社区</Link>
+          <Link href="/community/discover">重新加载</Link>
         </Button>
       </div>
     )
   }
 
-  const { hotPosts, trendingTags, recommendedUsers } = discoverQuery.data
+  const posts = postsQuery.data.items
+  const trendingTags = discoverQuery.data?.trendingTags ?? []
+  const recommendedUsers = discoverQuery.data?.recommendedUsers ?? []
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.back()}>
-        <ArrowLeft />
-        返回
-      </Button>
-
       <div className="flex items-center gap-2">
         <Sparkles className="size-5 text-primary" />
         <h1 className="text-xl font-semibold">发现</h1>
@@ -102,20 +124,36 @@ export default function DiscoverPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        {/* 主列：热门帖子 */}
+        {/* 主列：帖子列表（热门/最新切换） */}
         <div className="space-y-4">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <Flame className="size-4 text-orange-500" />
-            热门帖子
-          </h2>
-          {hotPosts.length === 0 ? (
+          <SortTabs current={sort} basePath="/community/discover" />
+
+          {posts.length === 0 ? (
             <Card className="border-dashed">
-              <div className="p-10 text-center text-sm text-muted-foreground">还没有热门内容，快去发帖吧</div>
+              <div className="p-10 text-center text-sm text-muted-foreground">还没有内容，快去发帖吧</div>
             </Card>
           ) : (
-            hotPosts.map((post) => (
-              <PostCard key={post.id} post={post} onChanged={() => queryClient.invalidateQueries({ queryKey: ['posts'] })} />
-            ))
+            <div className="grid gap-3">
+              {posts.map((post) => (
+                <PostCard key={post.id} post={post} onChanged={() => queryClient.invalidateQueries({ queryKey: ['discover-posts'] })} />
+              ))}
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goPage(page - 1)}>
+                <ChevronLeft />
+                上一页
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                第 {page} / {totalPages} 页
+              </span>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>
+                下一页
+                <ChevronRight />
+              </Button>
+            </div>
           )}
         </div>
 
@@ -159,5 +197,13 @@ export default function DiscoverPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function DiscoverPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center gap-2 py-20 text-muted-foreground"><Loader2 className="animate-spin" />加载发现页…</div>}>
+      <DiscoverPageInner />
+    </Suspense>
   )
 }

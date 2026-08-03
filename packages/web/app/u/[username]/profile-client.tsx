@@ -105,7 +105,7 @@ export function ProfileClient({ username }: { username: string }) {
         <h2 className="text-xl font-semibold">用户不存在</h2>
         <p className="mt-2 text-sm text-muted-foreground">找不到用户 &quot;{username}&quot;</p>
         <Button asChild className="mt-6">
-          <Link href="/community">返回社区</Link>
+          <Link href="/community/discover">返回社区</Link>
         </Button>
       </div>
     )
