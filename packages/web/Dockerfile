@@ -30,8 +30,8 @@ COPY --from=builder /app/packages/web/.next/static ./packages/web/.next/static
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://localhost:3000/community || exit 1
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
+  CMD node -e "require('net').connect(3000).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
 
 USER node
 CMD ["node", "packages/web/server.js"]

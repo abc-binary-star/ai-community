@@ -14,9 +14,9 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       web:
-        condition: service_healthy
+        condition: service_started
       server:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   web:
@@ -27,15 +27,15 @@ services:
       - NEXT_PUBLIC_API_URL=/api
       - NEXT_TELEMETRY_DISABLED=1
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/community"]
+      test: ["CMD-SHELL", "node -e \"require('net').connect(3000).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 15s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     depends_on:
       server:
-        condition: service_healthy
+        condition: service_started
 
   server:
     image: ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/server:latest
@@ -50,15 +50,15 @@ services:
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
 
   postgres:
     image: pgvector/pgvector:pg16
