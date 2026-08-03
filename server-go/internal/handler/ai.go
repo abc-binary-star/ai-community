@@ -108,3 +108,33 @@ func Summarize(ctx context.Context, c *app.RequestContext) {
 	}
 	response.JSON(c, map[string]interface{}{"summary": summary})
 }
+
+// VoicePolish AI 语音转录文本润色
+// POST /api/ai/voice-polish
+func VoicePolish(ctx context.Context, c *app.RequestContext) {
+	var req types.VoicePolishReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	if len([]rune(req.Content)) < 2 {
+		response.BadRequest(c, "内容太短")
+		return
+	}
+	if len([]rune(req.Content)) > 15000 {
+		response.BadRequest(c, "内容太长，最多 15000 字")
+		return
+	}
+
+	result, err := aiService.VoicePolish(ctx, req.Content, req.Style, req.Target)
+	if err != nil {
+		if !ai.Enabled() {
+			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
+			return
+		}
+		log.Printf("[AI] 语音润色失败: %v", err)
+		response.Error(c, consts.StatusServiceUnavailable, err.Error())
+		return
+	}
+	response.JSON(c, map[string]interface{}{"result": result})
+}

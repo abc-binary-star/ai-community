@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback, type TextareaHTMLAttributes } from 'react'
 import {
   Bold, Code, Code2, Eraser, Eye, EyeOff, Heading, Image as ImageIcon, Link2,
-  List, ListOrdered, ListChecks, Quote, Sparkles, Loader2, Strikethrough,
+  List, ListOrdered, ListChecks, Mic, Quote, Sparkles, Loader2, Strikethrough,
   Table as TableIcon, Type, Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { FONT_OPTIONS, fontFamily } from '@/lib/font-options'
+import { VoiceComposer } from '@/app/community/components/voice-composer'
 
 export interface MarkdownEditorProps {
   value: string
@@ -147,6 +148,8 @@ export function MarkdownEditor({
   const [preview, setPreview] = useState(false)
   // 记录采纳前的原始内容，支持「恢复原稿」
   const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null)
+  // 语音输入浮层
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   // 同步滚动：按滚动比例在两栏间同步
   const syncScroll = (source: 'editor' | 'preview') => {
@@ -301,6 +304,18 @@ export function MarkdownEditor({
             type="button"
             variant="ghost"
             size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setVoiceOpen(true)}
+            title="语音输入，AI 润色后插入"
+          >
+            <Mic className="size-3.5" />
+            语音
+          </Button>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             className="h-8 gap-1.5 text-xs text-primary"
             disabled={polishing}
             onMouseDown={(e) => {
@@ -395,6 +410,32 @@ export function MarkdownEditor({
             恢复原稿
           </Button>
         </div>
+      )}
+      {voiceOpen && (
+        <VoiceComposer
+          target="paragraph"
+          onInsert={(text) => {
+            // 在光标位置插入新段落，前后加空行
+            const ta = textareaRef.current
+            if (!ta) {
+              onChange(value + (value ? '\n\n' : '') + text)
+              return
+            }
+            const start = ta.selectionStart
+            const prefix = value.slice(0, start)
+            const suffix = value.slice(start)
+            const needLeadingBreak = prefix.length > 0 && !prefix.endsWith('\n\n')
+            const insertion = (needLeadingBreak ? '\n\n' : '') + text + '\n\n'
+            const newValue = prefix + insertion + suffix
+            onChange(newValue)
+            requestAnimationFrame(() => {
+              ta.focus()
+              const pos = start + insertion.length
+              ta.setSelectionRange(pos, pos)
+            })
+          }}
+          onClose={() => setVoiceOpen(false)}
+        />
       )}
     </div>
   )

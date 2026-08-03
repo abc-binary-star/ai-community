@@ -171,6 +171,65 @@ func (s *AIService) Summarize(ctx context.Context, content string) (string, erro
 	return text, nil
 }
 
+// VoicePolish 润色语音转录文本：去口水词、补标点、按语义分段，可选转为 Markdown 段落。
+// target="comment" 时精简为评论风格；target="paragraph" 时展开为结构化段落。
+func (s *AIService) VoicePolish(ctx context.Context, content, style, target string) (string, error) {
+	truncated := content
+	if runes := []rune(truncated); len(runes) > 15000 {
+		truncated = string(runes[:15000])
+	}
+
+	styleDesc := "简洁自然"
+	switch style {
+	case "formal":
+		styleDesc = "正式严谨"
+	case "casual":
+		styleDesc = "口语轻松"
+	case "friendly":
+		styleDesc = "亲和友好"
+	}
+
+	var systemPrompt string
+	if target == "comment" {
+		// 评论模式：精简为 1-3 句
+		systemPrompt = fmt.Sprintf(`你是一个语音转文字润色助手。用户通过语音输入了一段口语内容，请将其润色为适合发布的社区评论，风格为%s。
+
+要求：
+1. 去除口语中的口水词（嗯、啊、那个、就是说、然后等）和重复语句
+2. 补充正确的标点符号
+3. 精简为 1-3 句话，保留核心观点
+4. 保持说话者的原意和语气，不要添加未提及的信息
+5. 不要加前言后语，直接输出润色后的评论`, styleDesc)
+	} else {
+		// 段落模式：展开为结构化 Markdown 段落，可插入到文章中
+		systemPrompt = fmt.Sprintf(`你是一个语音转文字润色助手。用户通过语音输入了一段口语内容，请将其润色为适合插入文章的结构化段落，风格为%s。
+
+要求：
+1. 去除口语中的口水词（嗯、啊、那个、就是说、然后等）和重复语句
+2. 补充正确的标点符号
+3. 按语义分段，段落间用空行分隔
+4. 如有明显的层次结构，可使用 Markdown 标题、列表等元素
+5. 适度使用加粗强调重点词句
+6. 保持说话者的原意和语气，不要添加未提及的信息
+7. 不要加前言后语，直接输出润色后的内容`, styleDesc)
+	}
+
+	text, err := ai.Chat(ctx, ai.ChatRequest{
+		System:      systemPrompt,
+		User:        truncated,
+		MaxTokens:   8000,
+		Temperature: 0.3,
+	})
+	if err != nil {
+		log.Printf("[AI/VoicePolish] failed to call AI, err=%v", err)
+		return "", err
+	}
+	if text == "" {
+		return "", fmt.Errorf("AI 润色结果为空")
+	}
+	return text, nil
+}
+
 // indentPlainParagraphs 对纯文本段落应用首行缩进。
 // 规则：段落跨多行，且段落起始处没有列表、引用、标题、代码块等特殊 Markdown 结构时，
 // 在段落首行前加 2 个全角空格（\u3000\u3000）。

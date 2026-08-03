@@ -70,6 +70,12 @@ type SummarizeReq struct {
 	Content string `json:"content" vd:"len($)>=10"`
 }
 
+type VoicePolishReq struct {
+	Content string `json:"content" vd:"len($)>=1"`
+	Style   string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`
+	Target  string `json:"target" vd:"in($, '', 'comment', 'paragraph')"`
+}
+
 type CreateReportReq struct {
 	TargetType string `json:"targetType" vd:"in($, 'post', 'comment')"`
 	TargetID   string `json:"targetId" vd:"len($)>=1 && len($)<=64"`

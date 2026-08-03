@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, Mic, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import type { Comment } from 'shared'
+import { VoiceComposer } from './voice-composer'
 
 export function CommentForm({
   postId,
@@ -21,6 +22,7 @@ export function CommentForm({
 }) {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   const submit = async () => {
     const text = content.trim()
@@ -59,12 +61,30 @@ export function CommentForm({
         placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论…'}
         className="min-h-[100px] resize-y"
       />
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground"
+          onClick={() => setVoiceOpen(true)}
+          title="语音输入"
+        >
+          <Mic className="size-4" />
+          语音
+        </Button>
         <Button onClick={submit} disabled={submitting || !content.trim()}>
           {submitting && <Loader2 className="animate-spin" />}
           {replyTo ? '回复' : '评论'}
         </Button>
       </div>
+      {voiceOpen && (
+        <VoiceComposer
+          target="comment"
+          onInsert={(text) => setContent((prev) => (prev ? prev + '\n' + text : text))}
+          onClose={() => setVoiceOpen(false)}
+        />
+      )}
     </div>
   )
 }
