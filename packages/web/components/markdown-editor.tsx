@@ -126,8 +126,6 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [polishing, setPolishing] = useState(false)
-  // 暂存选区：onMouseDown 时读取（此时 textarea 还没失焦），onClick 时使用
-  const savedSelRef = useRef<{ start: number; end: number } | null>(null)
   const [diffState, setDiffState] = useState<{
     original: string
     rewritten: string
@@ -142,14 +140,8 @@ export function MarkdownEditor({
     }
   }, [value, onChange])
 
-  // 润色按钮 onMouseDown：此时 textarea 还没失焦，读出选区暂存
-  const handlePolishMouseDown = () => {
-    const ta = textareaRef.current
-    if (!ta) return
-    savedSelRef.current = { start: ta.selectionStart, end: ta.selectionEnd }
-  }
-
   // AI 润色：有选区时润色选段，否则润色全文
+  // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
   const handlePolish = async () => {
     const ta = textareaRef.current
     if (!ta) return
@@ -160,11 +152,9 @@ export function MarkdownEditor({
       return
     }
 
-    // 从暂存的选区读取
-    const sel = savedSelRef.current
-    savedSelRef.current = null
-    const start = sel?.start ?? 0
-    const end = sel?.end ?? 0
+    // 因为 onMouseDown preventDefault 了，textarea 没有失焦，直接读取选区
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
     const selection = start !== end ? value.slice(start, end) : ''
 
     if (!selection && !value.trim()) {
@@ -243,7 +233,10 @@ export function MarkdownEditor({
             size="sm"
             className="h-8 gap-1.5 text-xs text-primary"
             disabled={polishing}
-            onMouseDown={handlePolishMouseDown}
+            onMouseDown={(e) => {
+              // 阻止默认行为：防止 textarea 失焦，保持选区有效
+              e.preventDefault()
+            }}
             onClick={handlePolish}
             title="选中文字后点击只润色选段，未选中润色全文"
           >
