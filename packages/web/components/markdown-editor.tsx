@@ -221,8 +221,12 @@ export function MarkdownEditor({
   return (
     <div className={cn('w-full space-y-2', className)}>
       <div className="rounded-lg border border-input bg-card overflow-hidden">
-        {/* 工具栏 */}
-        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5">
+        {/* 工具栏：AI 功能区绝对定位右上角，格式按钮不受挤压 */}
+        <div
+          className={`relative flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5 ${
+            originalSnapshot !== null ? 'pr-56' : 'pr-32'
+          }`}
+        >
           {TOOLBAR.map((btn) => (
             <Button
               key={btn.label}
@@ -237,8 +241,10 @@ export function MarkdownEditor({
               {btn.icon}
             </Button>
           ))}
-          {/* AI 功能区：固定在右侧，不参与换行 */}
-          <div className="ml-auto flex items-center gap-1 whitespace-nowrap">
+          {/* AI 功能区：绝对定位右上角，始终第一行 */}
+          <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap">
+            {/* 左侧渐变遮罩：格式按钮溢出换行时被平滑遮住 */}
+            <div className="pointer-events-none absolute -left-8 top-0 h-full w-8 bg-gradient-to-r from-transparent to-muted/50" />
             <div className="mx-1 h-5 w-px bg-border" />
             <Button
               type="button"
