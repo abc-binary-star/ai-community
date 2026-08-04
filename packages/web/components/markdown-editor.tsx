@@ -66,8 +66,11 @@ export function compressImage(file: File, maxSize: number, quality: number): Pro
           quality,
         )
       }
+      // 解码失败（如损坏/不支持的格式）：返回原文件，交由后端校验兜底
+      img.onerror = () => resolve(file)
       img.src = reader.result as string
     }
+    reader.onerror = () => resolve(file)
     reader.readAsDataURL(file)
   })
 }
@@ -316,9 +319,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   }, [value, onChange])
 
   const uploadImage = async (file: File): Promise<string | null> => {
+    // 超过 5MB 自动压缩（缩放到 2560px、JPEG 92%，保留较高清晰度），而非直接拒绝
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('图片文件太大，最多 5MB')
-      return null
+      toast.info('图片超过 5MB，已自动压缩')
+      file = await compressImage(file, 2560, 0.92)
     }
     // 编辑时用本地 blob URL 即时预览，发帖时再上传
     const blobUrl = URL.createObjectURL(file)
@@ -340,7 +344,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       try {
         let uploadFile = file
         if (file.size > 1024 * 1024) {
-          uploadFile = await compressImage(file, 1920, 0.85)
+          uploadFile = await compressImage(file, 2560, 0.92)
         }
         const formData = new FormData()
         formData.append('file', uploadFile)

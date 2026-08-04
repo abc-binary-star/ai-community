@@ -29,13 +29,13 @@ async function cropImageToBlob(
   image.src = imageSrc
   await new Promise((resolve) => { image.onload = resolve })
   const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
+  canvas.width = 512
+  canvas.height = 512
   const ctx = canvas.getContext('2d')!
   ctx.drawImage(
     image,
     pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
-    0, 0, 256, 256,
+    0, 0, 512, 512,
   )
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob!), 'image/png')
@@ -166,11 +166,7 @@ export default function SettingsPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('图片文件太大，最多 5MB')
-      e.target.value = ''
-      return
-    }
+    // 原图允许超大：裁剪输出固定 256×256 PNG，体积很小，无需限制原始文件大小
     const reader = new FileReader()
     reader.onload = () => {
       setCropImage(reader.result as string)
@@ -194,6 +190,10 @@ export default function SettingsPage() {
         body: formData,
       })
       setAvatar(data.url)
+      // 同步全局用户状态，导航栏/消息页等订阅处立即显示新头像
+      if (user) setUser({ ...user, avatar: data.url })
+      // 全量失效缓存：帖子/评论等作者头像来自接口数据，重新拉取即可用新头像，无需手动刷新页面
+      queryClient.invalidateQueries()
       toast.success('头像上传成功')
       setCropImage(null)
     } catch (err) {

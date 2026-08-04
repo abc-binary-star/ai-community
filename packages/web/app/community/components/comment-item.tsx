@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Loader2, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
@@ -70,6 +70,7 @@ export function CommentItem({
         <div className="p-4">
           <div className="flex items-center gap-2">
             <Avatar className="size-7">
+              {comment.author.avatar && <AvatarImage src={comment.author.avatar} alt={comment.author.username} />}
               <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(comment.author.username)}</AvatarFallback>
             </Avatar>
             <span className="text-sm font-medium">{comment.author.username}</span>

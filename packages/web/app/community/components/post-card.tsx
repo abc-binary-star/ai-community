@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, MessageCircle, Pin, Star } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { formatRelativeTime, getInitials, truncateMarkdown } from '@/lib/utils'
@@ -68,6 +68,7 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-2">
             <Avatar className="size-6">
+              {post.author.avatar && <AvatarImage src={post.author.avatar} alt={post.author.username} />}
               <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(post.author.username)}</AvatarFallback>
             </Avatar>
             <span className="text-xs text-muted-foreground">{post.author.username}</span>

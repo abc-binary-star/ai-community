@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Bookmark, ChevronDown, FileText, LogOut, MessageCircle, Menu, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -133,6 +133,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                     className="flex items-center gap-2 rounded-full p-1 pr-2 transition-colors hover:bg-accent"
                   >
                     <Avatar className="size-8">
+                      {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
                       <AvatarFallback className="bg-primary/10 text-xs text-primary">{getInitials(user.username)}</AvatarFallback>
                     </Avatar>
                     <span className="hidden text-sm font-medium sm:inline">{user.username}</span>
@@ -170,6 +171,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <DropdownMenuItem asChild>
                     <Link href={`/u/${encodeURIComponent(user.username)}`}>
                       <Avatar className="size-4">
+                        {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
                         <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
                       </Avatar>
                       我的主页
