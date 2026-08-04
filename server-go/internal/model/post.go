@@ -23,6 +23,7 @@ type Post struct {
 	IsFeatured bool      `gorm:"default:false;index" json:"isFeatured"`
 	AiSummary  *string   `gorm:"type:text" json:"aiSummary,omitempty"`
 	Font       string    `gorm:"size:50;default:default" json:"font,omitempty"`
+	CoverURL   *string   `gorm:"size:512" json:"coverUrl,omitempty"`
 	CreatedAt  time.Time `gorm:"index" json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 	Comments   []Comment `gorm:"foreignKey:PostID" json:"-"`

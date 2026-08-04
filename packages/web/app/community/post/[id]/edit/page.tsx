@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save, Send, Sparkles, FileText } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Send, Sparkles, FileText, ImagePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { api, ApiError } from '@/lib/api'
+import { api, apiFetch, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
@@ -30,6 +30,9 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   const [aiSummary, setAiSummary] = useState('')
   const [summarizing, setSummarizing] = useState(false)
   const [editorHeight, setEditorHeight] = useState(600)
+  const [coverUrl, setCoverUrl] = useState('')
+  const [coverUploading, setCoverUploading] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement>(null)
   const { data: channels } = useChannels()
 
   const isDraft = status === 'draft'
@@ -52,6 +55,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         setStatus(p.status)
         setTagsInput(p.tags.join(', '))
         setAiSummary(p.aiSummary || '')
+        setCoverUrl(p.coverUrl || '')
         setLoading(false)
       })
       .catch(() => {
@@ -148,6 +152,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         tags: tags.length > 0 ? tags : undefined,
         aiSummary: aiSummary.trim() || undefined,
         font,
+        coverUrl: coverUrl || undefined,
       })
       if (targetStatus === 'draft') {
         toast.success('草稿已保存')
@@ -186,6 +191,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         tags: tags.length > 0 ? tags : undefined,
         aiSummary: aiSummary.trim() || undefined,
         font,
+        coverUrl: coverUrl || undefined,
       })
       toast.success('发布成功')
       router.push(`/community/post/${params.id}`)
@@ -283,6 +289,62 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
             AI 标签
           </Button>
         </div>
+      </div>
+      {/* 封面图 */}
+      <div className="space-y-2">
+        {coverUrl ? (
+          <div className="relative group">
+            <img src={coverUrl} alt="封面预览" className="w-full max-h-48 object-cover rounded-lg" />
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              className="absolute top-2 right-2 size-7 opacity-90"
+              onClick={() => setCoverUrl('')}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={coverUploading}
+            onClick={() => coverInputRef.current?.click()}
+          >
+            {coverUploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+            {coverUploading ? '上传中…' : '添加封面图'}
+          </Button>
+        )}
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            if (file.size > 5 * 1024 * 1024) {
+              toast.error('图片文件太大，最多 5MB')
+              e.target.value = ''
+              return
+            }
+            setCoverUploading(true)
+            try {
+              const formData = new FormData()
+              formData.append('file', file)
+              const data = await apiFetch<{ url: string }>('/upload/image', { method: 'POST', body: formData })
+              setCoverUrl(data.url)
+              toast.success('封面上传成功')
+            } catch (err) {
+              toast.error(err instanceof ApiError ? err.message : '上传失败')
+            } finally {
+              setCoverUploading(false)
+              e.target.value = ''
+            }
+          }}
+        />
       </div>
       {/* 编辑器占满剩余空间 */}
       <MarkdownEditor

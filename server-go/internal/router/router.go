@@ -137,6 +137,12 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/messages/conversations/:id/messages", middleware.Auth(), handler.SendMessage)
 	h.POST("/api/messages/conversations/:id/read", middleware.Auth(), handler.MarkConversationRead)
 
+	// --- 文件上传路由 ---
+	// 静态文件服务（本地存储模式时使用）
+	h.Static("/uploads", "./uploads")
+	h.POST("/api/upload/avatar", middleware.Auth(), middleware.UploadLimit(), handler.UploadAvatar)
+	h.POST("/api/upload/image", middleware.Auth(), middleware.UploadLimit(), handler.UploadImage)
+
 	// 统一 404
 	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(consts.StatusNotFound, map[string]string{"error": "接口不存在"})

@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { api, ApiError } from '@/lib/api'
+import { api, apiFetch, ApiError } from '@/lib/api'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { FONT_OPTIONS, fontFamily } from '@/lib/font-options'
 import { VoiceComposer } from '@/app/community/components/voice-composer'
@@ -144,6 +144,7 @@ export function MarkdownEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [polishing, setPolishing] = useState(false)
   const [preview, setPreview] = useState(false)
   // 记录采纳前的原始内容，支持「恢复原稿」
@@ -173,10 +174,30 @@ export function MarkdownEditor({
   }
 
   const handleAction = useCallback((btn: ToolbarBtn) => {
+    if (btn.label === '图片') {
+      fileInputRef.current?.click()
+      return
+    }
     if (textareaRef.current) {
       btn.action(textareaRef.current, value, onChange)
     }
   }, [value, onChange])
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('图片文件太大，最多 5MB')
+      return null
+    }
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const data = await apiFetch<{ url: string }>('/upload/image', { method: 'POST', body: formData })
+      return data.url
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '上传失败')
+      return null
+    }
+  }
 
   // AI 润色：有选区时润色选段，否则润色全文，完成后直接应用结果
   // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
@@ -362,6 +383,35 @@ export function MarkdownEditor({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onScroll={() => syncScroll('editor')}
+              onDrop={async (e) => {
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+                if (files.length === 0) return
+                e.preventDefault()
+                for (const file of files) {
+                  const url = await uploadImage(file)
+                  if (url) {
+                    insertText(textareaRef.current!, value, onChange, '![', `](${url})`, '图片描述')
+                  }
+                }
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes('Files')) {
+                  e.preventDefault()
+                }
+              }}
+              onPaste={async (e) => {
+                const items = Array.from(e.clipboardData.items).filter(item => item.type.startsWith('image/'))
+                if (items.length === 0) return
+                e.preventDefault()
+                for (const item of items) {
+                  const file = item.getAsFile()
+                  if (!file) continue
+                  const url = await uploadImage(file)
+                  if (url) {
+                    insertText(textareaRef.current!, value, onChange, '![', `](${url})`, '图片描述')
+                  }
+                }
+              }}
               placeholder={placeholder}
               className="h-full w-1/2 resize-none rounded-none border-0 text-sm leading-6 focus-visible:ring-0"
               style={{ fontFamily: fontFamily(font) }}
@@ -386,6 +436,35 @@ export function MarkdownEditor({
             ref={textareaRef}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onDrop={async (e) => {
+              const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+              if (files.length === 0) return
+              e.preventDefault()
+              for (const file of files) {
+                const url = await uploadImage(file)
+                if (url) {
+                  insertText(textareaRef.current!, value, onChange, '![', `](${url})`, '图片描述')
+                }
+              }
+            }}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes('Files')) {
+                e.preventDefault()
+              }
+            }}
+            onPaste={async (e) => {
+              const items = Array.from(e.clipboardData.items).filter(item => item.type.startsWith('image/'))
+              if (items.length === 0) return
+              e.preventDefault()
+              for (const item of items) {
+                const file = item.getAsFile()
+                if (!file) continue
+                const url = await uploadImage(file)
+                if (url) {
+                  insertText(textareaRef.current!, value, onChange, '![', `](${url})`, '图片描述')
+                }
+              }
+            }}
             placeholder={placeholder}
             className="min-h-[120px] resize-y rounded-none border-0 text-sm leading-6 focus-visible:ring-0"
             style={{ height, fontFamily: fontFamily(font) }}
@@ -437,6 +516,21 @@ export function MarkdownEditor({
           onClose={() => setVoiceOpen(false)}
         />
       )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          const url = await uploadImage(file)
+          if (url && textareaRef.current) {
+            insertText(textareaRef.current, value, onChange, '![', `](${url})`, '图片描述')
+          }
+          e.target.value = ''
+        }}
+      />
     </div>
   )
 }

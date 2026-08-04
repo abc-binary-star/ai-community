@@ -219,6 +219,13 @@ export function PostDetailView({ id }: { id: string }) {
             </div>
           </div>
           <h1 className="text-2xl font-semibold leading-snug">{post.title}</h1>
+          {post.coverUrl && (
+            <img
+              src={post.coverUrl}
+              alt={post.title}
+              className="max-h-96 w-full rounded-lg object-cover"
+            />
+          )}
 
           {post.aiSummary && (
             <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">

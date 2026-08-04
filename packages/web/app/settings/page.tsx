@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Bell, Loader2, Save, ShieldOff, User } from 'lucide-react'
+import { ArrowLeft, Ban, Bell, Loader2, Save, ShieldOff, Upload, User } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { api, ApiError } from '@/lib/api'
+import { api, apiFetch, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { CommunityShell } from '@/app/community/components/community-shell'
@@ -53,6 +53,8 @@ export default function SettingsPage() {
   const [avatar, setAvatar] = useState(user?.avatar || '')
   const [displayName, setDisplayName] = useState(user?.displayName || '')
   const [bio, setBio] = useState(user?.bio || '')
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const mutation = useMutation({
     mutationFn: (data: { avatar: string; displayName: string; bio: string }) =>
@@ -145,7 +147,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>头像</CardTitle>
-                <CardDescription>输入头像 URL，或将来支持本地上传</CardDescription>
+                <CardDescription>上传本地图片作为头像，支持 JPG/PNG/WebP/GIF，最大 2MB</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
@@ -156,7 +158,54 @@ export default function SettingsPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 space-y-2">
-                    <Label htmlFor="avatar">头像 URL</Label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('图片文件太大，最多 2MB')
+                          e.target.value = ''
+                          return
+                        }
+                        setAvatarUploading(true)
+                        try {
+                          const formData = new FormData()
+                          formData.append('file', file)
+                          const data = await apiFetch<{ url: string }>('/upload/avatar', {
+                            method: 'POST',
+                            body: formData,
+                          })
+                          setAvatar(data.url)
+                          toast.success('头像上传成功')
+                        } catch (err) {
+                          toast.error(err instanceof ApiError ? err.message : '上传失败')
+                        } finally {
+                          setAvatarUploading(false)
+                          e.target.value = ''
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={avatarUploading}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {avatarUploading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Upload className="size-4" />
+                      )}
+                      {avatarUploading ? '上传中…' : '上传头像'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      或在下方输入 URL
+                    </p>
                     <Input
                       id="avatar"
                       placeholder="https://example.com/avatar.png"

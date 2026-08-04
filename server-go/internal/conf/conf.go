@@ -22,6 +22,13 @@ type Config struct {
 	// AI 限流配置
 	AIConcurrentLimit   int
 	AIDailyTokenLimit   int
+	// 对象存储配置（S3 兼容：Cloudflare R2 / 阿里云 OSS）
+	S3Endpoint    string
+	S3Region      string
+	S3Bucket      string
+	S3AccessKey   string
+	S3SecretKey   string
+	S3PublicURL   string // 公开访问的基础 URL（CDN 域名或 R2 公开域名）
 }
 
 // Global 全局配置实例，Load 后可用
@@ -64,6 +71,12 @@ func Load() *Config {
 		VolcASRResID:  getEnvOrDefault("VOLC_ASR_RESOURCE_ID", "volc.bigasr.sauc.duration"),
 		AIConcurrentLimit:   getEnvIntOrDefault("AI_CONCURRENT_LIMIT", 5),
 		AIDailyTokenLimit:   getEnvIntOrDefault("AI_DAILY_TOKEN_LIMIT", 2000000),
+		S3Endpoint:          getEnvOrDefault("S3_ENDPOINT", ""),
+		S3Region:            getEnvOrDefault("S3_REGION", "auto"),
+		S3Bucket:            getEnvOrDefault("S3_BUCKET", ""),
+		S3AccessKey:         os.Getenv("S3_ACCESS_KEY_ID"),
+		S3SecretKey:         os.Getenv("S3_SECRET_ACCESS_KEY"),
+		S3PublicURL:         getEnvOrDefault("S3_PUBLIC_BASE_URL", ""),
 	}
 	Global = cfg
 	return cfg

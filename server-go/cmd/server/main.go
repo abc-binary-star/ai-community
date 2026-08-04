@@ -9,6 +9,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ailimit"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/storage"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/stt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/router"
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -74,6 +75,9 @@ func main() {
 
 	// 初始化语音转文字客户端（未配置 API Key 时语音功能降级）
 	stt.Init(cfg.VolcASRKey, cfg.VolcASRResID)
+
+	// 初始化存储服务
+	storage.Init(cfg)
 
 	// 创建 Hertz 服务器
 	h := server.Default(server.WithHostPorts(":" + cfg.Port))

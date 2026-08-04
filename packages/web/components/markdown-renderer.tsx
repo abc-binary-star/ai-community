@@ -87,6 +87,7 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
       src={typeof src === 'string' ? src : undefined}
       alt={alt || ''}
       className="max-w-full rounded-lg"
+      loading="lazy"
       {...props}
     />
   ),

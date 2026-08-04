@@ -44,6 +44,7 @@ export interface Post {
   isFeatured: boolean
   aiSummary?: string
   font?: string
+  coverUrl?: string
   tags: string[]
   createdAt: string
   updatedAt: string

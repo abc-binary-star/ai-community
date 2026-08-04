@@ -45,6 +45,14 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
         <Link href={`/community/post/${post.id}`} className="text-lg font-semibold leading-snug hover:text-primary">
           {post.title}
         </Link>
+        {post.coverUrl && (
+          <img
+            src={post.coverUrl}
+            alt={post.title}
+            className="max-h-48 w-full rounded-lg object-cover"
+            loading="lazy"
+          />
+        )}
         <p className="line-clamp-2 text-sm text-muted-foreground">
           {post.aiSummary || truncateMarkdown(post.content, 160)}
         </p>

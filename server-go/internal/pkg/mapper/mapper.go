@@ -82,6 +82,7 @@ func PostToDTO(p *model.Post, commentCount int, liked, bookmarked bool, tagNames
 		IsFeatured:   p.IsFeatured,
 		AiSummary:    p.AiSummary,
 		Font:         p.Font,
+		CoverURL:     p.CoverURL,
 		Tags:         tags,
 		CreatedAt:    p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    p.UpdatedAt.Format(time.RFC3339),
