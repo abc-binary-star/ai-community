@@ -11,7 +11,7 @@ import { api, apiFetch, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
-import { MarkdownEditor } from '@/components/markdown-editor'
+import { MarkdownEditor, type MarkdownEditorHandle, compressImage } from '@/components/markdown-editor'
 
 export default function NewPostPage() {
   const router = useRouter()
@@ -24,13 +24,15 @@ export default function NewPostPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
+  const editorRef = useRef<MarkdownEditorHandle>(null)
   const [suggestingTitle, setSuggestingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
   const [aiSummary, setAiSummary] = useState('')
   const [summarizing, setSummarizing] = useState(false)
   const [editorHeight, setEditorHeight] = useState(600)
   const [coverUrl, setCoverUrl] = useState('')
-  const [coverUploading, setCoverUploading] = useState(false)
+  // 封面本地文件：选择后本地预览，发布/保存时统一上传 OSS
+  const [coverFile, setCoverFile] = useState<File | null>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
   const { data: channels } = useChannels()
 
@@ -54,6 +56,24 @@ export default function NewPostPage() {
 
   const parseTags = () =>
     tagsInput.split(/[,，\s]+/).map((t) => t.trim()).filter(Boolean).slice(0, 5)
+
+  // 封面：有本地文件则压缩上传 OSS，否则沿用当前值（OSS URL 或空）
+  const resolveCover = async (): Promise<string | undefined> => {
+    if (!coverFile) return coverUrl || undefined
+    let uploadFile: File = coverFile
+    if (coverFile.size > 1024 * 1024) {
+      uploadFile = await compressImage(coverFile, 1920, 0.85)
+    }
+    try {
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+      const data = await apiFetch<{ url: string }>('/upload/image', { method: 'POST', body: formData })
+      return data.url
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '封面图上传失败')
+      throw err
+    }
+  }
 
   // AI 建议标题
   const handleSuggestTitle = async () => {
@@ -125,15 +145,17 @@ export default function NewPostPage() {
     setSavingDraft(true)
     try {
       const tags = parseTags()
+      const resolvedContent = await editorRef.current?.resolveImages()
+      const cover = await resolveCover()
       const post = await api.post<Post>('/posts', {
         title: title.trim(),
-        content,
+        content: resolvedContent || content,
         channel,
         tags: tags.length > 0 ? tags : undefined,
         status: 'draft',
         aiSummary: aiSummary.trim() || undefined,
         font,
-        coverUrl: coverUrl || undefined,
+        coverUrl: cover,
       })
       toast.success('草稿已保存')
       router.replace(`/community/post/${post.id}/edit`)
@@ -157,15 +179,17 @@ export default function NewPostPage() {
     setPublishing(true)
     try {
       const tags = parseTags()
+      const resolvedContent = await editorRef.current?.resolveImages()
+      const cover = await resolveCover()
       const post = await api.post<Post>('/posts', {
         title: title.trim(),
-        content,
+        content: resolvedContent || content,
         channel,
         tags: tags.length > 0 ? tags : undefined,
         status: 'published',
         aiSummary: aiSummary.trim() || undefined,
         font,
-        coverUrl: coverUrl || undefined,
+        coverUrl: cover,
       })
       toast.success('发布成功')
       router.push(`/community/post/${post.id}`)
@@ -271,7 +295,11 @@ export default function NewPostPage() {
               variant="secondary"
               size="icon"
               className="absolute top-2 right-2 size-7 opacity-90"
-              onClick={() => setCoverUrl('')}
+              onClick={() => {
+                if (coverUrl.startsWith('blob:')) URL.revokeObjectURL(coverUrl)
+                setCoverUrl('')
+                setCoverFile(null)
+              }}
             >
               <X className="size-4" />
             </Button>
@@ -281,11 +309,10 @@ export default function NewPostPage() {
             type="button"
             variant="outline"
             size="sm"
-            disabled={coverUploading}
             onClick={() => coverInputRef.current?.click()}
           >
-            {coverUploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-            {coverUploading ? '上传中…' : '添加封面图'}
+            <ImagePlus className="size-4" />
+            添加封面图
           </Button>
         )}
         <input
@@ -293,7 +320,7 @@ export default function NewPostPage() {
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="hidden"
-          onChange={async (e) => {
+          onChange={(e) => {
             const file = e.target.files?.[0]
             if (!file) return
             if (file.size > 5 * 1024 * 1024) {
@@ -301,24 +328,17 @@ export default function NewPostPage() {
               e.target.value = ''
               return
             }
-            setCoverUploading(true)
-            try {
-              const formData = new FormData()
-              formData.append('file', file)
-              const data = await apiFetch<{ url: string }>('/upload/image', { method: 'POST', body: formData })
-              setCoverUrl(data.url)
-              toast.success('封面上传成功')
-            } catch (err) {
-              toast.error(err instanceof ApiError ? err.message : '上传失败')
-            } finally {
-              setCoverUploading(false)
-              e.target.value = ''
-            }
+            // 先本地预览，发布/保存时统一上传
+            if (coverUrl.startsWith('blob:')) URL.revokeObjectURL(coverUrl)
+            setCoverUrl(URL.createObjectURL(file))
+            setCoverFile(file)
+            e.target.value = ''
           }}
         />
       </div>
       {/* 编辑器占满剩余空间 */}
       <MarkdownEditor
+        ref={editorRef}
         value={content}
         onChange={setContent}
         height={editorHeight}

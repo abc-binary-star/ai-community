@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Bell, Loader2, Save, ShieldOff, Upload, User } from 'lucide-react'
+import { ArrowLeft, Ban, Bell, Check, Loader2, Save, ShieldOff, Upload, X } from 'lucide-react'
+import Cropper from 'react-easy-crop'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,28 @@ import { CommunityShell } from '@/app/community/components/community-shell'
 import { cn, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { NotificationPreference, Paginated, PublicUser, User as UserType } from 'shared'
+
+// 裁剪图片为 Blob：使用 Canvas 从原图截取选定区域，输出 256x256 PNG
+async function cropImageToBlob(
+  imageSrc: string,
+  pixelCrop: { x: number; y: number; width: number; height: number },
+): Promise<Blob> {
+  const image = new Image()
+  image.src = imageSrc
+  await new Promise((resolve) => { image.onload = resolve })
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(
+    image,
+    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
+    0, 0, 256, 256,
+  )
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob!), 'image/png')
+  })
+}
 
 // 轻量开关组件：蓝色圆角滑块
 function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -55,6 +78,10 @@ export default function SettingsPage() {
   const [bio, setBio] = useState(user?.bio || '')
   const [avatarUploading, setAvatarUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [cropImage, setCropImage] = useState<string | null>(null)
+  const [crop, setCrop] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
   const mutation = useMutation({
     mutationFn: (data: { avatar: string; displayName: string; bio: string }) =>
@@ -104,6 +131,10 @@ export default function SettingsPage() {
   })
   const updatePref = (patch: Partial<NotificationPreference>) => prefsMutation.mutate(patch)
 
+  const onCropComplete = useCallback((_area: unknown, areaPixels: { x: number; y: number; width: number; height: number }) => {
+    setCroppedAreaPixels(areaPixels)
+  }, [])
+
   if (!hydrated) {
     return (
       <CommunityShell>
@@ -132,6 +163,46 @@ export default function SettingsPage() {
     mutation.mutate({ avatar, displayName, bio })
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('图片文件太大，最多 5MB')
+      e.target.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setCropImage(reader.result as string)
+      setCrop({ x: 0, y: 0 })
+      setZoom(1)
+      setCroppedAreaPixels(null)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleCropConfirm = async () => {
+    if (!cropImage || !croppedAreaPixels) return
+    setAvatarUploading(true)
+    try {
+      const blob = await cropImageToBlob(cropImage, croppedAreaPixels)
+      const formData = new FormData()
+      formData.append('file', blob, 'avatar.png')
+      const data = await apiFetch<{ url: string }>('/upload/avatar', {
+        method: 'POST',
+        body: formData,
+      })
+      setAvatar(data.url)
+      toast.success('头像上传成功')
+      setCropImage(null)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : '上传失败')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
   return (
     <CommunityShell>
       <div className="mx-auto max-w-2xl space-y-6">
@@ -147,7 +218,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>头像</CardTitle>
-                <CardDescription>上传本地图片作为头像，支持 JPG/PNG/WebP/GIF，最大 2MB</CardDescription>
+                <CardDescription>上传本地图片作为头像，支持 JPG/PNG/WebP/GIF，最大 5MB</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
@@ -163,31 +234,7 @@ export default function SettingsPage() {
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/gif"
                       className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        if (file.size > 2 * 1024 * 1024) {
-                          toast.error('图片文件太大，最多 2MB')
-                          e.target.value = ''
-                          return
-                        }
-                        setAvatarUploading(true)
-                        try {
-                          const formData = new FormData()
-                          formData.append('file', file)
-                          const data = await apiFetch<{ url: string }>('/upload/avatar', {
-                            method: 'POST',
-                            body: formData,
-                          })
-                          setAvatar(data.url)
-                          toast.success('头像上传成功')
-                        } catch (err) {
-                          toast.error(err instanceof ApiError ? err.message : '上传失败')
-                        } finally {
-                          setAvatarUploading(false)
-                          e.target.value = ''
-                        }
-                      }}
+                      onChange={handleFileSelect}
                     />
                     <Button
                       type="button"
@@ -395,6 +442,43 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
       </div>
+
+      {/* 头像裁剪弹窗 */}
+      {cropImage && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-4">
+          <div className="mb-4 w-full max-w-sm">
+            <div className="relative h-80 w-full rounded-lg overflow-hidden bg-black">
+              <Cropper
+                image={cropImage}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCropImage(null)}
+              disabled={avatarUploading}
+            >
+              <X className="size-4" />
+              取消
+            </Button>
+            <Button onClick={handleCropConfirm} disabled={avatarUploading}>
+              {avatarUploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              {avatarUploading ? '上传中…' : '确认上传'}
+            </Button>
+          </div>
+        </div>
+      )}
     </CommunityShell>
   )
 }

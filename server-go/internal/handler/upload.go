@@ -19,8 +19,8 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-// 最大头像文件 2MB
-const maxAvatarSize = 2 << 20
+// 最大头像文件 5MB
+const maxAvatarSize = 5 << 20
 
 // 最大帖子图片 5MB
 const maxImageSize = 5 << 20
@@ -60,7 +60,7 @@ func UploadAvatar(ctx context.Context, c *app.RequestContext) {
 	}
 
 	if fileHeader.Size > maxAvatarSize {
-		response.BadRequest(c, "图片文件太大，最多 2MB")
+		response.BadRequest(c, "图片文件太大，最多 5MB")
 		return
 	}
 
@@ -85,29 +85,22 @@ func UploadAvatar(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 解码图片
-	img, err := imaging.Decode(bytes.NewReader(buf))
-	if err != nil {
-		response.BadRequest(c, "图片解码失败，请检查文件是否损坏")
-		return
-	}
-
-	// 裁剪为正方形（居中裁剪），缩放到 256x256
-	avatarImg := imaging.Fill(img, 256, 256, imaging.Center, imaging.Lanczos)
-
-	// 编码为 PNG 格式（支持透明度，适合头像）
-	var imgBuf bytes.Buffer
-	if err := imaging.Encode(&imgBuf, avatarImg, imaging.PNG); err != nil {
-		log.Printf("[Upload] PNG 编码失败: %v", err)
-		response.Error(c, consts.StatusInternalServerError, "图片处理失败")
-		return
+	// 根据 MIME 类型确定扩展名
+	ext := "jpg"
+	switch mime {
+	case "image/png":
+		ext = "png"
+	case "image/webp":
+		ext = "webp"
+	case "image/gif":
+		ext = "gif"
 	}
 
 	// 生成存储 key
-	key := storage.GenerateKey("avatar", "png")
+	key := storage.GenerateKey("avatar", ext)
 
-	// 保存到存储
-	url, err := storage.Get().SaveFile(ctx, &imgBuf, key)
+	// 直接上传到存储（前端已裁剪，无需后端再处理）
+	url, err := storage.Get().SaveFile(ctx, bytes.NewReader(buf), key)
 	if err != nil {
 		log.Printf("[Upload] 保存文件失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "文件保存失败")
@@ -119,10 +112,8 @@ func UploadAvatar(ctx context.Context, c *app.RequestContext) {
 	imgRecord := &model.Image{
 		UserID:   userID,
 		URL:      url,
-		Width:    256,
-		Height:   256,
-		Size:     int64(imgBuf.Len()),
-		MimeType: "image/png",
+		Size:     fileHeader.Size,
+		MimeType: mime,
 		Purpose:  "avatar",
 	}
 	if err := dal.DB.Create(imgRecord).Error; err != nil {

@@ -79,8 +79,11 @@ func main() {
 	// 初始化存储服务
 	storage.Init(cfg)
 
-	// 创建 Hertz 服务器
-	h := server.Default(server.WithHostPorts(":" + cfg.Port))
+	// 创建 Hertz 服务器（增大请求体限制到 10MB，支持图片上传）
+	h := server.Default(
+		server.WithHostPorts(":"+cfg.Port),
+		server.WithMaxRequestBodySize(10 << 20),
+	)
 
 	// 注册路由
 	router.Register(h, cfg)
