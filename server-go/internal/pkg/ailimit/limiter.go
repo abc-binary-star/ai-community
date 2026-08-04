@@ -57,7 +57,7 @@ func DefaultConfig() Config {
 		GlobalDailyTokenLimit: 2_000_000,
 		FeatureConfigs: map[Feature]FeatureConfig{
 			FeatureSuggestTitle:  {MaxPerMinute: 10, MaxPerDay: 100},
-			FeatureRewrite:       {MaxPerMinute: 5, MaxPerDay: 50},
+			FeatureRewrite:       {MaxPerMinute: 10, MaxPerDay: 50},
 			FeatureSummarize:     {MaxPerMinute: 10, MaxPerDay: 100},
 			FeatureVoicePolish:   {MaxPerMinute: 5, MaxPerDay: 50},
 			FeatureSuggestTags:   {MaxPerMinute: 10, MaxPerDay: 100},

@@ -433,7 +433,7 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	}
 	if req.Content != nil {
 		contentLen := len([]rune(*req.Content))
-		if contentLen > 30000 || (contentLen < 1 && !isDraft) {
+		if contentLen > 40000 || (contentLen < 1 && !isDraft) {
 			return nil, ErrPostInvalidInput
 		}
 	}

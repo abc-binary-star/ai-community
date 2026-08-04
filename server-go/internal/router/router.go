@@ -66,6 +66,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	ai := h.Group("/api/ai", middleware.Auth())
 	ai.POST("/suggest-title", middleware.AILimit(ailimit.FeatureSuggestTitle), handler.SuggestTitle)
 	ai.POST("/rewrite", middleware.AILimit(ailimit.FeatureRewrite), handler.Rewrite)
+	ai.POST("/rewrite-stream", handler.RewriteStream)
 	ai.POST("/summarize", middleware.AILimit(ailimit.FeatureSummarize), handler.Summarize)
 	ai.POST("/voice-polish", middleware.AILimit(ailimit.FeatureVoicePolish), handler.VoicePolish)
 	ai.POST("/transcribe", middleware.AILimit(ailimit.FeatureTranscribe), handler.Transcribe)

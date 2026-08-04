@@ -74,8 +74,8 @@ func CreatePost(ctx context.Context, c *app.RequestContext) {
 			response.BadRequest(c, "标题长度需在 100 字以内")
 			return
 		}
-		if len([]rune(req.Content)) > 30000 {
-			response.BadRequest(c, "内容长度需在 30000 字以内")
+		if len([]rune(req.Content)) > 40000 {
+			response.BadRequest(c, "内容长度需在 40000 字以内")
 			return
 		}
 	} else {
@@ -83,8 +83,8 @@ func CreatePost(ctx context.Context, c *app.RequestContext) {
 			response.BadRequest(c, "标题长度需在 1-100 字之间")
 			return
 		}
-		if len([]rune(req.Content)) < 1 || len([]rune(req.Content)) > 30000 {
-			response.BadRequest(c, "内容长度需在 1-30000 字之间")
+		if len([]rune(req.Content)) < 1 || len([]rune(req.Content)) > 40000 {
+			response.BadRequest(c, "内容长度需在 1-40000 字之间")
 			return
 		}
 	}

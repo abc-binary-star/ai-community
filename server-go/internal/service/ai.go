@@ -77,8 +77,8 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 	}
 
 	truncated := target
-	if runes := []rune(truncated); len(runes) > 15000 {
-		truncated = string(runes[:15000])
+	if runes := []rune(truncated); len(runes) > 40000 {
+		truncated = string(runes[:40000])
 	}
 
 	styleDesc := "简洁自然"
@@ -144,11 +144,54 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 	return indentPlainParagraphs(text), nil
 }
 
+// RewriteChunk 润色单个分片。与 Rewrite 的全文润色用相同的 system prompt，
+// 但提示 AI 这是文章的一部分，需保持上下文连贯。
+func (s *AIService) RewriteChunk(ctx context.Context, userID, content, style string, index, total int) (string, error) {
+	styleDesc := "简洁自然"
+	switch style {
+	case "formal":
+		styleDesc = "正式严谨"
+	case "casual":
+		styleDesc = "口语轻松"
+	case "friendly":
+		styleDesc = "亲和友好"
+	}
+
+	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文章的第 %d/%d 部分，风格为%s。
+
+要求：
+1. 修正错别字和语病，确保用词准确
+2. 优化句子结构和表达流畅度，使行文更自然
+3. 整理文本格式：合理使用标题、分段、列表等 Markdown 元素
+4. 优化排版：段落间用空行分隔
+5. 适度使用加粗强调重点
+6. 保持原意不变，不改写事实内容
+7. 保留代码块、链接、图片等 Markdown 元素
+8. 不要加任何前言或后语，直接输出润色后的内容`, index+1, total, styleDesc)
+
+	text, err := ai.Chat(ctx, ai.ChatRequest{
+		System:      systemPrompt,
+		User:        content,
+		MaxTokens:   8000,
+		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "rewrite",
+	})
+	if err != nil {
+		log.Printf("[AI/RewriteChunk] part %d/%d failed: %v", index+1, total, err)
+		return "", err
+	}
+	if text == "" {
+		return "", fmt.Errorf("AI 润色结果为空（第 %d 部分）", index+1)
+	}
+	return indentPlainParagraphs(text), nil
+}
+
 // Summarize 根据帖子内容生成摘要（1-2 句话，供列表卡片展示）
 func (s *AIService) Summarize(ctx context.Context, userID, content string) (string, error) {
 	truncated := content
-	if runes := []rune(truncated); len(runes) > 15000 {
-		truncated = string(runes[:15000])
+	if runes := []rune(truncated); len(runes) > 40000 {
+		truncated = string(runes[:40000])
 	}
 
 	systemPrompt := `你是一个社区帖子摘要助手。根据帖子内容，生成一句话摘要。
@@ -181,8 +224,8 @@ func (s *AIService) Summarize(ctx context.Context, userID, content string) (stri
 // target="comment" 时精简为评论风格；target="paragraph" 时展开为结构化段落。
 func (s *AIService) VoicePolish(ctx context.Context, userID, content, style, target string) (string, error) {
 	truncated := content
-	if runes := []rune(truncated); len(runes) > 15000 {
-		truncated = string(runes[:15000])
+	if runes := []rune(truncated); len(runes) > 40000 {
+		truncated = string(runes[:40000])
 	}
 
 	styleDesc := "简洁自然"

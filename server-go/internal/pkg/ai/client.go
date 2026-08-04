@@ -39,7 +39,7 @@ type ChatRequest struct {
 	MaxTokens int
 	// Temperature 采样温度，默认 0.3
 	Temperature float64
-	// Timeout 单次请求超时，默认 60s
+	// Timeout 单次请求超时，默认 180s（长文本润色/摘要需要较长时间）
 	Timeout time.Duration
 	// UserID 调用者用户 ID（必填，用于限制检查和用量追踪）
 	UserID string
@@ -79,7 +79,7 @@ func Init(key, url, mdl string) {
 	if model == "" {
 		model = "deepseek-chat"
 	}
-	httpClient = &http.Client{Timeout: 60 * time.Second}
+	httpClient = &http.Client{Timeout: 180 * time.Second}
 }
 
 // Enabled 返回 AI 网关是否已配置可用

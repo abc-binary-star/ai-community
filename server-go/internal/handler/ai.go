@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
@@ -12,6 +14,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/cloudwego/hertz/pkg/protocol/http1/resp"
 )
 
 var aiService = &service.AIService{}
@@ -28,8 +31,8 @@ func SuggestTitle(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短，至少 10 个字")
 		return
 	}
-	if len([]rune(req.Content)) > 15000 {
-		response.BadRequest(c, "内容太长，最多 15000 字")
+	if len([]rune(req.Content)) > 40000 {
+		response.BadRequest(c, "内容太长，最多 40000 字")
 		return
 	}
 
@@ -64,12 +67,12 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短")
 		return
 	}
-	if len([]rune(req.Content)) > 15000 {
-		response.BadRequest(c, "内容太长，最多 15000 字")
+	if len([]rune(req.Content)) > 40000 {
+		response.BadRequest(c, "内容太长，最多 40000 字")
 		return
 	}
-	if len([]rune(req.Selection)) > 15000 {
-		response.BadRequest(c, "选段太长，最多 15000 字")
+	if len([]rune(req.Selection)) > 40000 {
+		response.BadRequest(c, "选段太长，最多 40000 字")
 		return
 	}
 
@@ -85,6 +88,145 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	response.JSON(c, map[string]interface{}{"result": result})
+}
+
+// RewriteStream 流式润色：按段落分批发送给 AI，逐段通过 SSE 返回。
+// 适合全文润色场景，用户不用等整篇文章处理完才能看到结果。
+// POST /api/ai/rewrite-stream
+func RewriteStream(ctx context.Context, c *app.RequestContext) {
+	var req types.RewriteReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	if len([]rune(req.Content)) < 2 {
+		response.BadRequest(c, "内容太短")
+		return
+	}
+	if len([]rune(req.Content)) > 40000 {
+		response.BadRequest(c, "内容太长，最多 40000 字")
+		return
+	}
+	// 流式润色仅支持全文，选段走原接口
+	if req.Selection != "" {
+		response.BadRequest(c, "选段润色请使用 /api/ai/rewrite")
+		return
+	}
+	if !ai.Enabled() {
+		response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
+		return
+	}
+
+	userID := middleware.GetCurrentUserID(c)
+
+	// SSE 头
+	c.SetStatusCode(consts.StatusOK)
+	c.SetContentType("text/event-stream")
+	c.Response.Header.Set("Cache-Control", "no-cache")
+	c.Response.Header.Set("Connection", "keep-alive")
+	c.Response.Header.Set("X-Accel-Buffering", "no")
+
+	// 劫持 writer 走 chunked 编码，否则 Hertz 会缓冲整个响应体，
+	// 客户端要等全部段落跑完才收到数据，流式就失去意义。
+	c.Response.HijackWriter(resp.NewChunkedBodyWriter(&c.Response, c.GetWriter()))
+
+	// 按 \n\n（空行）切分段落块，每块不超过 5000 字
+	chunks := splitForRewrite(req.Content, 5000)
+
+	for i, chunk := range chunks {
+		result, err := aiService.RewriteChunk(ctx, userID, chunk, req.Style, i, len(chunks))
+		if err != nil {
+			writeSSE(c, map[string]interface{}{"error": err.Error()})
+			return
+		}
+		writeSSE(c, map[string]interface{}{
+			"index":  i,
+			"total":  len(chunks),
+			"result": result,
+		})
+	}
+	writeSSE(c, map[string]interface{}{"done": true})
+}
+
+// splitForRewrite 按空行切分文本，保证每块不超过 maxChars 个 rune。
+// 单段超长时在句号/换行处硬切。
+func splitForRewrite(text string, maxChars int) []string {
+	paragraphs := strings.Split(text, "\n\n")
+	var chunks []string
+	var current strings.Builder
+	currentLen := 0
+
+	flush := func() {
+		if currentLen > 0 {
+			chunks = append(chunks, current.String())
+			current.Reset()
+			currentLen = 0
+		}
+	}
+
+	for _, para := range paragraphs {
+		paraRunes := len([]rune(para))
+		// 单段就超限：在句号处拆分
+		if paraRunes > maxChars {
+			flush()
+			for _, sub := range splitLongParagraph(para, maxChars) {
+				chunks = append(chunks, sub)
+			}
+			continue
+		}
+		if currentLen+paraRunes+2 > maxChars {
+			flush()
+		}
+		if currentLen > 0 {
+			current.WriteString("\n\n")
+			currentLen += 2
+		}
+		current.WriteString(para)
+		currentLen += paraRunes
+	}
+	flush()
+	return chunks
+}
+
+// splitLongParagraph 在句号/问号/感叹号/换行处切分超长段落
+func splitLongParagraph(para string, maxChars int) []string {
+	runes := []rune(para)
+	var chunks []string
+	for start := 0; start < len(runes); start += maxChars {
+		end := start + maxChars
+		if end >= len(runes) {
+			chunks = append(chunks, string(runes[start:]))
+			break
+		}
+		// 在 maxChars 附近往前找句末标点
+		cutAt := end
+		for j := end; j > start+maxChars/2; j-- {
+			if runes[j-1] == '。' || runes[j-1] == '？' || runes[j-1] == '！' ||
+				runes[j-1] == '.' || runes[j-1] == '\n' || runes[j-1] == '；' {
+				cutAt = j
+				break
+			}
+		}
+		chunks = append(chunks, string(runes[start:cutAt]))
+		start = cutAt - maxChars // for 循环会 += maxChars，这里补偿
+	}
+	return chunks
+}
+
+// writeSSE 写一条 SSE 事件并立即 flush，保证客户端能马上收到这一段
+func writeSSE(c *app.RequestContext, data map[string]interface{}) {
+	body, _ := json.Marshal(data)
+	payload := make([]byte, 0, len(body)+8)
+	payload = append(payload, "data: "...)
+	payload = append(payload, body...)
+	payload = append(payload, '\n', '\n')
+	if _, err := c.Write(payload); err != nil {
+		log.Printf("[AI/RewriteStream] write failed: %v", err)
+		return
+	}
+	if err := c.Flush(); err != nil {
+		log.Printf("[AI/RewriteStream] flush failed: %v", err)
+	}
 }
 
 // Transcribe 语音转文字
@@ -137,8 +279,8 @@ func Summarize(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "输入不合法")
 		return
 	}
-	if len([]rune(req.Content)) > 30000 {
-		response.BadRequest(c, "内容太长，最多 30000 字")
+	if len([]rune(req.Content)) > 40000 {
+		response.BadRequest(c, "内容太长，最多 40000 字")
 		return
 	}
 
@@ -168,8 +310,8 @@ func VoicePolish(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "内容太短")
 		return
 	}
-	if len([]rune(req.Content)) > 15000 {
-		response.BadRequest(c, "内容太长，最多 15000 字")
+	if len([]rune(req.Content)) > 40000 {
+		response.BadRequest(c, "内容太长，最多 40000 字")
 		return
 	}
 

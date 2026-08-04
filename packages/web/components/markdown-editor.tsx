@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useImperativeHandle, forwardRef, type TextareaHTMLAttributes } from 'react'
 import {
-  Bold, Code, Code2, Eraser, Eye, EyeOff, Heading, Image as ImageIcon, Link2,
+  Bold, Code, Code2, Eraser, Eye, EyeOff, FileText, Heading, Image as ImageIcon, Link2,
   List, ListOrdered, ListChecks, Mic, Quote, Sparkles, Loader2, Strikethrough,
   Table as TableIcon, Type, Undo2,
 } from 'lucide-react'
@@ -16,9 +16,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { api, apiFetch, ApiError } from '@/lib/api'
+import { api, apiFetch, apiFetchStream, ApiError } from '@/lib/api'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { extractExternalImageUrls, hasMdImage, normalizeMdImages } from '@/lib/markdown-images'
+import { convertDocxToMarkdown, isDocxFile, isLegacyDocFile } from '@/lib/docx-import'
 import { FONT_OPTIONS, fontFamily } from '@/lib/font-options'
 import { VoiceComposer } from '@/app/community/components/voice-composer'
 
@@ -59,10 +60,21 @@ export function compressImage(file: File, maxSize: number, quality: number): Pro
         const canvas = document.createElement('canvas')
         canvas.width = width
         canvas.height = height
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, width, height)
+        const ctx = canvas.getContext('2d')
+        // 取不到 2d 上下文（如超大尺寸导致 canvas 分配失败）时退回原文件
+        if (!ctx) {
+          resolve(file)
+          return
+        }
+        try {
+          ctx.drawImage(img, 0, 0, width, height)
+        } catch {
+          resolve(file)
+          return
+        }
         canvas.toBlob(
-          (blob) => resolve(new File([blob!], 'compressed.jpg', { type: 'image/jpeg' })),
+          // toBlob 可能回传 null（编码失败），此时用原文件兜底而不是抛错
+          (blob) => resolve(blob ? new File([blob], 'compressed.jpg', { type: 'image/jpeg' }) : file),
           'image/jpeg',
           quality,
         )
@@ -123,12 +135,22 @@ interface PastedImage {
   source: File | string // string 为可直引用的外链图片地址
 }
 
+// 本地文档（Word/WPS）复制时，剪贴板 HTML 里的图片是 file:// 临时文件路径。
+// 浏览器禁止网页读取 file://，这类图片无法恢复，只能计数后提示用户改用 .docx 导入
+function isUnreadableImageSrc(src: string): boolean {
+  const s = src.trim()
+  if (!s) return false
+  return !/^(data:image\/|https?:\/\/|blob:)/i.test(s)
+}
+
 // 解析 Word/网页复制的 HTML：提取内嵌 base64 图片与外链图片，同时转为保留换行的纯文本。
-// file:/// 等浏览器无法读取的图片直接丢弃。
-function parseRichHtml(html: string): { text: string; images: PastedImage[] } {
+// file:/// 等浏览器无法读取的图片直接丢弃，数量记在 skippedLocal 里供上层提示。
+function parseRichHtml(html: string): { text: string; images: PastedImage[]; skippedLocal: number } {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const images: PastedImage[] = []
   const seenSrc = new Set<string>()
+  // 无法读取的本地图片地址（去重后计数）
+  const unreadable = new Set<string>()
 
   // 尝试把图片源加入列表；返回是否成功加入（成功时占位符为列表最后一个）
   const addSource = (src: string): boolean => {
@@ -154,6 +176,7 @@ function parseRichHtml(html: string): { text: string; images: PastedImage[] } {
       const placeholder = images[images.length - 1].placeholder
       img.parentNode?.replaceChild(doc.createTextNode(placeholder), img)
     } else {
+      if (isUnreadableImageSrc(src)) unreadable.add(src.trim())
       img.parentNode?.removeChild(img)
     }
   })
@@ -168,7 +191,15 @@ function parseRichHtml(html: string): { text: string; images: PastedImage[] } {
     }
   }
 
-  return { text: htmlToText(doc.body), images }
+  // 兜底：Word 的图片有时放在 <v:imagedata src="file://..."> 或条件注释里，
+  // DOMParser 不一定暴露成 <img>，用正则全量扫一遍本地图片路径补计数
+  const localRefs = html.match(/(?:src|href)=["'](file:\/\/[^"']+)["']/gi) || []
+  for (const ref of localRefs) {
+    const src = ref.replace(/^(?:src|href)=["']/i, '').replace(/["']$/, '')
+    if (/\.(png|jpe?g|gif|webp|bmp|tiff?|emf|wmf)$/i.test(src)) unreadable.add(src)
+  }
+
+  return { text: htmlToText(doc.body), images, skippedLocal: unreadable.size }
 }
 
 // 在光标位置插入文本，支持选区替换
@@ -277,17 +308,25 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   const previewRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const docxInputRef = useRef<HTMLInputElement>(null)
   // 本地图片：blobUrl -> File，编辑时即时预览，发帖时批量上传
   const localImagesRef = useRef<Map<string, File>>(new Map())
   const valueRef = useRef(value)
   valueRef.current = value
   const [polishing, setPolishing] = useState(false)
+  // 流式润色进度：done 为已完成段数，total 为总段数
+  const [polishProgress, setPolishProgress] = useState<{ done: number; total: number } | null>(null)
   const [preview, setPreview] = useState(false)
   // 记录采纳前的原始内容，支持「恢复原稿」
   const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null)
   // 语音输入浮层
   const [voiceOpen, setVoiceOpen] = useState(false)
 
+  // 字数统计：按 Unicode 字符计数，与后端 len([]rune) 一致
+  const charCount = [...value].length
+
+  // Word 文档解析中的提示态
+  const [importing, setImporting] = useState(false)
   // 外站图片转存中的提示态
   const [mirroring, setMirroring] = useState(false)
   // 已尝试转存过的外站地址，避免重复请求（含失败的，失败不再自动重试）
@@ -462,6 +501,71 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     return true
   }
 
+  // 导入 .docx：整篇转 markdown 后在光标处插入，图片走既有的延迟上传链路。
+  // 这是保留 Word 全部图片的可靠路径——粘贴时图片是 file:// 路径，网页读不到
+  const importDocx = async (file: File) => {
+    if (isLegacyDocFile(file) && !isDocxFile(file)) {
+      toast.error('不支持 .doc 格式，请在 Word/WPS 中另存为 .docx 后重试')
+      return
+    }
+    setImporting(true)
+    try {
+      const { markdown, images, skippedTypes } = await convertDocxToMarkdown(file)
+      if (!markdown && images.length === 0) {
+        toast.error('文档为空或无法解析')
+        return
+      }
+
+      let text = markdown
+      for (const img of images) {
+        const url = await uploadImage(img.file)
+        // 上传失败时清掉占位符，避免残留在正文里
+        text = text.replaceAll(img.placeholder, url ?? '')
+      }
+      text = text.replace(/!\[[^\]]*\]\(\s*\)/g, '').replace(/\n{3,}/g, '\n\n').trim()
+
+      const ta = textareaRef.current
+      const current = ta ? ta.value : valueRef.current
+      const start = ta ? ta.selectionStart : current.length
+      const end = ta ? ta.selectionEnd : current.length
+      const prefix = current.slice(0, start)
+      const needBreak = prefix.length > 0 && !prefix.endsWith('\n\n')
+      const insertion = (needBreak ? '\n\n' : '') + text + '\n'
+      onChange(prefix + insertion + current.slice(end))
+      requestAnimationFrame(() => {
+        if (!ta) return
+        ta.focus()
+        const pos = start + insertion.length
+        ta.setSelectionRange(pos, pos)
+      })
+
+      toast.success(images.length > 0 ? `已导入文档，含 ${images.length} 张图片` : '已导入文档')
+      if (skippedTypes.length > 0) {
+        toast.warning(`${skippedTypes.length} 类图片无法导入（${skippedTypes.join('、')}），Word 图表/公式需先转成图片`)
+      }
+    } catch (err) {
+      console.error('[DocxImport] 导入失败:', err)
+      // 把真实原因透出来，笼统提示会让人误以为文件本身有问题
+      const reason = err instanceof Error && err.message ? err.message : '未知错误'
+      toast.error('Word 文档导入失败', { description: reason })
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  // 拖拽入口：.docx 走文档导入，其余按图片处理
+  const handleDrop = async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.dataTransfer.files)
+    const docx = files.find((f) => isDocxFile(f) || isLegacyDocFile(f))
+    if (docx) {
+      e.preventDefault()
+      await importDocx(docx)
+      return
+    }
+    const handled = await handleImageFiles(files)
+    if (handled) e.preventDefault()
+  }
+
   // 处理粘贴：兼容 Word/网页复制的「文字 + 图片」。
   // 图片来源：① HTML 内嵌 base64 图片；② HTML 中可直接引用的外链图片；③ 剪贴板文件项（截图/复制图片文件）；
   // ④ B站/贴吧等复制时以 markdown 文本（BT 包裹 url 或 ![](url)）形式存在的图片（无 img、无文件项）。
@@ -477,6 +581,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     // B站/贴吧复制时图片以 markdown 文本形式存在（无 <img> 标签、无文件项），需识别
     const textHasImages = hasMdImage(parsed?.text ?? '') || hasMdImage(plainText)
+
+    // 本地 Word/WPS 文档的图片在剪贴板里是 file:// 临时路径，浏览器无权读取。
+    // 静默丢弃会让人以为编辑器有问题，这里明确告知并指路 .docx 导入。
+    // Mac 上 Word 常把图片同时放进文件项，已取到的部分要从丢失数里扣掉，避免虚报
+    const lost = (parsed?.skippedLocal ?? 0) - fileImages.length
+    if (lost > 0) {
+      toast.warning(`${lost} 张图片来自本地文档，浏览器无法读取`, {
+        description: '改用「导入 Word」直接读 .docx 文件，可完整保留图片',
+        duration: 8000,
+        action: { label: '导入 Word', onClick: () => docxInputRef.current?.click() },
+      })
+    }
 
     // 没有任何图片来源时不拦截，保持浏览器默认粘贴（纯文本）。
     // 注意：Word 可能把图片全放文件项、HTML 为空（parsed 为 null），此时也必须拦截
@@ -525,13 +641,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     void mirrorExternalImages(newValue)
   }, [onChange, mirrorExternalImages])
 
-  // AI 润色：有选区时润色选段，否则润色全文，完成后直接应用结果
+  // AI 润色：有选区时走单次请求；全文按块流式返回，先到的段落先展示
   // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
   const handlePolish = async () => {
     const ta = textareaRef.current
     if (!ta) return
 
-    // 因为 onMouseDown preventDefault 了，textarea 没有失焦，直接读取选区
     const start = ta.selectionStart
     const end = ta.selectionEnd
     const selection = start !== end ? value.slice(start, end) : ''
@@ -547,23 +662,60 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     setPolishing(true)
     try {
-      const data = await api.post<{ result: string }>('/ai/rewrite', {
-        content: value,
-        selection: selection || undefined,
-        style: '',
-      })
-      // 记录润色前的内容，支持「恢复原稿」
       setOriginalSnapshot(value)
       if (selection) {
+        const data = await api.post<{ result: string }>('/ai/rewrite', {
+          content: value,
+          selection,
+          style: '',
+        })
         onChange(value.slice(0, start) + data.result + value.slice(end))
-      } else {
-        onChange(data.result)
+        toast.success('已应用 AI 润色，可点「恢复原稿」撤销')
+        return
       }
-      toast.success('已应用 AI 润色，可点「恢复原稿」撤销')
+
+      const response = await apiFetchStream('/ai/rewrite-stream', {
+        method: 'POST',
+        body: JSON.stringify({ content: value, style: '' }),
+      })
+      if (!response.body) throw new Error('流式响应不可用')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let result = ''
+      let received = 0
+
+      const consume = (text: string) => {
+        buffer += text
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+        for (const event of events) {
+          const line = event.split('\n').find((item) => item.startsWith('data: '))
+          if (!line) continue
+          const data = JSON.parse(line.slice(6)) as { result?: string; error?: string; index?: number; total?: number }
+          if (data.error) throw new Error(data.error)
+          if (!data.result) continue
+          result += (received > 0 ? '\n\n' : '') + data.result
+          received += 1
+          onChange(result)
+          setPolishProgress({ done: received, total: data.total ?? received })
+        }
+      }
+
+      while (true) {
+        const { value: chunk, done } = await reader.read()
+        if (done) break
+        consume(decoder.decode(chunk, { stream: true }))
+      }
+      consume(decoder.decode())
+      if (!result) throw new Error('AI 未返回润色结果')
+      toast.success('已完成 AI 润色，可点「恢复原稿」撤销')
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'AI 润色失败')
+      toast.error(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'AI 润色失败')
     } finally {
       setPolishing(false)
+      setPolishProgress(null)
     }
   }
 
@@ -637,28 +789,35 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
+            size="icon"
+            className="size-8"
             onClick={() => setPreview((v) => !v)}
             title={preview ? '关闭预览' : '开启分屏预览，左侧编辑右侧实时渲染'}
             aria-pressed={preview}
           >
-            {preview ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-            {preview ? '关闭预览' : '预览'}
+            {preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </Button>
-          <div className="mx-1 h-5 w-px bg-border" />
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
+            size="icon"
+            className="size-8"
+            disabled={importing}
+            onClick={() => docxInputRef.current?.click()}
+            title={importing ? '正在解析…' : '导入 .docx 文档，完整保留文字与图片（也可直接把文件拖进编辑区）'}
+          >
+            {importing ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
             onClick={() => setVoiceOpen(true)}
             title="语音输入，AI 润色后插入"
           >
-            <Mic className="size-3.5" />
-            语音
+            <Mic className="size-4" />
           </Button>
-          <div className="mx-1 h-5 w-px bg-border" />
           <Button
             type="button"
             variant="ghost"
@@ -673,14 +832,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             title="选中文字后点击只润色选段，未选中润色全文"
           >
             {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            AI 润色
+            {polishing
+              ? polishProgress
+                ? `润色中 ${polishProgress.done}/${polishProgress.total}`
+                : '润色中…'
+              : 'AI 润色'}
           </Button>
-          <div className="mx-1 h-5 w-px bg-border" />
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-destructive"
             disabled={!value.trim()}
             onClick={() => {
               if (!value.trim()) return
@@ -692,21 +854,47 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             }}
             title="清空全部内容"
           >
-            <Eraser className="size-3.5" />
-            清空
+            <Eraser className="size-4" />
           </Button>
           {mirroring && (
-            <span className="flex items-center gap-1.5 pl-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5 pl-1 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" />
-              正在转存外站图片…
+              转存中…
             </span>
           )}
-          {toolbarEnd && (
-            <div className="ml-auto flex items-center gap-2 pl-2">
-              {toolbarEnd}
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-2 pl-2">
+            <span className={cn(
+              'text-xs tabular-nums whitespace-nowrap',
+              charCount > 40000 ? 'text-destructive font-medium' : 'text-muted-foreground',
+            )}>
+              {charCount.toLocaleString()}/40,000
+            </span>
+            {toolbarEnd}
+          </div>
         </div>
+        {/* 流式润色进度条：跟随分段完成度增长，替代弹窗提示 */}
+        {polishing && (
+          <div
+            className="h-0.5 w-full overflow-hidden bg-muted"
+            role="progressbar"
+            aria-label="AI 润色进度"
+            aria-valuemin={0}
+            aria-valuemax={polishProgress?.total ?? 100}
+            aria-valuenow={polishProgress?.done ?? 0}
+          >
+            <div
+              className={cn(
+                'h-full bg-primary transition-all duration-500',
+                !polishProgress && 'w-1/4 animate-pulse',
+              )}
+              style={
+                polishProgress
+                  ? { width: `${Math.round((polishProgress.done / polishProgress.total) * 100)}%` }
+                  : undefined
+              }
+            />
+          </div>
+        )}
         {/* 编辑区：preview 开启时分屏，左编辑右预览 */}
         {preview ? (
           <div className="flex divide-x divide-border" style={{ height }}>
@@ -715,10 +903,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               value={value}
               onChange={(e) => handleTextareaChange(e.target.value)}
               onScroll={() => syncScroll('editor')}
-              onDrop={async (e) => {
-                const handled = await handleImageFiles(Array.from(e.dataTransfer.files))
-                if (handled) e.preventDefault()
-              }}
+              onDrop={handleDrop}
               onDragOver={(e) => {
                 if (e.dataTransfer.types.includes('Files')) {
                   e.preventDefault()
@@ -749,10 +934,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             ref={textareaRef}
             value={value}
             onChange={(e) => handleTextareaChange(e.target.value)}
-            onDrop={async (e) => {
-              const handled = await handleImageFiles(Array.from(e.dataTransfer.files))
-              if (handled) e.preventDefault()
-            }}
+            onDrop={handleDrop}
             onDragOver={(e) => {
               if (e.dataTransfer.types.includes('Files')) {
                 e.preventDefault()
@@ -821,6 +1003,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           const url = await uploadImage(file)
           if (url) insertImageAtCursor(url)
           e.target.value = ''
+        }}
+      />
+      <input
+        ref={docxInputRef}
+        type="file"
+        accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0]
+          // 先清空再解析：同一文件二次选择也能触发 onChange
+          e.target.value = ''
+          if (file) await importDocx(file)
         }}
       />
     </div>

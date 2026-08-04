@@ -113,6 +113,21 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return data as T
 }
 
+export async function apiFetchStream(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = useAuthStore.getState().token
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> | undefined),
+    'Content-Type': 'application/json',
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new ApiError(data?.error || `请求失败 (${res.status})`, res.status)
+  }
+  return res
+}
+
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
