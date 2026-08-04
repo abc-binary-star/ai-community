@@ -126,10 +126,29 @@ export interface Channel {
   label: string
   description: string
   icon: string
+  categoryId: string | null
   sortOrder: number
   createdBy: string
   createdAt: string
   updatedAt: string
+}
+
+export interface ChannelCategory {
+  id: string
+  name: string
+  label: string
+  icon: string
+  sortOrder: number
+  createdAt: string
+}
+
+export interface ChannelCategoryWithChannels extends ChannelCategory {
+  channels: Channel[]
+}
+
+export interface ChannelTree {
+  categories: ChannelCategoryWithChannels[]
+  uncategorized: Channel[]
 }
 
 // 频道 fallback 默认值（API 不可用时使用）

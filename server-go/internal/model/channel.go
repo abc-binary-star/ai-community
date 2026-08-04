@@ -14,6 +14,7 @@ type Channel struct {
 	Label       string    `gorm:"type:varchar(50);not null" json:"label"`                    // 显示名称，如 "技术前沿"
 	Description string    `gorm:"type:text" json:"description"`                               // 频道描述
 	Icon        string    `gorm:"type:varchar(10)" json:"icon"`                               // emoji 图标
+	CategoryID  *string   `gorm:"index;type:varchar(36)" json:"categoryId"`                    // 所属分组 ID（可空）
 	SortOrder   int       `gorm:"default:0" json:"sortOrder"`                                  // 排序权重
 	CreatedBy   string    `gorm:"index" json:"createdBy"`                                      // 创建者
 	CreatedAt   time.Time `gorm:"index" json:"createdAt"`

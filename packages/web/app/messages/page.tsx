@@ -12,7 +12,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
 import { cn, formatEditedTime, getInitials } from '@/lib/utils'
-import { Navbar } from '@/app/community/components/navbar'
+import { CommunityShell } from '@/app/community/components/community-shell'
 import { toast } from 'sonner'
 import type { Conversation, Message, Paginated } from 'shared'
 
@@ -422,11 +422,10 @@ function MessagesInner() {
 
 export default function MessagesPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Navbar />
+    <CommunityShell>
       <Suspense>
         <MessagesInner />
       </Suspense>
-    </div>
+    </CommunityShell>
   )
 }

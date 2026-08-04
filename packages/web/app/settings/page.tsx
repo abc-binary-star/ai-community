@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
-import { Navbar } from '@/app/community/components/navbar'
+import { CommunityShell } from '@/app/community/components/community-shell'
 import { cn, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { NotificationPreference, Paginated, PublicUser, User as UserType } from 'shared'
@@ -104,30 +104,24 @@ export default function SettingsPage() {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <Navbar />
-        <div className="container flex-1 py-8">
-          <div className="mx-auto max-w-md py-20 text-center">
-            <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
-          </div>
+      <CommunityShell>
+        <div className="mx-auto max-w-md py-20 text-center">
+          <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </CommunityShell>
     )
   }
 
   if (!token || !user) {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <Navbar />
-        <div className="container flex-1 py-8">
-          <div className="mx-auto max-w-md py-20 text-center">
-            <p className="text-muted-foreground">请先登录</p>
-            <Button asChild className="mt-4">
-              <Link href="/login">去登录</Link>
-            </Button>
-          </div>
+      <CommunityShell>
+        <div className="mx-auto max-w-md py-20 text-center">
+          <p className="text-muted-foreground">请先登录</p>
+          <Button asChild className="mt-4">
+            <Link href="/login">去登录</Link>
+          </Button>
         </div>
-      </div>
+      </CommunityShell>
     )
   }
 
@@ -137,10 +131,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Navbar />
-      <div className="container flex-1 py-8">
-        <div className="mx-auto max-w-2xl space-y-6">
+    <CommunityShell>
+      <div className="mx-auto max-w-2xl space-y-6">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft />
@@ -353,8 +345,7 @@ export default function SettingsPage() {
               ) : null}
             </CardContent>
           </Card>
-        </div>
       </div>
-    </div>
+    </CommunityShell>
   )
 }
