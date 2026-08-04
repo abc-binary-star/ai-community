@@ -3,6 +3,9 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"errors"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -17,6 +20,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/disintegration/imaging"
+	"gorm.io/gorm"
 )
 
 // 最大头像文件 5MB
@@ -96,18 +100,29 @@ func UploadAvatar(ctx context.Context, c *app.RequestContext) {
 		ext = "gif"
 	}
 
-	// 生成存储 key
-	key := storage.GenerateKey("avatar", ext)
-
-	// 直接上传到存储（前端已裁剪，无需后端再处理）
-	url, err := storage.Get().SaveFile(ctx, bytes.NewReader(buf), key)
+	// 内容寻址去重：以内容 MD5 作为存储 key，相同图片只存一份
+	hash := md5.Sum(buf)
+	key := storage.ContentKey("avatar", ext, hex.EncodeToString(hash[:]))
+	exists, err := storage.Get().Exists(ctx, key)
 	if err != nil {
-		log.Printf("[Upload] 保存文件失败: %v", err)
+		log.Printf("[Upload] 检查头像是否存在失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "文件保存失败")
 		return
 	}
+	var url string
+	if exists {
+		url = storage.Get().URLOf(key)
+	} else {
+		// 直接上传到存储（前端已裁剪，无需后端再处理）
+		url, err = storage.Get().SaveFile(ctx, bytes.NewReader(buf), key)
+		if err != nil {
+			log.Printf("[Upload] 保存文件失败: %v", err)
+			response.Error(c, consts.StatusInternalServerError, "文件保存失败")
+			return
+		}
+	}
 
-	// 记录图片元数据
+	// 记录图片元数据（同 URL 已存在则跳过，避免重复记录）
 	userID := middleware.GetCurrentUserID(c)
 	imgRecord := &model.Image{
 		UserID:   userID,
@@ -116,8 +131,10 @@ func UploadAvatar(ctx context.Context, c *app.RequestContext) {
 		MimeType: mime,
 		Purpose:  "avatar",
 	}
-	if err := dal.DB.Create(imgRecord).Error; err != nil {
-		log.Printf("[Upload] 记录图片元数据失败: %v", err)
+	if err := dal.DB.Where("url = ?", url).First(&model.Image{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := dal.DB.Create(imgRecord).Error; err != nil {
+			log.Printf("[Upload] 记录图片元数据失败: %v", err)
+		}
 	}
 
 	// 更新用户头像
@@ -195,15 +212,28 @@ func UploadImage(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	key := storage.GenerateKey("post", ext)
-	url, err := storage.Get().SaveFile(ctx, bytes.NewReader(saveBuf), key)
+	// 内容寻址去重：以最终内容 MD5 作为存储 key，相同图片只存一份
+	hash := md5.Sum(saveBuf)
+	key := storage.ContentKey("post", ext, hex.EncodeToString(hash[:]))
+	exists, err := storage.Get().Exists(ctx, key)
 	if err != nil {
-		log.Printf("[Upload] 保存图片失败: %v", err)
+		log.Printf("[Upload] 检查图片是否存在失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "文件保存失败")
 		return
 	}
+	var url string
+	if exists {
+		url = storage.Get().URLOf(key)
+	} else {
+		url, err = storage.Get().SaveFile(ctx, bytes.NewReader(saveBuf), key)
+		if err != nil {
+			log.Printf("[Upload] 保存图片失败: %v", err)
+			response.Error(c, consts.StatusInternalServerError, "文件保存失败")
+			return
+		}
+	}
 
-	// 记录图片元数据
+	// 记录图片元数据（同 URL 已存在则跳过，避免重复记录）
 	userID := middleware.GetCurrentUserID(c)
 	imgRecord := &model.Image{
 		UserID:   userID,
@@ -214,8 +244,10 @@ func UploadImage(ctx context.Context, c *app.RequestContext) {
 		MimeType: mime,
 		Purpose:  "post",
 	}
-	if err := dal.DB.Create(imgRecord).Error; err != nil {
-		log.Printf("[Upload] 记录图片元数据失败: %v", err)
+	if err := dal.DB.Where("url = ?", url).First(&model.Image{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := dal.DB.Create(imgRecord).Error; err != nil {
+			log.Printf("[Upload] 记录图片元数据失败: %v", err)
+		}
 	}
 
 	response.JSON(c, map[string]interface{}{
