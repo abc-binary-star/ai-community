@@ -72,6 +72,73 @@ export function compressImage(file: File, maxSize: number, quality: number): Pro
   })
 }
 
+// dataURL 转 File（Word/网页复制的 HTML 中内嵌图片通常为 base64）
+function dataURLToFile(dataUrl: string): File | null {
+  try {
+    const [header, base64] = dataUrl.split(',')
+    const mime = /^data:(image\/[^;,]+)/.exec(header)?.[1] || 'image/png'
+    const bin = atob(base64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    const ext = mime.split('/')[1]?.split(';')[0] || 'png'
+    return new File([bytes], `pasted-${Date.now()}.${ext}`, { type: mime })
+  } catch {
+    return null
+  }
+}
+
+// 递归把 DOM 转成纯文本：块级元素与 <br> 后补换行，&nbsp; 转普通空格
+const BLOCK_TAGS = new Set([
+  'p', 'div', 'br', 'li', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'blockquote', 'pre', 'hr',
+])
+function htmlToText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent || '').replace(/\u00a0/g, ' ')
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return ''
+  const el = node as HTMLElement
+  const tag = el.tagName.toLowerCase()
+  let out = ''
+  for (const child of Array.from(el.childNodes)) out += htmlToText(child)
+  if (tag === 'br' || BLOCK_TAGS.has(tag)) out += '\n'
+  return out
+}
+
+interface PastedImage {
+  placeholder: string
+  source: File | string // string 为可直引用的外链图片地址
+}
+
+// 解析 Word/网页复制的 HTML：提取内嵌 base64 图片与外链图片，同时转为保留换行的纯文本。
+// file:/// 等浏览器无法读取的图片直接丢弃。
+function parseRichHtml(html: string): { text: string; images: PastedImage[] } {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const images: PastedImage[] = []
+
+  Array.from(doc.querySelectorAll('img')).forEach((img) => {
+    const src = (img.getAttribute('src') || '').trim()
+    if (src.startsWith('data:image/')) {
+      const file = dataURLToFile(src)
+      if (file) {
+        const placeholder = `@@IMG_${images.length}@@`
+        img.parentNode?.replaceChild(doc.createTextNode(placeholder), img)
+        images.push({ placeholder, source: file })
+        return
+      }
+    } else if (/^https?:\/\//i.test(src)) {
+      // 网页上的外链图片：直接复用原地址
+      const placeholder = `@@IMG_${images.length}@@`
+      img.parentNode?.replaceChild(doc.createTextNode(placeholder), img)
+      images.push({ placeholder, source: src })
+      return
+    }
+    img.parentNode?.removeChild(img)
+  })
+
+  return { text: htmlToText(doc.body), images }
+}
+
 // 在光标位置插入文本，支持选区替换
 function insertText(
   textarea: HTMLTextAreaElement,
@@ -308,6 +375,56 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     return true
   }
 
+  // 处理粘贴：兼容 Word/网页复制的「文字 + 图片」。
+  // 图片来源：① HTML 内嵌 base64 图片；② HTML 中可直接引用的外链图片；③ 剪贴板文件项（截图/复制图片文件）。
+  // 文字从 HTML 转纯文本（保留换行），避免默认粘贴丢弃图片。
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const cd = e.clipboardData
+    const html = cd.getData('text/html')
+    const parsed = html ? parseRichHtml(html) : null
+
+    // 剪贴板文件项中的图片（直接复制图片文件/截图）
+    const fileImages = Array.from(cd.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => !!f)
+
+    // 没有任何图片时不做拦截，保持浏览器默认粘贴（纯文本）
+    if (!parsed || (parsed.images.length === 0 && fileImages.length === 0)) return
+    e.preventDefault()
+
+    const ta = textareaRef.current
+    const current = ta ? ta.value : valueRef.current
+    const start = ta ? ta.selectionStart : current.length
+    const end = ta ? ta.selectionEnd : current.length
+
+    // HTML 内嵌/外链图片：按原位置替换占位符
+    let inserted = parsed.text
+    for (const img of parsed.images) {
+      const url = typeof img.source === 'string' ? img.source : await uploadImage(img.source)
+      if (!url) continue
+      inserted = inserted.replace(img.placeholder, `![图片](${url})`)
+    }
+    // 剪贴板文件图片：追加到末尾
+    for (const file of fileImages) {
+      const url = await uploadImage(file)
+      if (!url) continue
+      inserted += (inserted && !inserted.endsWith('\n') ? '\n' : '') + `![图片](${url})` + '\n'
+    }
+    // 清理未匹配的占位符，收敛多余空行
+    inserted = inserted.replace(/@@IMG_\d+@@/g, '').replace(/\n{3,}/g, '\n\n').trim()
+
+    if (!inserted) return
+    const newValue = current.slice(0, start) + inserted + current.slice(end)
+    onChange(newValue)
+    requestAnimationFrame(() => {
+      if (!ta) return
+      ta.focus()
+      const pos = start + inserted.length
+      ta.setSelectionRange(pos, pos)
+    })
+  }, [onChange])
+
   // AI 润色：有选区时润色选段，否则润色全文，完成后直接应用结果
   // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
   const handlePolish = async () => {
@@ -501,17 +618,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                   e.preventDefault()
                 }
               }}
-              onPaste={async (e) => {
-                // 同步阶段立即检测是否有图片，防止浏览器默认粘贴行为
-                const items = Array.from(e.clipboardData.items)
-                const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'))
-                if (imageItems.length === 0) return
-                e.preventDefault()
-                const imageFiles = imageItems
-                  .map(item => item.getAsFile())
-                  .filter((f): f is File => !!f)
-                await handleImageFiles(imageFiles)
-              }}
+              onPaste={handlePaste}
               placeholder={placeholder}
               className="h-full w-1/2 resize-none rounded-none border-0 text-sm leading-6 focus-visible:ring-0"
               style={{ fontFamily: fontFamily(font) }}
@@ -545,17 +652,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                 e.preventDefault()
               }
             }}
-              onPaste={async (e) => {
-                // 同步阶段立即检测是否有图片，防止浏览器默认粘贴行为
-                const items = Array.from(e.clipboardData.items)
-                const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'))
-                if (imageItems.length === 0) return
-                e.preventDefault()
-                const imageFiles = imageItems
-                  .map(item => item.getAsFile())
-                  .filter((f): f is File => !!f)
-                await handleImageFiles(imageFiles)
-              }}
+              onPaste={handlePaste}
               placeholder={placeholder}
               className="min-h-[120px] resize-y rounded-none border-0 text-sm leading-6 focus-visible:ring-0"
             style={{ height, fontFamily: fontFamily(font) }}
