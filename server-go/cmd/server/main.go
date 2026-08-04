@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ailimit"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/stt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/router"
@@ -28,6 +30,47 @@ func main() {
 
 	// 初始化 AI 网关（未配置 API Key 时 AI 功能降级，不影响社区基础功能）
 	ai.Init(cfg.DeepSeekKey, cfg.DeepSeekURL, cfg.DeepSeekModel)
+
+	// 初始化 AI 限制器（速率限制 + 每日配额 + token 追踪）
+	ailimitCfg := ailimit.DefaultConfig()
+	ailimitCfg.GlobalMaxConcurrent = cfg.AIConcurrentLimit
+	ailimitCfg.GlobalDailyTokenLimit = cfg.AIDailyTokenLimit
+	ailimit.Init(dal.DB, ailimitCfg)
+
+	// 注入 AI 限制钩子（限制检查 + 用量记录）
+	ai.SetMaxConcurrent(cfg.AIConcurrentLimit)
+	limiter := ailimit.Get()
+
+	// PreCheckHook: 在 ai.Chat 内部自动执行限制检查
+	// 任何调用 ai.Chat 的代码都会自动受限，无需手动接入
+	ai.SetPreCheckHook(func(ctx context.Context, userID, feature string) error {
+		if limiter == nil {
+			return nil
+		}
+		return limiter.CheckAsError(ctx, userID, ailimit.Feature(feature))
+	})
+
+	// UsageHook: 在 ai.Chat 完成后自动记录 token 用量
+	ai.SetUsageHook(func(ctx context.Context, userID, feature, mdl string, usage ai.UsageInfo, durationMs int, err error) {
+		if limiter == nil || userID == "" {
+			return
+		}
+		errMsg := ""
+		if err != nil {
+			errMsg = err.Error()
+		}
+		limiter.RecordUsage(ctx, ailimit.UsageRecord{
+			UserID:           userID,
+			Feature:          ailimit.Feature(feature),
+			Model:            mdl,
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+			DurationMs:       durationMs,
+			Success:          err == nil,
+			ErrorMessage:     errMsg,
+		})
+	})
 
 	// 初始化语音转文字客户端（未配置 API Key 时语音功能降级）
 	stt.Init(cfg.VolcASRKey, cfg.VolcASRResID)

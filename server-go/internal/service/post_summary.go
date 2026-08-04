@@ -36,7 +36,7 @@ func (e *PostSummaryError) Error() string { return e.Msg }
 // - 已有缓存直接返回
 // - 评论数未达阈值返回 eligible=false（不生成）
 // - 评论数达标则调用 AI 生成并缓存
-func (s *PostSummaryService) GetSummary(ctx context.Context, postID string) (*types.PostSummary, error) {
+func (s *PostSummaryService) GetSummary(ctx context.Context, userID, postID string) (*types.PostSummary, error) {
 	// 帖子必须存在
 	var post model.Post
 	if err := dal.DB.WithContext(ctx).Select("id", "title", "content", "channel").First(&post, "id = ?", postID).Error; err != nil {
@@ -74,7 +74,7 @@ func (s *PostSummaryService) GetSummary(ctx context.Context, postID string) (*ty
 		return nil, err
 	}
 
-	summaryText, err := generateDiscussionSummary(ctx, &post, comments)
+	summaryText, err := generateDiscussionSummary(ctx, userID, &post, comments)
 	if err != nil {
 		log.Printf("[PostSummary/GetSummary] failed to generate discussion summary, postID=%s, err=%v", postID, err)
 		return nil, err
@@ -103,7 +103,7 @@ func summaryToDTO(s *model.PostSummary) *types.PostSummary {
 }
 
 // generateDiscussionSummary 调用 DeepSeek 生成讨论要点摘要
-func generateDiscussionSummary(ctx context.Context, post *model.Post, comments []model.Comment) (string, error) {
+func generateDiscussionSummary(ctx context.Context, userID string, post *model.Post, comments []model.Comment) (string, error) {
 	// 截断帖子内容
 	postContent := post.Content
 	if runes := []rune(postContent); len(runes) > 2000 {
@@ -137,5 +137,7 @@ func generateDiscussionSummary(ctx context.Context, post *model.Post, comments [
 		User:        fmt.Sprintf("帖子标题：%s\n帖子内容：%s\n\n讨论评论：\n%s", post.Title, postContent, commentsText),
 		MaxTokens:   1000,
 		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "post_summary",
 	})
 }

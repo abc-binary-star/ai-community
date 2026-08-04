@@ -59,6 +59,9 @@ func Init(cfg *conf.Config) {
 		&model.ThreadSummary{},
 		&model.BookmarkFolder{},
 		&model.FollowGroup{},
+		&model.AIUsageLog{},
+		&model.AIUserQuota{},
+		&model.AIGlobalQuota{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

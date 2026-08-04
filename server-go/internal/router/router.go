@@ -6,6 +6,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
 	"github.com/abc-binary-star/ai-community/server-go/internal/handler"
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ailimit"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -44,23 +45,23 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/posts", middleware.OptionalAuth(), handler.ListPosts)
 	h.POST("/api/posts", middleware.Auth(), handler.CreatePost)
 	h.GET("/api/posts/tags/popular", handler.PopularTags)
-	h.POST("/api/posts/suggest-tags", middleware.Auth(), handler.SuggestTags)
+	h.POST("/api/posts/suggest-tags", middleware.Auth(), middleware.AILimit(ailimit.FeatureSuggestTags), handler.SuggestTags)
 	h.GET("/api/posts/:id", middleware.OptionalAuth(), handler.GetPost)
 	h.PUT("/api/posts/:id", middleware.Auth(), handler.UpdatePost)
 	h.DELETE("/api/posts/:id", middleware.Auth(), handler.DeletePost)
 	h.PUT("/api/posts/:id/status", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.SetPostStatus)
 	h.GET("/api/posts/:id/summary", middleware.OptionalAuth(), handler.GetThreadSummary)
-	h.POST("/api/posts/:id/summary", middleware.Auth(), handler.GenerateThreadSummary)
+	h.POST("/api/posts/:id/summary", middleware.Auth(), middleware.AILimit(ailimit.FeatureThreadSummary), handler.GenerateThreadSummary)
 	h.POST("/api/posts/:id/like", middleware.Auth(), handler.LikePost)
 	h.DELETE("/api/posts/:id/like", middleware.Auth(), handler.UnlikePost)
 
 	// --- AI 辅助创作路由 ---
 	ai := h.Group("/api/ai", middleware.Auth())
-	ai.POST("/suggest-title", handler.SuggestTitle)
-	ai.POST("/rewrite", handler.Rewrite)
-	ai.POST("/summarize", handler.Summarize)
-	ai.POST("/voice-polish", handler.VoicePolish)
-	ai.POST("/transcribe", handler.Transcribe)
+	ai.POST("/suggest-title", middleware.AILimit(ailimit.FeatureSuggestTitle), handler.SuggestTitle)
+	ai.POST("/rewrite", middleware.AILimit(ailimit.FeatureRewrite), handler.Rewrite)
+	ai.POST("/summarize", middleware.AILimit(ailimit.FeatureSummarize), handler.Summarize)
+	ai.POST("/voice-polish", middleware.AILimit(ailimit.FeatureVoicePolish), handler.VoicePolish)
+	ai.POST("/transcribe", middleware.AILimit(ailimit.FeatureTranscribe), handler.Transcribe)
 
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)

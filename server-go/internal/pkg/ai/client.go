@@ -20,6 +20,13 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+// UsageInfo 单次调用的 token 用量
+type UsageInfo struct {
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+}
+
 // ChatRequest 一次对话请求的参数
 type ChatRequest struct {
 	// System 系统提示词
@@ -34,13 +41,30 @@ type ChatRequest struct {
 	Temperature float64
 	// Timeout 单次请求超时，默认 60s
 	Timeout time.Duration
+	// UserID 调用者用户 ID（必填，用于限制检查和用量追踪）
+	UserID string
+	// Feature 功能标识（必填，用于限制检查和用量追踪）
+	Feature string
 }
 
+// UsageHook 在每次 Chat 调用完成后被调用，用于记录用量。
+// 由 ailimit 包在应用启动时注入，ai 包本身不依赖数据库。
+type UsageHook func(ctx context.Context, userID, feature, model string, usage UsageInfo, durationMs int, err error)
+
+// PreCheckHook 在每次 Chat 调用前被调用，用于检查是否允许调用。
+// 返回 error 时 Chat 直接返回该错误，不发起 LLM 请求。
+// 由 ailimit 包在应用启动时注入。
+type PreCheckHook func(ctx context.Context, userID, feature string) error
+
 var (
-	apiKey    string
-	baseURL   string
-	model     string
+	apiKey     string
+	baseURL    string
+	model      string
 	httpClient = &http.Client{}
+
+	usageHook     UsageHook
+	preCheckHook  PreCheckHook
+	concurrentSem chan struct{}
 )
 
 // Init 初始化网关配置（应用启动时调用一次）。
@@ -63,10 +87,54 @@ func Enabled() bool {
 	return apiKey != ""
 }
 
+// SetUsageHook 设置用量记录钩子（由 ailimit 包注入）
+func SetUsageHook(h UsageHook) {
+	usageHook = h
+}
+
+// SetPreCheckHook 设置调用前限制检查钩子（由 ailimit 包注入）
+func SetPreCheckHook(h PreCheckHook) {
+	preCheckHook = h
+}
+
+// SetMaxConcurrent 设置全局最大并发 AI 调用数
+func SetMaxConcurrent(n int) {
+	if n > 0 {
+		concurrentSem = make(chan struct{}, n)
+	}
+}
+
 // Chat 发起一次对话请求，返回模型生成的文本内容。
+// 限制检查（频率/配额/全局token上限）在调用前自动执行，
+// 调用方无需手动接入限制模块。
 func Chat(ctx context.Context, req ChatRequest) (string, error) {
 	if !Enabled() {
 		return "", fmt.Errorf("DEEPSEEK_API_KEY 未配置")
+	}
+
+	// 强制检查：限制器已注入但 UserID/Feature 为空时报错
+	if preCheckHook != nil {
+		if req.UserID == "" {
+			return "", fmt.Errorf("ai.Chat: UserID 不能为空，请从 handler 传入用户 ID")
+		}
+		if req.Feature == "" {
+			return "", fmt.Errorf("ai.Chat: Feature 不能为空，请在 ailimit 包中注册功能标识")
+		}
+		if err := preCheckHook(ctx, req.UserID, req.Feature); err != nil {
+			return "", err
+		}
+	}
+
+	start := time.Now()
+
+	// 全局并发控制
+	if concurrentSem != nil {
+		select {
+		case concurrentSem <- struct{}{}:
+			defer func() { <-concurrentSem }()
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
 	}
 
 	maxTokens := req.MaxTokens
@@ -106,13 +174,16 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
+		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
 		return "", fmt.Errorf("AI 服务请求失败: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("AI 服务请求失败 (%d): %s", resp.StatusCode, string(respBody))
+		err := fmt.Errorf("AI 服务请求失败 (%d): %s", resp.StatusCode, string(respBody))
+		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
+		return "", err
 	}
 
 	var data struct {
@@ -121,12 +192,37 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
 		return "", err
 	}
 	if len(data.Choices) == 0 {
-		return "", fmt.Errorf("AI 返回内容为空")
+		err := fmt.Errorf("AI 返回内容为空")
+		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
+		return "", err
 	}
+
+	usage := UsageInfo{
+		PromptTokens:     data.Usage.PromptTokens,
+		CompletionTokens: data.Usage.CompletionTokens,
+		TotalTokens:      data.Usage.TotalTokens,
+	}
+	invokeUsageHook(ctx, req, usage, start, nil)
+
 	return strings.TrimSpace(data.Choices[0].Message.Content), nil
+}
+
+// invokeUsageHook 安全调用用量钩子（若已设置）
+func invokeUsageHook(ctx context.Context, req ChatRequest, usage UsageInfo, start time.Time, err error) {
+	if usageHook == nil {
+		return
+	}
+	durationMs := int(time.Since(start).Milliseconds())
+	usageHook(ctx, req.UserID, req.Feature, model, usage, durationMs, err)
 }

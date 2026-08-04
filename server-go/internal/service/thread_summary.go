@@ -68,7 +68,7 @@ func (s *ThreadSummaryService) GetThreadSummary(ctx context.Context, postID stri
 // - 已有缓存且未过期 -> 直接返回
 // - 已有缓存但过期 -> 返回旧数据(标记 stale) + 后台异步更新
 // - 无缓存 -> 返回 generating 状态 + 后台异步生成
-func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID string) (*types.ThreadSummaryDTO, error) {
+func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, userID, postID string) (*types.ThreadSummaryDTO, error) {
 	// 帖子必须存在
 	var post model.Post
 	if err := dal.DB.WithContext(ctx).Select("id", "title", "content").First(&post, "id = ?", postID).Error; err != nil {
@@ -92,7 +92,7 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID
 		dto := threadSummaryToDTO(&cached, int(commentCount))
 		dto.Stale = stale
 		if stale {
-			go s.asyncGenerate(postID)
+			go s.asyncGenerate(postID, userID)
 		}
 		return dto, nil
 	}
@@ -106,7 +106,7 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID
 		}, nil
 	}
 
-	go s.asyncGenerate(postID)
+	go s.asyncGenerate(postID, userID)
 
 	return &types.ThreadSummaryDTO{
 		Status:       "generating",
@@ -115,7 +115,7 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, postID
 }
 
 // asyncGenerate 异步生成讨论摘要
-func (s *ThreadSummaryService) asyncGenerate(postID string) {
+func (s *ThreadSummaryService) asyncGenerate(postID, userID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
@@ -138,7 +138,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 		return
 	}
 
-	summaryText, err := generateThreadSummaryText(ctx, &post, comments)
+	summaryText, err := generateThreadSummaryText(ctx, userID, &post, comments)
 	if err != nil {
 		log.Printf("[ThreadSummary/asyncGenerate] failed to generate summary text, postID=%s, err=%v", postID, err)
 		return
@@ -170,7 +170,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID string) {
 }
 
 // generateThreadSummaryText 调用 LLM 生成段落式讨论摘要
-func generateThreadSummaryText(ctx context.Context, post *model.Post, comments []model.Comment) (string, error) {
+func generateThreadSummaryText(ctx context.Context, userID string, post *model.Post, comments []model.Comment) (string, error) {
 	// 截断帖子内容
 	postContent := post.Content
 	if runes := []rune(postContent); len(runes) > 2000 {
@@ -206,6 +206,8 @@ func generateThreadSummaryText(ctx context.Context, post *model.Post, comments [
 		User:        userMsg,
 		MaxTokens:   800,
 		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "thread_summary",
 	})
 	if err != nil {
 		log.Printf("[ThreadSummary/generateThreadSummaryText] failed to call AI, postID=%s, err=%v", post.ID, err)

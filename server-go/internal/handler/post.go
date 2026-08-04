@@ -209,7 +209,8 @@ func SuggestTags(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	tags, err := postService.SuggestTags(ctx, req.Title, req.Content)
+	userID := middleware.GetCurrentUserID(c)
+	tags, err := postService.SuggestTags(ctx, userID, req.Title, req.Content)
 	if err != nil {
 		log.Printf("[SuggestTags] AI 标签推荐失败: %v", err)
 		response.Error(c, consts.StatusServiceUnavailable, "AI 标签推荐服务暂时不可用")

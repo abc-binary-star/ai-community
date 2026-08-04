@@ -686,7 +686,7 @@ var tagCache sync.Map
 const tagCacheTTL = 7 * 24 * time.Hour
 
 // SuggestTags AI 标签推荐（含缓存 + 失败降级）
-func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([]string, error) {
+func (s *PostService) SuggestTags(ctx context.Context, userID, title, content string) ([]string, error) {
 	// 构造缓存 key
 	key := tagCacheKey(title, content)
 
@@ -729,6 +729,8 @@ func (s *PostService) SuggestTags(ctx context.Context, title, content string) ([
 		User:        fmt.Sprintf("标题：%s\n内容：%s", truncatedTitle, truncatedContent),
 		MaxTokens:   1000,
 		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "suggest_tags",
 	})
 	if err != nil {
 		// 降级：返回空标签数组，不阻塞发帖
