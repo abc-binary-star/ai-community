@@ -26,5 +26,5 @@ server-go
 .DS_Store
 *.log
 .trae
-community-feature-gap-analysis
+docs/analysis
 .trae-html-share-packages

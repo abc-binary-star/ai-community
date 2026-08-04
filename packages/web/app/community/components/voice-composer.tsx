@@ -147,8 +147,11 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
           {/* 主体 */}
           <div className="space-y-4 px-5 py-4">
             {!supported && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-600">
-                当前浏览器不支持录音功能。
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-sm text-amber-600">
+                <p className="font-medium">无法使用语音输入</p>
+                <p className="mt-1 text-xs leading-5">
+                  录音功能需要 HTTPS 安全上下文。请通过 HTTPS 访问本站，或使用 localhost 地址。
+                </p>
               </div>
             )}
 

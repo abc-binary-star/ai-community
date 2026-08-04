@@ -32,12 +32,14 @@ export function useAudioRecorder() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    setSupported(
-      typeof navigator !== 'undefined' &&
-        !!navigator.mediaDevices &&
-        typeof navigator.mediaDevices.getUserMedia === 'function' &&
-        (typeof AudioContext !== 'undefined' || typeof (window as unknown as Record<string, unknown>).webkitAudioContext !== 'undefined')
-    )
+    // 检测浏览器是否支持录音（getUserMedia + AudioContext）
+    // 注意：HTTP 非安全上下文下 navigator.mediaDevices 为 undefined，这是浏览器安全限制
+    const hasMediaDevices = typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === 'function'
+    const hasAudioContext = typeof AudioContext !== 'undefined' ||
+      typeof (window as unknown as Record<string, unknown>).webkitAudioContext !== 'undefined'
+    setSupported(hasMediaDevices && hasAudioContext)
   }, [])
 
   const cleanup = useCallback(() => {
