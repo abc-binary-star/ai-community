@@ -142,6 +142,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.Static("/uploads", "./uploads")
 	h.POST("/api/upload/avatar", middleware.Auth(), middleware.UploadLimit(), handler.UploadAvatar)
 	h.POST("/api/upload/image", middleware.Auth(), middleware.UploadLimit(), handler.UploadImage)
+	// 外站图片转存：绕过 B站/贴吧等图床的 Referer 防盗链
+	h.POST("/api/upload/remote-images", middleware.Auth(), middleware.UploadLimit(), handler.FetchRemoteImages)
 
 	// 统一 404
 	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {

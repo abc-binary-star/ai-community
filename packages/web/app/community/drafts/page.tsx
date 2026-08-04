@@ -13,21 +13,23 @@ import type { Post } from 'shared'
 export default function DraftsPage() {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const [drafts, setDrafts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!token) {
+    if (hasHydrated && !token) {
       router.replace('/login?redirect=%2Fcommunity%2Fdrafts')
       return
     }
+    if (!token) return
     api
       .get<{ items: Post[] }>('/posts?status=draft&channel=all')
       .then((data) => setDrafts(data.items))
       .catch((e) => toast.error(e instanceof ApiError ? e.message : '草稿加载失败'))
       .finally(() => setLoading(false))
-  }, [token, router])
+  }, [hasHydrated, token, router])
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('确定删除这篇草稿吗？此操作不可撤销。')) return
@@ -43,7 +45,7 @@ export default function DraftsPage() {
     }
   }
 
-  if (!token || loading) {
+  if (!hasHydrated || !token || loading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="animate-spin" />

@@ -17,6 +17,7 @@ import { CoverEditor } from '@/app/community/components/cover-editor'
 export default function EditPostPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
   const [font, setFont] = useState('default')
@@ -44,10 +45,11 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
 
   useEffect(() => {
-    if (!token) {
+    if (hasHydrated && !token) {
       router.replace(`/login?redirect=${encodeURIComponent(`/community/post/${params.id}/edit`)}`)
       return
     }
+    if (!token) return
     api.get<Post>(`/posts/${params.id}`)
       .then((p) => {
         setTitle(p.title)
@@ -226,7 +228,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     }
   }
 
-  if (!token || loading) {
+  if (!hasHydrated || !token || loading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="animate-spin" />

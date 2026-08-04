@@ -11,7 +11,6 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { useHydrated } from '@/lib/use-hydrated'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Paginated, Report } from 'shared'
 
@@ -35,11 +34,11 @@ export default function ModerationPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
-  const hydrated = useHydrated()
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const [handlingId, setHandlingId] = useState<string | null>(null)
 
-  const canModerate = hydrated && !!user && (user.role === 'admin' || user.role === 'moderator')
+  const canModerate = hasHydrated && !!user && (user.role === 'admin' || user.role === 'moderator')
 
   const reportsQuery = useQuery({
     queryKey: ['reports', status],
@@ -61,7 +60,7 @@ export default function ModerationPage() {
     }
   }
 
-  if (!hydrated) {
+  if (!hasHydrated) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="animate-spin" />

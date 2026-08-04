@@ -17,6 +17,7 @@ import { CoverEditor } from '@/app/community/components/cover-editor'
 export default function NewPostPage() {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
   const [font, setFont] = useState('default')
@@ -41,10 +42,10 @@ export default function NewPostPage() {
     : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
 
   useEffect(() => {
-    if (!token) {
+    if (hasHydrated && !token) {
       router.replace(`/login?redirect=${encodeURIComponent('/community/post/new')}`)
     }
-  }, [token, router])
+  }, [hasHydrated, token, router])
 
   // 编辑器高度随视口变化，尽量占满空间
   useEffect(() => {
@@ -200,7 +201,7 @@ export default function NewPostPage() {
     }
   }
 
-  if (!token) {
+  if (!hasHydrated || !token) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="animate-spin" />

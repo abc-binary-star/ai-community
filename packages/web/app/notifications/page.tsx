@@ -21,6 +21,7 @@ function NotificationsContent() {
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
 
   const { data, isLoading, isError } = useQuery({
@@ -50,7 +51,7 @@ function NotificationsContent() {
     },
   })
 
-  if (!token || !user) {
+  if (!hasHydrated || !token || !user) {
     return (
       <div className="mx-auto max-w-md py-20 text-center">
         <Bell className="mx-auto mb-3 size-10 text-muted-foreground" />

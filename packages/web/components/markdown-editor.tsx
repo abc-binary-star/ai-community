@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils'
 import { api, apiFetch, ApiError } from '@/lib/api'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
+import { extractExternalImageUrls, hasMdImage, normalizeMdImages } from '@/lib/markdown-images'
 import { FONT_OPTIONS, fontFamily } from '@/lib/font-options'
 import { VoiceComposer } from '@/app/community/components/voice-composer'
 
@@ -287,6 +288,60 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   // 语音输入浮层
   const [voiceOpen, setVoiceOpen] = useState(false)
 
+  // 外站图片转存中的提示态
+  const [mirroring, setMirroring] = useState(false)
+  // 已尝试转存过的外站地址，避免重复请求（含失败的，失败不再自动重试）
+  const mirroredRef = useRef<Set<string>>(new Set())
+
+  // 把外站图片交给服务端转存，再把正文里的原地址替换为本站地址。
+  // B站/贴吧图床有 Referer 防盗链，浏览器直接引用会 403，必须服务端代拉取。
+  const mirrorExternalImages = useCallback(async (text: string) => {
+    const urls = extractExternalImageUrls(text).filter((u) => !mirroredRef.current.has(u))
+    if (urls.length === 0) return
+    urls.forEach((u) => mirroredRef.current.add(u))
+
+    setMirroring(true)
+    try {
+      const data = await api.post<{ items: { sourceUrl: string; url?: string; error?: string }[] }>(
+        '/upload/remote-images',
+        { urls: urls.slice(0, 10) },
+      )
+      let next = valueRef.current
+      let okCount = 0
+      const failed: string[] = []
+      for (const item of data.items) {
+        if (item.url) {
+          next = next.replaceAll(item.sourceUrl, item.url)
+          okCount++
+        } else {
+          failed.push(item.error || '未知原因')
+        }
+      }
+      if (okCount > 0) {
+        onChange(next)
+        toast.success(`已转存 ${okCount} 张外站图片`)
+      }
+      if (failed.length > 0) {
+        toast.error(`${failed.length} 张图片转存失败：${failed[0]}`)
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '外站图片转存失败')
+    } finally {
+      setMirroring(false)
+    }
+  }, [onChange])
+
+  // textarea 输入统一入口：兜底把 B站/贴吧的图片语法转成标准 ![图片](url)。
+  // handlePaste 未拦截（如浏览器默认粘贴、拖拽文本、输入法直接上屏）时，这里仍能生效
+  const handleTextareaChange = useCallback((next: string) => {
+    const normalized = hasMdImage(next) ? normalizeMdImages(next) : next
+    onChange(normalized)
+    if (normalized !== next) {
+      // 刚由 B站式语法转成标准语法，说明是外站图片，尝试转存
+      void mirrorExternalImages(normalized)
+    }
+  }, [onChange, mirrorExternalImages])
+
   // 同步滚动：按滚动比例在两栏间同步
   const syncScroll = (source: 'editor' | 'preview') => {
     if (syncingRef.current) return
@@ -408,19 +463,24 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   }
 
   // 处理粘贴：兼容 Word/网页复制的「文字 + 图片」。
-  // 图片来源：① HTML 内嵌 base64 图片；② HTML 中可直接引用的外链图片；③ 剪贴板文件项（截图/复制图片文件）。
+  // 图片来源：① HTML 内嵌 base64 图片；② HTML 中可直接引用的外链图片；③ 剪贴板文件项（截图/复制图片文件）；
+  // ④ B站/贴吧等复制时以 markdown 文本（BT 包裹 url 或 ![](url)）形式存在的图片（无 img、无文件项）。
   // 文字从 HTML 转纯文本（保留换行），避免默认粘贴丢弃图片。
   const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const cd = e.clipboardData
     const html = cd.getData('text/html')
     const parsed = html ? parseRichHtml(html) : null
+    const plainText = cd.getData('text/plain') || ''
 
     // 剪贴板文件项中的图片（Mac 上 Word 复制时图片以文件项提供，type 常为 public.png 等 UTI）
     const fileImages = Array.from(cd.files).filter(isImageFile)
 
+    // B站/贴吧复制时图片以 markdown 文本形式存在（无 <img> 标签、无文件项），需识别
+    const textHasImages = hasMdImage(parsed?.text ?? '') || hasMdImage(plainText)
+
     // 没有任何图片来源时不拦截，保持浏览器默认粘贴（纯文本）。
     // 注意：Word 可能把图片全放文件项、HTML 为空（parsed 为 null），此时也必须拦截
-    if (fileImages.length === 0 && !(parsed && parsed.images.length > 0)) return
+    if (fileImages.length === 0 && !(parsed && parsed.images.length > 0) && !textHasImages) return
     e.preventDefault()
 
     const ta = textareaRef.current
@@ -429,20 +489,28 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const end = ta ? ta.selectionEnd : current.length
 
     // HTML 内嵌/外链图片：按原位置替换占位符
-    let inserted = parsed ? parsed.text : ''
+    // 优先用 HTML 转文本；若 HTML 转文本后没有图片语法、而纯文本里有（B站复制时常见），用纯文本兜底
+    let inserted = parsed ? parsed.text : plainText
+    if (parsed && !hasMdImage(inserted) && hasMdImage(plainText)) inserted = plainText
+
     for (const img of (parsed?.images ?? [])) {
       const url = typeof img.source === 'string' ? img.source : await uploadImage(img.source)
       if (!url) continue
       inserted = inserted.replace(img.placeholder, `![图片](${url})`)
     }
-    // 剪贴板文件图片：追加到末尾
-    for (const file of fileImages) {
-      const url = await uploadImage(file)
-      if (!url) continue
-      inserted += (inserted && !inserted.endsWith('\n') ? '\n' : '') + `![图片](${url})` + '\n'
+    // 剪贴板文件图片：文本里已有 B站式图片语法时优先用外链（文件项是同一张图，追加会重复），
+    // 仅在文本无图片语法时追加（截图/复制图片文件场景）
+    if (!hasMdImage(inserted)) {
+      for (const file of fileImages) {
+        const url = await uploadImage(file)
+        if (!url) continue
+        inserted += (inserted && !inserted.endsWith('\n') ? '\n' : '') + `![图片](${url})` + '\n'
+      }
     }
     // 清理未匹配的占位符，收敛多余空行
     inserted = inserted.replace(/@@IMG_\d+@@/g, '').replace(/\n{3,}/g, '\n\n').trim()
+    // B站/贴吧复制的 markdown 图片语法规范化为标准图片语法
+    inserted = normalizeMdImages(inserted)
 
     if (!inserted) return
     const newValue = current.slice(0, start) + inserted + current.slice(end)
@@ -453,7 +521,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       const pos = start + inserted.length
       ta.setSelectionRange(pos, pos)
     })
-  }, [onChange])
+    // 粘贴进来的外站图片（B站/贴吧等有防盗链）交给服务端转存
+    void mirrorExternalImages(newValue)
+  }, [onChange, mirrorExternalImages])
 
   // AI 润色：有选区时润色选段，否则润色全文，完成后直接应用结果
   // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
@@ -625,6 +695,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             <Eraser className="size-3.5" />
             清空
           </Button>
+          {mirroring && (
+            <span className="flex items-center gap-1.5 pl-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              正在转存外站图片…
+            </span>
+          )}
           {toolbarEnd && (
             <div className="ml-auto flex items-center gap-2 pl-2">
               {toolbarEnd}
@@ -637,7 +713,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             <Textarea
               ref={textareaRef}
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => handleTextareaChange(e.target.value)}
               onScroll={() => syncScroll('editor')}
               onDrop={async (e) => {
                 const handled = await handleImageFiles(Array.from(e.dataTransfer.files))
@@ -672,7 +748,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           <Textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => handleTextareaChange(e.target.value)}
             onDrop={async (e) => {
               const handled = await handleImageFiles(Array.from(e.dataTransfer.files))
               if (handled) e.preventDefault()

@@ -6,6 +6,7 @@ import { Loader2, Mic, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
+import { hasMdImage, normalizeMdImages } from '@/lib/markdown-images'
 import type { Comment } from 'shared'
 import { VoiceComposer } from './voice-composer'
 
@@ -57,7 +58,11 @@ export function CommentForm({
       )}
       <Textarea
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={(e) => {
+          const next = e.target.value
+          // 兜底把 B站/贴吧复制的图片语法转成标准 ![图片](url)
+          setContent(hasMdImage(next) ? normalizeMdImages(next) : next)
+        }}
         placeholder={replyTo ? `回复 @${replyTo.author.username}…` : '写下你的评论…'}
         className="min-h-[100px] resize-y"
       />

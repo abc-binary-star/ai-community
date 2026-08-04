@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { api, apiFetch, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { useHydrated } from '@/lib/use-hydrated'
 import { CommunityShell } from '@/app/community/components/community-shell'
 import { cn, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -71,7 +70,7 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const token = useAuthStore((s) => s.token)
-  const hydrated = useHydrated()
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
 
   const [avatar, setAvatar] = useState(user?.avatar || '')
   const [displayName, setDisplayName] = useState(user?.displayName || '')
@@ -135,7 +134,7 @@ export default function SettingsPage() {
     setCroppedAreaPixels(areaPixels)
   }, [])
 
-  if (!hydrated) {
+  if (!hasHydrated) {
     return (
       <CommunityShell>
         <div className="mx-auto max-w-md py-20 text-center">

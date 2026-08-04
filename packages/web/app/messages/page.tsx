@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { useHydrated } from '@/lib/use-hydrated'
 import { cn, formatEditedTime, getInitials } from '@/lib/utils'
 import { CommunityShell } from '@/app/community/components/community-shell'
 import { toast } from 'sonner'
@@ -29,7 +28,7 @@ function MessagesInner() {
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const currentUser = useAuthStore((s) => s.user)
-  const hydrated = useHydrated()
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
 
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
@@ -210,7 +209,7 @@ function MessagesInner() {
     }
   }
 
-  if (!hydrated || !token || !currentUser) {
+  if (!hasHydrated || !token || !currentUser) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">

@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { useHydrated } from '@/lib/use-hydrated'
 import { cn } from '@/lib/utils'
 import { CommunityShell } from '@/app/community/components/community-shell'
 import { PostCard } from '@/app/community/components/post-card'
@@ -20,7 +19,7 @@ type FolderFilter = 'all' | 'uncategorized' | string
 export default function BookmarksPage() {
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
-  const hydrated = useHydrated()
+  const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<FolderFilter>('all')
 
@@ -86,7 +85,7 @@ export default function BookmarksPage() {
     deleteMutation.mutate(folder.id)
   }
 
-  if (!hydrated) {
+  if (!hasHydrated) {
     return (
       <CommunityShell>
         <div className="mx-auto max-w-md py-20 text-center">
