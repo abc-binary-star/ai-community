@@ -119,22 +119,64 @@ func (s *CommentService) ListComments(ctx context.Context, postID, currentUserID
 		replyCountMap[r.ParentID] = int(r.Cnt)
 	}
 
-	// 批量加载每条根评论的前 replyPreviewLimit 条回复（按时间正序）
-	var previewReplies []model.Comment
-	previewQuery := dal.DB.WithContext(ctx).
-		Preload("Author").
-		Where("parent_id IN ?", rootIDs)
-	if len(blocked) > 0 {
-		previewQuery = previewQuery.Where("author_id NOT IN ?", blocked)
+	// 批量加载每条根评论的前 replyPreviewLimit 条回复（使用 LATERAL JOIN 在数据库层面分页）
+	type replyRow struct {
+		model.Comment
+		ParentID string `gorm:"column:parent_id"`
+		RN       int    `gorm:"column:rn"`
 	}
-	previewQuery.Order("created_at ASC").Find(&previewReplies)
+	var previewReplies []replyRow
+	previewSQL := `
+		SELECT c.*, c.parent_id as parent_id, c.rn as rn
+		FROM (
+			SELECT *, ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY created_at ASC) as rn
+			FROM comments
+			WHERE parent_id IN ?
+		) c
+		WHERE c.rn <= ?`
+	if len(blocked) > 0 {
+		previewSQL = `
+			SELECT c.*, c.parent_id as parent_id, c.rn as rn
+			FROM (
+				SELECT *, ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY created_at ASC) as rn
+				FROM comments
+				WHERE parent_id IN ? AND author_id NOT IN ?
+			) c
+			WHERE c.rn <= ?`
+	}
+	previewQuery := dal.DB.WithContext(ctx).Raw(previewSQL, rootIDs, replyPreviewLimit)
+	if len(blocked) > 0 {
+		previewQuery = dal.DB.WithContext(ctx).Raw(previewSQL, rootIDs, blocked, replyPreviewLimit)
+	}
+	previewQuery.Scan(&previewReplies)
 
-	// 按 parent_id 分组，每组只取前 replyPreviewLimit 条
+	// 按 parent_id 分组，并收集需要预加载 Author 的回复列表
 	repliesMap := make(map[string][]model.Comment)
+	replyAuthorIDs := make(map[string]bool)
 	for i := range previewReplies {
-		pid := *previewReplies[i].ParentID
-		if len(repliesMap[pid]) < replyPreviewLimit {
-			repliesMap[pid] = append(repliesMap[pid], previewReplies[i])
+		pid := previewReplies[i].ParentID
+		repliesMap[pid] = append(repliesMap[pid], previewReplies[i].Comment)
+		replyAuthorIDs[previewReplies[i].AuthorID] = true
+	}
+
+	// 批量预加载回复的 Author（Raw SQL 无法用 Preload）
+	replyAuthorMap := make(map[string]*model.User)
+	if len(replyAuthorIDs) > 0 {
+		ids := make([]string, 0, len(replyAuthorIDs))
+		for id := range replyAuthorIDs {
+			ids = append(ids, id)
+		}
+		var replyAuthors []model.User
+		dal.DB.WithContext(ctx).Where("id IN ?", ids).Find(&replyAuthors)
+		for i := range replyAuthors {
+			replyAuthorMap[replyAuthors[i].ID] = &replyAuthors[i]
+		}
+	}
+	for pid := range repliesMap {
+		for j := range repliesMap[pid] {
+			if author, ok := replyAuthorMap[repliesMap[pid][j].AuthorID]; ok {
+				repliesMap[pid][j].Author = *author
+			}
 		}
 	}
 
@@ -378,19 +420,25 @@ func (s *CommentService) UnlikeComment(ctx context.Context, commentID, userID st
 		return 0, err
 	}
 
-	// 幂等删除（DeleteMany 语义：零匹配不报错）
-	result := dal.DB.WithContext(ctx).Where("comment_id = ? AND user_id = ?", commentID, userID).Delete(&model.CommentLike{})
-	if result.Error != nil {
-		log.Printf("[Comment/UnlikeComment] 删除点赞记录失败, commentID=%s, userID=%s, err=%v", commentID, userID, result.Error)
-		return 0, result.Error
+	var rowsAffected int64
+	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("comment_id = ? AND user_id = ?", commentID, userID).Delete(&model.CommentLike{})
+		if result.Error != nil {
+			return result.Error
+		}
+		rowsAffected = result.RowsAffected
+		if rowsAffected == 0 {
+			return nil
+		}
+		return tx.Model(&model.Comment{}).Where("id = ? AND like_count > 0", commentID).UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
+	})
+	if err != nil {
+		log.Printf("[Comment/UnlikeComment] 事务执行失败, commentID=%s, userID=%s, err=%v", commentID, userID, err)
+		return 0, err
 	}
-
-	if result.RowsAffected == 0 {
+	if rowsAffected == 0 {
 		return comment.LikeCount, nil
 	}
-
-	// 减少计数（gt:0 条件防止减为负数）
-	dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("id = ? AND like_count > 0", commentID).UpdateColumn("like_count", gorm.Expr("like_count - 1"))
 
 	var updated model.Comment
 	dal.DB.WithContext(ctx).Select("like_count").First(&updated, "id = ?", commentID)

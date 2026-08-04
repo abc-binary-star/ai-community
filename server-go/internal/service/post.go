@@ -298,34 +298,36 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 
 // replacePostTags 全量替换帖子的标签关联
 func replacePostTags(ctx context.Context, postID string, rawTags []string) error {
-	// 删除旧关联
-	if err := dal.DB.WithContext(ctx).Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
-		return err
-	}
-	seen := make(map[string]bool)
-	for _, rawTag := range rawTags {
-		tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
-		if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
-			continue
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 删除旧关联
+		if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
+			return err
 		}
-		seen[tagName] = true
+		seen := make(map[string]bool)
+		for _, rawTag := range rawTags {
+			tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
+			if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
+				continue
+			}
+			seen[tagName] = true
 
-		var tag model.Tag
-		if err := dal.DB.WithContext(ctx).Where("name = ?", tagName).First(&tag).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				tag = model.Tag{Name: tagName}
-				if err := dal.DB.WithContext(ctx).Create(&tag).Error; err != nil {
+			var tag model.Tag
+			if err := tx.Where("name = ?", tagName).First(&tag).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					tag = model.Tag{Name: tagName}
+					if err := tx.Create(&tag).Error; err != nil {
+						return err
+					}
+				} else {
 					return err
 				}
-			} else {
+			}
+			if err := tx.Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
 				return err
 			}
 		}
-		if err := dal.DB.WithContext(ctx).Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // CreatePost 创建帖子（支持 tags）
@@ -613,18 +615,24 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 		return 0, err
 	}
 
-	result := dal.DB.WithContext(ctx).Where("post_id = ? AND user_id = ?", postID, userID).Delete(&model.PostLike{})
-	if result.Error != nil {
-		log.Printf("[UnlikePost] 删除点赞记录失败, postID=%s, userID=%s, err=%v", postID, userID, result.Error)
-		return 0, result.Error
-	}
-	if result.RowsAffected == 0 {
-		return post.LikeCount, nil
-	}
-
-	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ? AND like_count > 0", postID).UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error; err != nil {
-		log.Printf("[UnlikePost] 更新点赞数失败, postID=%s, err=%v", postID, err)
+	var rowsAffected int64
+	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("post_id = ? AND user_id = ?", postID, userID).Delete(&model.PostLike{})
+		if result.Error != nil {
+			return result.Error
+		}
+		rowsAffected = result.RowsAffected
+		if rowsAffected == 0 {
+			return nil
+		}
+		return tx.Model(&model.Post{}).Where("id = ? AND like_count > 0", postID).UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
+	})
+	if err != nil {
+		log.Printf("[UnlikePost] 事务执行失败, postID=%s, userID=%s, err=%v", postID, userID, err)
 		return 0, err
+	}
+	if rowsAffected == 0 {
+		return post.LikeCount, nil
 	}
 
 	var updated model.Post

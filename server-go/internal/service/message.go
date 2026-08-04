@@ -83,14 +83,81 @@ func (s *MessageService) ListConversations(ctx context.Context, userID string, p
 		Offset(offset).Limit(pageSize).
 		Find(&rows)
 
+	if len(rows) == 0 {
+		return &types.Paginated[types.Conversation]{
+			Items:      []types.Conversation{},
+			Total:      int(total),
+			Page:       page,
+			PageSize:   pageSize,
+			TotalPages: pagination.TotalPages(int(total), pageSize),
+		}, nil
+	}
+
+	// 收集对端用户 ID 和会话 ID，批量查询消除 N+1
+	otherIDs := make([]string, 0, len(rows))
+	convIDs := make([]string, 0, len(rows))
+	for i := range rows {
+		otherID := rows[i].UserBID
+		if rows[i].UserBID == userID {
+			otherID = rows[i].UserAID
+		}
+		otherIDs = append(otherIDs, otherID)
+		convIDs = append(convIDs, rows[i].ID)
+	}
+
+	// 批量查询对端用户信息
+	var users []model.User
+	dal.DB.WithContext(ctx).
+		Select("id", "username", "avatar", "bio", "display_name", "created_at").
+		Where("id IN ?", otherIDs).
+		Find(&users)
+	userMap := make(map[string]*model.User, len(users))
+	for i := range users {
+		userMap[users[i].ID] = &users[i]
+	}
+
+	// 批量查询每个会话的未读消息数
+	type unreadRow struct {
+		ConversationID string
+		Cnt            int64
+	}
+	var unreadRows []unreadRow
+	dal.DB.WithContext(ctx).Model(&model.Message{}).
+		Select("conversation_id as conversation_id, COUNT(*) as cnt").
+		Where("conversation_id IN ? AND sender_id <> ? AND read_at IS NULL", convIDs, userID).
+		Group("conversation_id").
+		Scan(&unreadRows)
+	unreadMap := make(map[string]int, len(unreadRows))
+	for _, r := range unreadRows {
+		unreadMap[r.ConversationID] = int(r.Cnt)
+	}
+
+	// 组装 DTO
 	items := make([]types.Conversation, 0, len(rows))
 	for i := range rows {
-		item, err := s.conversationToDTO(ctx, &rows[i], userID)
-		if err != nil {
-			log.Printf("[Message/ListConversations] failed to convert conversation to DTO, convID=%s, err=%v", rows[i].ID, err)
-			return nil, err
+		conv := &rows[i]
+		otherID := conv.UserBID
+		if conv.UserBID == userID {
+			otherID = conv.UserAID
 		}
-		items = append(items, *item)
+		other := userMap[otherID]
+		if other == nil {
+			log.Printf("[Message/ListConversations] 对端用户不存在, otherID=%s, convID=%s", otherID, conv.ID)
+			continue
+		}
+
+		lastMsgAt := ""
+		if !conv.LastMessageAt.IsZero() {
+			lastMsgAt = conv.LastMessageAt.Format(time.RFC3339)
+		}
+
+		items = append(items, types.Conversation{
+			ID:            conv.ID,
+			OtherUser:     mapper.AuthorToDTO(other),
+			LastMessage:   conv.LastMessage,
+			LastMessageAt: lastMsgAt,
+			UnreadCount:   unreadMap[conv.ID],
+		})
 	}
 
 	return &types.Paginated[types.Conversation]{

@@ -2,6 +2,7 @@ package dal
 
 import (
 	"log"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -21,6 +22,15 @@ func Init(cfg *conf.Config) {
 	if err != nil {
 		log.Fatalf("数据库连接失败: %v", err)
 	}
+
+	// 配置连接池
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Fatalf("获取底层 sql.DB 失败: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	// 告知 GORM many2many 连接表的真实结构
 	if err := DB.SetupJoinTable(&model.Post{}, "Tags", &model.PostTag{}); err != nil {

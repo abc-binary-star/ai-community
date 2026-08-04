@@ -966,22 +966,22 @@ func (s *UserService) UpdateBookmarkFolder(ctx context.Context, folderId, userId
 
 // DeleteBookmarkFolder 删除收藏夹（收藏记录的 folder_id 置为 NULL）
 func (s *UserService) DeleteBookmarkFolder(ctx context.Context, folderId, userId string) error {
-	result := dal.DB.WithContext(ctx).
-		Where("id = ? AND user_id = ?", folderId, userId).
-		Delete(&model.BookmarkFolder{})
-	if result.Error != nil {
-		log.Printf("[BookmarkFolder/Delete] 删除失败, folderId=%s, err=%v", folderId, result.Error)
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return &ServiceError{Msg: "收藏夹不存在", Code: 404}
-	}
-	// 解除收藏记录的关联
-	dal.DB.WithContext(ctx).
-		Model(&model.Bookmark{}).
-		Where("user_id = ? AND folder_id = ?", userId, folderId).
-		Update("folder_id", nil)
-	return nil
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.
+			Where("id = ? AND user_id = ?", folderId, userId).
+			Delete(&model.BookmarkFolder{})
+		if result.Error != nil {
+			log.Printf("[BookmarkFolder/Delete] 删除失败, folderId=%s, err=%v", folderId, result.Error)
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return &ServiceError{Msg: "收藏夹不存在", Code: 404}
+		}
+		// 解除收藏记录的关联
+		return tx.Model(&model.Bookmark{}).
+			Where("user_id = ? AND folder_id = ?", userId, folderId).
+			Update("folder_id", nil).Error
+	})
 }
 
 // ========== Follow Group Module ==========
@@ -1046,20 +1046,20 @@ func (s *UserService) UpdateFollowGroup(ctx context.Context, groupId, userId, na
 
 // DeleteFollowGroup 删除关注分组（关注记录的 group_id 置为 NULL）
 func (s *UserService) DeleteFollowGroup(ctx context.Context, groupId, userId string) error {
-	result := dal.DB.WithContext(ctx).
-		Where("id = ? AND user_id = ?", groupId, userId).
-		Delete(&model.FollowGroup{})
-	if result.Error != nil {
-		log.Printf("[FollowGroup/Delete] 删除失败, groupId=%s, err=%v", groupId, result.Error)
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return &ServiceError{Msg: "分组不存在", Code: 404}
-	}
-	// 解除关注记录的关联
-	dal.DB.WithContext(ctx).
-		Model(&model.Follow{}).
-		Where("follower_id = ? AND group_id = ?", userId, groupId).
-		Update("group_id", nil)
-	return nil
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.
+			Where("id = ? AND user_id = ?", groupId, userId).
+			Delete(&model.FollowGroup{})
+		if result.Error != nil {
+			log.Printf("[FollowGroup/Delete] 删除失败, groupId=%s, err=%v", groupId, result.Error)
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return &ServiceError{Msg: "分组不存在", Code: 404}
+		}
+		// 解除关注记录的关联
+		return tx.Model(&model.Follow{}).
+			Where("follower_id = ? AND group_id = ?", userId, groupId).
+			Update("group_id", nil).Error
+	})
 }
