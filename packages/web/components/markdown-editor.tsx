@@ -75,9 +75,11 @@ export function compressImage(file: File, maxSize: number, quality: number): Pro
 // dataURL 转 File（Word/网页复制的 HTML 中内嵌图片通常为 base64）
 function dataURLToFile(dataUrl: string): File | null {
   try {
-    const [header, base64] = dataUrl.split(',')
+    const [header, base64 = ''] = dataUrl.split(',')
     const mime = /^data:(image\/[^;,]+)/.exec(header)?.[1] || 'image/png'
-    const bin = atob(base64)
+    // 部分来源会对 base64 做百分号编码（如 %2B）；Word 等还会在 base64 中插入换行/空格，需清洗
+    const b64 = (base64.includes('%') ? decodeURIComponent(base64) : base64).replace(/[\r\n\s]/g, '')
+    const bin = atob(b64)
     const bytes = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
     const ext = mime.split('/')[1]?.split(';')[0] || 'png'
@@ -85,6 +87,13 @@ function dataURLToFile(dataUrl: string): File | null {
   } catch {
     return null
   }
+}
+
+// 判断是否为图片文件：MIME 以 image/ 开头，或文件名带常见图片扩展名。
+// Mac 上 Word 复制的图片文件项 type 常为 public.png / public.jpeg 等 UTI，需靠扩展名兜底
+function isImageFile(file: File): boolean {
+  if (file.type.startsWith('image/')) return true
+  return /\.(png|jpe?g|gif|webp|bmp|tiff?|heic)$/i.test(file.name)
 }
 
 // 递归把 DOM 转成纯文本：块级元素与 <br> 后补换行，&nbsp; 转普通空格
@@ -115,26 +124,45 @@ interface PastedImage {
 function parseRichHtml(html: string): { text: string; images: PastedImage[] } {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const images: PastedImage[] = []
+  const seenSrc = new Set<string>()
+
+  // 尝试把图片源加入列表；返回是否成功加入（成功时占位符为列表最后一个）
+  const addSource = (src: string): boolean => {
+    const s = src.trim()
+    if (!s || seenSrc.has(s)) return false
+    seenSrc.add(s)
+    if (s.startsWith('data:image/')) {
+      const file = dataURLToFile(s)
+      if (!file) return false
+      images.push({ placeholder: `@@IMG_${images.length}@@`, source: file })
+      return true
+    }
+    if (/^https?:\/\//i.test(s)) {
+      images.push({ placeholder: `@@IMG_${images.length}@@`, source: s })
+      return true
+    }
+    return false
+  }
 
   Array.from(doc.querySelectorAll('img')).forEach((img) => {
-    const src = (img.getAttribute('src') || '').trim()
-    if (src.startsWith('data:image/')) {
-      const file = dataURLToFile(src)
-      if (file) {
-        const placeholder = `@@IMG_${images.length}@@`
-        img.parentNode?.replaceChild(doc.createTextNode(placeholder), img)
-        images.push({ placeholder, source: file })
-        return
-      }
-    } else if (/^https?:\/\//i.test(src)) {
-      // 网页上的外链图片：直接复用原地址
-      const placeholder = `@@IMG_${images.length}@@`
+    const src = img.getAttribute('src') || ''
+    if (addSource(src)) {
+      const placeholder = images[images.length - 1].placeholder
       img.parentNode?.replaceChild(doc.createTextNode(placeholder), img)
-      images.push({ placeholder, source: src })
-      return
+    } else {
+      img.parentNode?.removeChild(img)
     }
-    img.parentNode?.removeChild(img)
   })
+
+  // 兜底：部分 Word 版本把图片放在 <v:imagedata> 或 CSS 里而非 <img>，
+  // 用正则全量扫描 data URL 补抓（已处理过的跳过）
+  const globalDataUrls = html.match(/data:image\/[^"'>]*/g) || []
+  for (const src of globalDataUrls) {
+    if (addSource(src)) {
+      const placeholder = images[images.length - 1].placeholder
+      doc.body.appendChild(doc.createTextNode(`\n${placeholder}\n`))
+    }
+  }
 
   return { text: htmlToText(doc.body), images }
 }
@@ -383,14 +411,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const html = cd.getData('text/html')
     const parsed = html ? parseRichHtml(html) : null
 
-    // 剪贴板文件项中的图片（直接复制图片文件/截图）
-    const fileImages = Array.from(cd.items)
-      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
-      .map((item) => item.getAsFile())
-      .filter((f): f is File => !!f)
+    // 剪贴板文件项中的图片（Mac 上 Word 复制时图片以文件项提供，type 常为 public.png 等 UTI）
+    const fileImages = Array.from(cd.files).filter(isImageFile)
 
-    // 没有任何图片时不做拦截，保持浏览器默认粘贴（纯文本）
-    if (!parsed || (parsed.images.length === 0 && fileImages.length === 0)) return
+    // 没有任何图片来源时不拦截，保持浏览器默认粘贴（纯文本）。
+    // 注意：Word 可能把图片全放文件项、HTML 为空（parsed 为 null），此时也必须拦截
+    if (fileImages.length === 0 && !(parsed && parsed.images.length > 0)) return
     e.preventDefault()
 
     const ta = textareaRef.current
@@ -399,8 +425,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const end = ta ? ta.selectionEnd : current.length
 
     // HTML 内嵌/外链图片：按原位置替换占位符
-    let inserted = parsed.text
-    for (const img of parsed.images) {
+    let inserted = parsed ? parsed.text : ''
+    for (const img of (parsed?.images ?? [])) {
       const url = typeof img.source === 'string' ? img.source : await uploadImage(img.source)
       if (!url) continue
       inserted = inserted.replace(img.placeholder, `![图片](${url})`)

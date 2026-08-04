@@ -20,6 +20,11 @@ const safeStyleValue = (_node: unknown, key: string, value: unknown) =>
 
 const sanitizeSchema = {
   ...defaultSchema,
+  // 编辑器本地预览用 blob:/data: 地址（发帖后为 http/https），需放行；均为安全来源
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [...(defaultSchema.protocols?.src || []), 'blob', 'data'],
+  },
   attributes: {
     ...defaultSchema.attributes,
     code: [...(defaultSchema.attributes?.code || []), 'className'],
@@ -148,6 +153,10 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeRaw], [rehypePrism, { ignoreMissing: true }], [rehypeSanitize, sanitizeSchema]]}
         components={components}
+        urlTransform={(url) =>
+          // 放行编辑器本地预览的 blob:/data: 图片地址（发帖后为 http/https）
+          /^(blob|data|https?|mailto|tel):/i.test(url) ? url : ''
+        }
       >
         {content}
       </ReactMarkdown>
