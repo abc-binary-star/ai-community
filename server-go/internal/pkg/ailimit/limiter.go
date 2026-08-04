@@ -282,8 +282,8 @@ func (l *Limiter) RecordUsage(ctx context.Context, rec UsageRecord) {
 	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "user_id"}, {Name: "date"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"request_count": gorm.Expr("ai_user_quotas.request_count + 1"),
-			"total_tokens":  gorm.Expr("ai_user_quotas.total_tokens + ?", rec.TotalTokens),
+			"request_count": gorm.Expr("ai_user_quota.request_count + 1"),
+			"total_tokens":  gorm.Expr("ai_user_quota.total_tokens + ?", rec.TotalTokens),
 		}),
 	}).Create(&userQuota).Error; err != nil {
 		log.Printf("[AILimit] 更新用户配额失败: %v", err)
@@ -298,8 +298,8 @@ func (l *Limiter) RecordUsage(ctx context.Context, rec UsageRecord) {
 	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "date"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"request_count": gorm.Expr("ai_global_quotas.request_count + 1"),
-			"total_tokens":  gorm.Expr("ai_global_quotas.total_tokens + ?", rec.TotalTokens),
+			"request_count": gorm.Expr("ai_global_quota.request_count + 1"),
+			"total_tokens":  gorm.Expr("ai_global_quota.total_tokens + ?", rec.TotalTokens),
 		}),
 	}).Create(&globalQuota).Error; err != nil {
 		log.Printf("[AILimit] 更新全局配额失败: %v", err)
