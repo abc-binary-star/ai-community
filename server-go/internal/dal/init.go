@@ -51,7 +51,8 @@ func Init(cfg *conf.Config) {
 		&model.Notification{},
 &model.Report{},
 	&model.Channel{},
-	&model.Block{},
+&model.ChannelCategory{},
+&model.Block{},
 	&model.NotificationPreference{},
 	&model.Conversation{},
 	&model.Message{},
@@ -97,25 +98,46 @@ func initSearchIndexes() {
 	log.Println("搜索索引初始化完成")
 }
 
-// defaultChannels 默认频道列表
-var defaultChannels = []model.Channel{
-	{Name: "general", Label: "综合讨论", Icon: "💬", SortOrder: 1},
-	{Name: "tech", Label: "技术前沿", Icon: "🔧", SortOrder: 2},
-	{Name: "design", Label: "设计美学", Icon: "🎨", SortOrder: 3},
-	{Name: "gaming", Label: "游戏天地", Icon: "🎮", SortOrder: 4},
-	{Name: "life", Label: "生活方式", Icon: "🌿", SortOrder: 5},
+// defaultChannelCategories 默认频道分组（Icon 存储 lucide 图标名称）
+var defaultChannelCategories = []model.ChannelCategory{
+	{Name: "explore", Label: "探索", Icon: "compass", SortOrder: 1},
+	{Name: "creation", Label: "创作与兴趣", Icon: "sparkles", SortOrder: 2},
 }
 
-// seedDefaultChannels 频道表为空时插入默认频道
+// defaultChannels 默认频道列表（CategoryID 在 seed 时动态填充）
+var defaultChannels = []model.Channel{
+	{Name: "general", Label: "综合讨论", Icon: "message-circle", SortOrder: 1},
+	{Name: "tech", Label: "技术前沿", Icon: "code", SortOrder: 2},
+	{Name: "design", Label: "设计美学", Icon: "palette", SortOrder: 3},
+	{Name: "gaming", Label: "游戏天地", Icon: "gamepad-2", SortOrder: 4},
+	{Name: "life", Label: "生活方式", Icon: "leaf", SortOrder: 5},
+}
+
+// seedDefaultChannels 频道表为空时插入默认分组和频道
 func seedDefaultChannels() {
 	var count int64
 	DB.Model(&model.Channel{}).Count(&count)
 	if count > 0 {
 		return
 	}
+
+	// 先创建分组
+	if err := DB.Create(&defaultChannelCategories).Error; err != nil {
+		log.Printf("默认频道分组初始化失败: %v", err)
+		return
+	}
+
+	// 为频道分配分组：general -> explore，其余 -> creation
+	exploreID := defaultChannelCategories[0].ID
+	creationID := defaultChannelCategories[1].ID
+	defaultChannels[0].CategoryID = &exploreID // general -> 探索
+	for i := 1; i < len(defaultChannels); i++ {
+		defaultChannels[i].CategoryID = &creationID // tech/design/gaming/life -> 创作与兴趣
+	}
+
 	if err := DB.Create(&defaultChannels).Error; err != nil {
 		log.Printf("默认频道初始化失败: %v", err)
 		return
 	}
-	log.Println("默认频道初始化成功")
+	log.Println("默认频道和分组初始化成功")
 }

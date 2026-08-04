@@ -1,10 +1,5 @@
-import { Navbar } from '@/app/community/components/navbar'
+import { CommunityShell } from '@/app/community/components/community-shell'
 
 export default function UserProfileLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Navbar />
-      <main className="container flex-1 py-8">{children}</main>
-    </div>
-  )
+  return <CommunityShell>{children}</CommunityShell>
 }

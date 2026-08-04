@@ -1,0 +1,357 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import Link from 'next/link'
+import { usePathname, useSearchParams } from 'next/navigation'
+import {
+  Bookmark,
+  ChevronRight,
+  Code2,
+  Compass,
+  FileText,
+  Gamepad2,
+  Hash,
+  Leaf,
+  type LucideIcon,
+  MessageCircle,
+  Palette,
+  Search,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import { useChannelTree } from '@/lib/use-channel-tree'
+import { useCollapsedState } from '@/lib/use-collapsed-state'
+import { CHANNELS, CHANNEL_LABELS } from 'shared'
+import { cn } from '@/lib/utils'
+
+// ---- 图标映射：将数据库中的图标名称字符串映射为 lucide 组件 ----
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  'message-circle': MessageCircle,
+  'code': Code2,
+  'palette': Palette,
+  'gamepad-2': Gamepad2,
+  'leaf': Leaf,
+  'compass': Compass,
+  'sparkles': Sparkles,
+  'file-text': FileText,
+  'bookmark': Bookmark,
+  'hash': Hash,
+}
+
+// fallback 频道的默认图标映射
+const FALLBACK_ICONS: Record<string, LucideIcon> = {
+  general: MessageCircle,
+  tech: Code2,
+  design: Palette,
+  gaming: Gamepad2,
+  life: Leaf,
+}
+
+function getIcon(iconName: string | undefined, fallbackName?: string): LucideIcon {
+  if (iconName && ICON_MAP[iconName]) return ICON_MAP[iconName]
+  if (fallbackName && FALLBACK_ICONS[fallbackName]) return FALLBACK_ICONS[fallbackName]
+  return Hash
+}
+
+// ---- 移动端抽屉 ----
+
+function MobileSidebar({
+  open,
+  onClose,
+  activeChannel,
+  isDiscover,
+}: {
+  open: boolean
+  onClose: () => void
+  activeChannel: string
+  isDiscover: boolean
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 md:hidden">
+      {/* 背景遮罩 */}
+      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
+      {/* 抽屉面板 */}
+      <div className="absolute left-0 top-0 h-full w-72 animate-[slide-up_0.2s_ease-out]">
+        <SidebarContent
+          activeChannel={activeChannel}
+          isDiscover={isDiscover}
+          onNavigate={onClose}
+          showCloseButton
+          onClose={onClose}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ---- 折叠分组 ----
+
+function CollapsibleSection({
+  label,
+  icon,
+  children,
+}: {
+  label: string
+  icon?: string
+  children: React.ReactNode
+}) {
+  const { collapsed, toggle } = useCollapsedState(label)
+  const Icon = getIcon(icon)
+
+  return (
+    <div className="mb-1">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronRight
+          className={cn(
+            'size-3 transition-transform duration-200',
+            !collapsed && 'rotate-90',
+          )}
+        />
+        <Icon className="size-3.5" />
+        <span>{label}</span>
+      </button>
+      {!collapsed && <div className="mt-0.5">{children}</div>}
+    </div>
+  )
+}
+
+// ---- 频道项 ----
+
+function ChannelItem({
+  label,
+  icon,
+  iconFallback,
+  href,
+  active,
+  onNavigate,
+}: {
+  label: string
+  icon?: string
+  iconFallback?: string
+  href: string
+  active: boolean
+  onNavigate?: () => void
+}) {
+  const Icon = getIcon(icon, iconFallback)
+
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+        active
+          ? 'bg-primary/10 font-medium text-primary'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="truncate">{label}</span>
+    </Link>
+  )
+}
+
+// ---- 侧边栏内容（桌面和移动端共用） ----
+
+function SidebarContent({
+  activeChannel,
+  isDiscover,
+  onNavigate,
+  showCloseButton,
+  onClose,
+}: {
+  activeChannel: string
+  isDiscover: boolean
+  onNavigate?: () => void
+  showCloseButton?: boolean
+  onClose?: () => void
+}) {
+  const { data: tree } = useChannelTree()
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // 构建频道树，API 不可用时使用 fallback
+  const { categories, uncategorized } = useMemo(() => {
+    if (tree) {
+      return { categories: tree.categories, uncategorized: tree.uncategorized }
+    }
+    // Fallback：将默认频道放入一个未分组列表
+    const fallbackChannels = CHANNELS.map((name) => ({
+      id: name,
+      name,
+      label: CHANNEL_LABELS[name] || name,
+      description: '',
+      icon: '',
+      categoryId: null,
+      sortOrder: 0,
+      createdBy: '',
+      createdAt: '',
+      updatedAt: '',
+    }))
+    return { categories: [], uncategorized: fallbackChannels }
+  }, [tree])
+
+  // 搜索过滤
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return categories
+    const q = searchQuery.toLowerCase()
+    return categories
+      .map((cat) => ({
+        ...cat,
+        channels: cat.channels.filter(
+          (ch) =>
+            ch.label.toLowerCase().includes(q) || ch.name.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((cat) => cat.channels.length > 0)
+  }, [categories, searchQuery])
+
+  const filteredUncategorized = useMemo(() => {
+    if (!searchQuery.trim()) return uncategorized
+    const q = searchQuery.toLowerCase()
+    return uncategorized.filter(
+      (ch) => ch.label.toLowerCase().includes(q) || ch.name.toLowerCase().includes(q),
+    )
+  }, [uncategorized, searchQuery])
+
+  return (
+    <div className="flex h-full flex-col border-r border-border bg-card/40">
+      {/* 顶部：搜索栏 + 关闭按钮 */}
+      <div className="flex items-center gap-2 p-3">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="搜索频道..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          />
+        </div>
+        {showCloseButton && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="关闭"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      {/* 频道列表（可滚动） */}
+      <nav className="scrollbar-thin flex-1 overflow-y-auto px-2 pb-4">
+        {/* 固定项：发现 */}
+        <ChannelItem
+          label="发现"
+          icon="compass"
+          href="/community/discover"
+          active={isDiscover}
+          onNavigate={onNavigate}
+        />
+
+        {/* 分组频道 */}
+        {filteredCategories.map((cat) => (
+          <CollapsibleSection key={cat.id} label={cat.label} icon={cat.icon}>
+            <div className="space-y-0.5">
+              {cat.channels.map((ch) => (
+                <ChannelItem
+                  key={ch.id}
+                  label={ch.label}
+                  icon={ch.icon}
+                  iconFallback={ch.name}
+                  href={`/community?channel=${encodeURIComponent(ch.name)}`}
+                  active={!isDiscover && activeChannel === ch.name}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
+          </CollapsibleSection>
+        ))}
+
+        {/* 未分组频道 */}
+        {filteredUncategorized.length > 0 && (
+          <div className="mt-2 space-y-0.5">
+            {filteredUncategorized.map((ch) => (
+              <ChannelItem
+                key={ch.id}
+                label={ch.label}
+                icon={ch.icon}
+                iconFallback={ch.name}
+                href={`/community?channel=${encodeURIComponent(ch.name)}`}
+                active={!isDiscover && activeChannel === ch.name}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* 搜索无结果 */}
+        {searchQuery.trim() &&
+          filteredCategories.length === 0 &&
+          filteredUncategorized.length === 0 && (
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+              没有找到匹配的频道
+            </p>
+          )}
+      </nav>
+
+      {/* 底部：个人入口 */}
+      <div className="border-t border-border p-2">
+        <ChannelItem
+          label="我的草稿"
+          icon="file-text"
+          href="/community/drafts"
+          active={false}
+          onNavigate={onNavigate}
+        />
+        <ChannelItem
+          label="我的收藏"
+          icon="bookmark"
+          href="/bookmarks"
+          active={false}
+          onNavigate={onNavigate}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ---- 主导出组件 ----
+
+export function Sidebar({
+  mobileOpen,
+  onMobileClose,
+}: {
+  mobileOpen: boolean
+  onMobileClose: () => void
+}) {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const activeChannel = searchParams.get('channel') || 'general'
+  const isDiscover = pathname === '/community/discover'
+
+  return (
+    <>
+      {/* 桌面端固定侧边栏 */}
+      <aside className="hidden w-60 shrink-0 md:block">
+        <SidebarContent activeChannel={activeChannel} isDiscover={isDiscover} />
+      </aside>
+
+      {/* 移动端抽屉 */}
+      <MobileSidebar
+        open={mobileOpen}
+        onClose={onMobileClose}
+        activeChannel={activeChannel}
+        isDiscover={isDiscover}
+      />
+    </>
+  )
+}

@@ -28,9 +28,16 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 
 	// --- 频道路由 ---
 	h.GET("/api/channels", handler.ListChannels)
+	h.GET("/api/channels/tree", handler.GetChannelTree)
 	h.POST("/api/channels", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.CreateChannel)
 	h.PUT("/api/channels/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.UpdateChannel)
 	h.DELETE("/api/channels/:id", middleware.Auth(), middleware.RequireRole("admin"), handler.DeleteChannel)
+
+	// --- 频道分组路由 ---
+	h.GET("/api/channel-categories", handler.ListCategories)
+	h.POST("/api/channel-categories", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.CreateCategory)
+	h.PUT("/api/channel-categories/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.UpdateCategory)
+	h.DELETE("/api/channel-categories/:id", middleware.Auth(), middleware.RequireRole("admin"), handler.DeleteCategory)
 
 	// --- 认证路由 ---
 	auth := h.Group("/api/auth")

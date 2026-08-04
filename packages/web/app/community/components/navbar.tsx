@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, Compass, FileText, LogOut, MessageCircle, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
+import { Bookmark, ChevronDown, FileText, LogOut, MessageCircle, Menu, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,12 +16,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuthStore } from '@/lib/store'
-import { useChannels } from '@/lib/use-channels'
 import { useHydrated } from '@/lib/use-hydrated'
 import { getInitials } from '@/lib/utils'
 import { api } from '@/lib/api'
 import type { PublicUser } from 'shared'
-import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { NotificationBell } from './notification-bell'
 import { SearchBar } from './search-bar'
 
@@ -54,16 +52,13 @@ function MessageEntry() {
   )
 }
 
-function NavbarInner() {
+function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const hydrated = useHydrated()
-  const activeChannel = searchParams.get('channel') || 'general'
-  const isDiscover = pathname === '/community/discover'
-  const { data: channels } = useChannels()
 
   // 拉取当前用户的统计数据（帖子数、粉丝数、关注数）
   const profileQuery = useQuery({
@@ -73,11 +68,6 @@ function NavbarInner() {
   })
   const stats = profileQuery.data
 
-  // 频道列表，API 加载前使用 fallback
-  const channelItems: { name: string; label: string }[] = (channels && channels.length > 0)
-    ? channels
-    : CHANNELS.map((name) => ({ name, label: CHANNEL_LABELS[name] || name }))
-
   const handleLogout = () => {
     clearAuth()
     router.push('/login')
@@ -85,45 +75,27 @@ function NavbarInner() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 px-4">
-        <div className="flex items-center gap-8">
-          {/* 品牌：蓝色圆角方块 logo */}
+      <div className="mx-auto flex h-16 w-full items-center justify-between gap-4 px-4">
+        <div className="flex items-center gap-3">
+          {/* 移动端：汉堡菜单按钮 */}
+          {onMenuClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={onMenuClick}
+              aria-label="打开菜单"
+            >
+              <Menu className="size-5" />
+            </Button>
+          )}
+          {/* 品牌 */}
           <Link href="/community/discover" className="flex items-center gap-2 font-semibold">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               C
             </span>
             <span className="text-base">Commons</span>
           </Link>
-          {/* 频道 tab */}
-          <nav className="hidden items-center gap-1 md:flex">
-            <Link
-              href="/community/discover"
-              className={`mr-1 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                isDiscover
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              }`}
-            >
-              <Compass className="size-4" />
-              发现
-            </Link>
-            {channelItems.map((ch) => {
-              const active = !isDiscover && activeChannel === ch.name
-              return (
-                <Link
-                  key={ch.name}
-                  href={`/community?channel=${encodeURIComponent(ch.name)}`}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                    active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {ch.label}
-                </Link>
-              )
-            })}
-          </nav>
         </div>
 
         {/* 搜索栏 */}
@@ -252,10 +224,10 @@ function NavbarInner() {
   )
 }
 
-export function Navbar() {
+export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   return (
     <Suspense fallback={<header className="h-16 border-b border-border" />}>
-      <NavbarInner />
+      <NavbarInner onMenuClick={onMenuClick} />
     </Suspense>
   )
 }

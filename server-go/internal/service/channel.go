@@ -70,6 +70,7 @@ func (s *ChannelService) CreateChannel(ctx context.Context, userID string, req t
 		Label:       req.Label,
 		Description: req.Description,
 		Icon:        req.Icon,
+		CategoryID:  req.CategoryID,
 		CreatedBy:   userID,
 	}
 	if err := dal.DB.WithContext(ctx).Create(channel).Error; err != nil {
@@ -104,6 +105,9 @@ func (s *ChannelService) UpdateChannel(ctx context.Context, id string, req types
 	}
 	if req.SortOrder != nil {
 		updates["sort_order"] = *req.SortOrder
+	}
+	if req.CategoryID != nil {
+		updates["category_id"] = *req.CategoryID
 	}
 
 	if len(updates) > 0 {
@@ -156,9 +160,68 @@ func channelToDTO(c *model.Channel) types.Channel {
 		Label:       c.Label,
 		Description: c.Description,
 		Icon:        c.Icon,
+		CategoryID:  c.CategoryID,
 		SortOrder:   c.SortOrder,
 		CreatedBy:   c.CreatedBy,
 		CreatedAt:   c.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   c.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+// GetChannelTree 获取频道树（分组 + 频道）
+func (s *ChannelService) GetChannelTree(ctx context.Context) (*types.ChannelTree, error) {
+	// 查询所有分组
+	var categories []model.ChannelCategory
+	if err := dal.DB.WithContext(ctx).Order("sort_order ASC, created_at ASC").Find(&categories).Error; err != nil {
+		log.Printf("[Channel/GetChannelTree] failed to list categories, err=%v", err)
+		return nil, err
+	}
+
+	// 查询所有频道
+	var channels []model.Channel
+	if err := dal.DB.WithContext(ctx).Order("sort_order ASC, created_at ASC").Find(&channels).Error; err != nil {
+		log.Printf("[Channel/GetChannelTree] failed to list channels, err=%v", err)
+		return nil, err
+	}
+
+	// 按分组归类
+	categoryMap := make(map[string]*types.ChannelCategoryWithChannels)
+	for i := range categories {
+		cat := &categories[i]
+		categoryMap[cat.ID] = &types.ChannelCategoryWithChannels{
+			ChannelCategory: types.ChannelCategory{
+				ID:        cat.ID,
+				Name:      cat.Name,
+				Label:     cat.Label,
+				Icon:      cat.Icon,
+				SortOrder: cat.SortOrder,
+			},
+			Channels: []types.Channel{},
+		}
+	}
+
+	var uncategorized []types.Channel
+	for _, ch := range channels {
+		dto := channelToDTO(&ch)
+		if ch.CategoryID != nil {
+			if cat, ok := categoryMap[*ch.CategoryID]; ok {
+				cat.Channels = append(cat.Channels, dto)
+				continue
+			}
+		}
+		uncategorized = append(uncategorized, dto)
+	}
+
+	// 保持分组顺序
+	result := &types.ChannelTree{
+		Categories:    make([]types.ChannelCategoryWithChannels, 0, len(categories)),
+		Uncategorized: uncategorized,
+	}
+	for _, cat := range categories {
+		if entry, ok := categoryMap[cat.ID]; ok {
+			result.Categories = append(result.Categories, *entry)
+		}
+	}
+
+	return result, nil
 }

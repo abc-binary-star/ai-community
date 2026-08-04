@@ -129,7 +129,7 @@ export function PostListPage({
       </div>
 
       {/* 侧边栏 */}
-      <aside className="hidden w-72 shrink-0 space-y-6 lg:block">
+      <aside className="hidden w-72 shrink-0 space-y-6 xl:block">
         <Card className="bg-primary/5">
           <div className="space-y-3 p-5">
             <p className="text-sm font-semibold">社区公约</p>

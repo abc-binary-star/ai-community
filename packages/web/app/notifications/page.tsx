@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Navbar } from '@/app/community/components/navbar'
+import { CommunityShell } from '@/app/community/components/community-shell'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { TYPE_ICON, TYPE_LABEL } from '@/lib/notification-meta'
 import { toast } from 'sonner'
@@ -178,13 +178,10 @@ function NotificationsContent() {
 
 export default function NotificationsPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Navbar />
-      <div className="container flex-1 py-8">
-        <Suspense>
-          <NotificationsContent />
-        </Suspense>
-      </div>
-    </div>
+    <CommunityShell>
+      <Suspense>
+        <NotificationsContent />
+      </Suspense>
+    </CommunityShell>
   )
 }

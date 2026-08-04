@@ -88,10 +88,11 @@ type HandleReportReq struct {
 }
 
 type CreateChannelReq struct {
-	Name        string `json:"name" vd:"len($)>=2 && len($)<=90"`   // 30中文字符=90字节
-	Label       string `json:"label" vd:"len($)>=1 && len($)<=150"` // 50中文字符=150字节
-	Description string `json:"description"`
-	Icon        string `json:"icon"`
+	Name        string  `json:"name" vd:"len($)>=2 && len($)<=90"`   // 30中文字符=90字节
+	Label       string  `json:"label" vd:"len($)>=1 && len($)<=150"` // 50中文字符=150字节
+	Description string  `json:"description"`
+	Icon        string  `json:"icon"`
+	CategoryID  *string `json:"categoryId"`
 }
 
 type UpdateChannelReq struct {
@@ -99,6 +100,22 @@ type UpdateChannelReq struct {
 	Description *string `json:"description"`
 	Icon        *string `json:"icon"`
 	SortOrder   *int    `json:"sortOrder"`
+	CategoryID  *string `json:"categoryId"`
+}
+
+// --- 频道分组 ---
+
+type CreateChannelCategoryReq struct {
+	Name      string `json:"name" vd:"len($)>=2 && len($)<=90"`
+	Label     string `json:"label" vd:"len($)>=1 && len($)<=150"`
+	Icon      string `json:"icon"`
+	SortOrder *int   `json:"sortOrder"`
+}
+
+type UpdateChannelCategoryReq struct {
+	Label     *string `json:"label"`
+	Icon      *string `json:"icon"`
+	SortOrder *int    `json:"sortOrder"`
 }
 
 type UpdatePostStatusReq struct {
@@ -290,15 +307,38 @@ type Report struct {
 }
 
 type Channel struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	Icon        string `json:"icon"`
-	SortOrder   int    `json:"sortOrder"`
-	CreatedBy   string `json:"createdBy"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Label       string  `json:"label"`
+	Description string  `json:"description"`
+	Icon        string  `json:"icon"`
+	CategoryID  *string `json:"categoryId"`
+	SortOrder   int     `json:"sortOrder"`
+	CreatedBy   string  `json:"createdBy"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
+// ChannelCategory 频道分组 DTO
+type ChannelCategory struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Label     string `json:"label"`
+	Icon      string `json:"icon"`
+	SortOrder int    `json:"sortOrder"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// ChannelCategoryWithChannels 含频道列表的分组 DTO（用于 tree 接口）
+type ChannelCategoryWithChannels struct {
+	ChannelCategory
+	Channels []Channel `json:"channels"`
+}
+
+// ChannelTree 频道树结构
+type ChannelTree struct {
+	Categories    []ChannelCategoryWithChannels `json:"categories"`
+	Uncategorized []Channel                     `json:"uncategorized"`
 }
 
 // NotificationPreference 通知偏好 DTO
