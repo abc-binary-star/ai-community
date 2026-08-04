@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Bookmark, ChevronDown, Compass, FileText, LogOut, MessageCircle, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -56,11 +56,13 @@ function MessageEntry() {
 
 function NavbarInner() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const hydrated = useHydrated()
   const activeChannel = searchParams.get('channel') || 'general'
+  const isDiscover = pathname === '/community/discover'
   const { data: channels } = useChannels()
 
   // 拉取当前用户的统计数据（帖子数、粉丝数、关注数）
@@ -96,13 +98,17 @@ function NavbarInner() {
           <nav className="hidden items-center gap-1 md:flex">
             <Link
               href="/community/discover"
-              className={`mr-1 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground`}
+              className={`mr-1 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                isDiscover
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
             >
               <Compass className="size-4" />
               发现
             </Link>
             {channelItems.map((ch) => {
-              const active = activeChannel === ch.name
+              const active = !isDiscover && activeChannel === ch.name
               return (
                 <Link
                   key={ch.name}
