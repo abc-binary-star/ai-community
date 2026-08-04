@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/stt"
@@ -37,7 +38,8 @@ func SuggestTitle(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	titles, err := aiService.SuggestTitle(ctx, req.Content)
+	userID := middleware.GetCurrentUserID(c)
+	titles, err := aiService.SuggestTitle(ctx, userID, req.Content)
 	if err != nil {
 		if !ai.Enabled() {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
@@ -71,7 +73,8 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	result, err := aiService.Rewrite(ctx, req.Content, req.Selection, req.Style)
+	userID := middleware.GetCurrentUserID(c)
+	result, err := aiService.Rewrite(ctx, userID, req.Content, req.Selection, req.Style)
 	if err != nil {
 		if !ai.Enabled() {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
@@ -139,7 +142,8 @@ func Summarize(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	summary, err := aiService.Summarize(ctx, req.Content)
+	userID := middleware.GetCurrentUserID(c)
+	summary, err := aiService.Summarize(ctx, userID, req.Content)
 	if err != nil {
 		if !ai.Enabled() {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
@@ -169,7 +173,8 @@ func VoicePolish(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	result, err := aiService.VoicePolish(ctx, req.Content, req.Style, req.Target)
+	userID := middleware.GetCurrentUserID(c)
+	result, err := aiService.VoicePolish(ctx, userID, req.Content, req.Style, req.Target)
 	if err != nil {
 		if !ai.Enabled() {
 			response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")

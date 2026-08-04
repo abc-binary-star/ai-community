@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/service"
 	"github.com/cloudwego/hertz/pkg/app"
@@ -33,8 +34,9 @@ func GetThreadSummary(ctx context.Context, c *app.RequestContext) {
 // POST /api/posts/:id/summary
 func GenerateThreadSummary(ctx context.Context, c *app.RequestContext) {
 	postID := c.Param("id")
+	userID := middleware.GetCurrentUserID(c)
 
-	result, err := threadSummaryService.GenerateThreadSummary(ctx, postID)
+	result, err := threadSummaryService.GenerateThreadSummary(ctx, userID, postID)
 	if err != nil {
 		if pe, ok := err.(*service.PostSummaryError); ok {
 			response.Error(c, pe.Code, pe.Msg)

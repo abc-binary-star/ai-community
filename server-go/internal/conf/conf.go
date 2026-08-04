@@ -3,6 +3,7 @@ package conf
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,9 @@ type Config struct {
 	DeepSeekModel string
 	VolcASRKey    string
 	VolcASRResID  string
+	// AI 限流配置
+	AIConcurrentLimit   int
+	AIDailyTokenLimit   int
 }
 
 // Global 全局配置实例，Load 后可用
@@ -58,6 +62,8 @@ func Load() *Config {
 		DeepSeekModel: getEnvOrDefault("DEEPSEEK_MODEL", "deepseek-chat"),
 		VolcASRKey:    os.Getenv("VOLC_ASR_API_KEY"),
 		VolcASRResID:  getEnvOrDefault("VOLC_ASR_RESOURCE_ID", "volc.bigasr.sauc.duration"),
+		AIConcurrentLimit:   getEnvIntOrDefault("AI_CONCURRENT_LIMIT", 5),
+		AIDailyTokenLimit:   getEnvIntOrDefault("AI_DAILY_TOKEN_LIMIT", 2000000),
 	}
 	Global = cfg
 	return cfg
@@ -66,6 +72,15 @@ func Load() *Config {
 func getEnvOrDefault(key, defaultVal string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return defaultVal
+}
+
+func getEnvIntOrDefault(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return defaultVal
 }

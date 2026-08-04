@@ -13,7 +13,7 @@ import (
 type AIService struct{}
 
 // SuggestTitle 根据帖子内容生成 3 个候选标题
-func (s *AIService) SuggestTitle(ctx context.Context, content string) ([]string, error) {
+func (s *AIService) SuggestTitle(ctx context.Context, userID, content string) ([]string, error) {
 	truncated := content
 	if runes := []rune(truncated); len(runes) > 2000 {
 		truncated = string(runes[:2000])
@@ -32,6 +32,8 @@ func (s *AIService) SuggestTitle(ctx context.Context, content string) ([]string,
 		User:        truncated,
 		MaxTokens:   500,
 		Temperature: 0.7,
+		UserID:      userID,
+		Feature:     "suggest_title",
 	})
 	if err != nil {
 		log.Printf("[AI/SuggestTitle] failed to call AI, err=%v", err)
@@ -67,7 +69,7 @@ func (s *AIService) SuggestTitle(ctx context.Context, content string) ([]string,
 }
 
 // Rewrite 润色文本内容。selection 非空时只润色选段，否则润色全文。
-func (s *AIService) Rewrite(ctx context.Context, content, selection, style string) (string, error) {
+func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, style string) (string, error) {
 	// 确定润色目标：有选段时润色选段，否则润色全文
 	target := selection
 	if target == "" {
@@ -124,6 +126,8 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 		User:        truncated,
 		MaxTokens:   8000,
 		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "rewrite",
 	})
 	if err != nil {
 		log.Printf("[AI/Rewrite] failed to call AI, err=%v", err)
@@ -141,7 +145,7 @@ func (s *AIService) Rewrite(ctx context.Context, content, selection, style strin
 }
 
 // Summarize 根据帖子内容生成摘要（1-2 句话，供列表卡片展示）
-func (s *AIService) Summarize(ctx context.Context, content string) (string, error) {
+func (s *AIService) Summarize(ctx context.Context, userID, content string) (string, error) {
 	truncated := content
 	if runes := []rune(truncated); len(runes) > 15000 {
 		truncated = string(runes[:15000])
@@ -160,6 +164,8 @@ func (s *AIService) Summarize(ctx context.Context, content string) (string, erro
 		User:        truncated,
 		MaxTokens:   200,
 		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "summarize",
 	})
 	if err != nil {
 		log.Printf("[AI/Summarize] failed to call AI, err=%v", err)
@@ -173,7 +179,7 @@ func (s *AIService) Summarize(ctx context.Context, content string) (string, erro
 
 // VoicePolish 润色语音转录文本：去口水词、补标点、按语义分段，可选转为 Markdown 段落。
 // target="comment" 时精简为评论风格；target="paragraph" 时展开为结构化段落。
-func (s *AIService) VoicePolish(ctx context.Context, content, style, target string) (string, error) {
+func (s *AIService) VoicePolish(ctx context.Context, userID, content, style, target string) (string, error) {
 	truncated := content
 	if runes := []rune(truncated); len(runes) > 15000 {
 		truncated = string(runes[:15000])
@@ -219,6 +225,8 @@ func (s *AIService) VoicePolish(ctx context.Context, content, style, target stri
 		User:        truncated,
 		MaxTokens:   8000,
 		Temperature: 0.3,
+		UserID:      userID,
+		Feature:     "voice_polish",
 	})
 	if err != nil {
 		log.Printf("[AI/VoicePolish] failed to call AI, err=%v", err)
