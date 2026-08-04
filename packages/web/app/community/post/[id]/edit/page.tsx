@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save, Send, Sparkles, FileText, ImagePlus, X } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Send, Sparkles, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,7 @@ import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
 import { MarkdownEditor, type MarkdownEditorHandle, compressImage } from '@/components/markdown-editor'
+import { CoverEditor } from '@/app/community/components/cover-editor'
 
 export default function EditPostPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -33,7 +34,6 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   const [coverUrl, setCoverUrl] = useState('')
   // 封面本地文件：选择后本地预览，保存/发布时统一上传 OSS
   const [coverFile, setCoverFile] = useState<File | null>(null)
-  const coverInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const { data: channels } = useChannels()
 
@@ -314,54 +314,17 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
           </Button>
         </div>
       </div>
-      {/* 封面图 */}
-      <div className="space-y-2">
-        {coverUrl ? (
-          <div className="relative group">
-            <img src={coverUrl} alt="封面预览" className="w-full max-h-48 object-cover rounded-lg" />
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="absolute top-2 right-2 size-7 opacity-90"
-              onClick={() => {
-                if (coverUrl.startsWith('blob:')) URL.revokeObjectURL(coverUrl)
-                setCoverUrl('')
-                setCoverFile(null)
-              }}
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => coverInputRef.current?.click()}
-          >
-            <ImagePlus className="size-4" />
-            添加封面图
-          </Button>
-        )}
-        <input
-          ref={coverInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (!file) return
-            if (file.size > 5 * 1024 * 1024) {
-              toast.error('图片文件太大，最多 5MB')
-              e.target.value = ''
-              return
-            }
-            // 先本地预览，保存/发布时统一上传
-            if (coverUrl.startsWith('blob:')) URL.revokeObjectURL(coverUrl)
-            setCoverUrl(URL.createObjectURL(file))
+      {/* 封面图：紧凑 16:9 预览，不挤占编辑器空间 */}
+      <div className="mb-3">
+        <div className="mb-1.5 flex items-baseline gap-2">
+          <Label className="text-xs text-muted-foreground">封面</Label>
+          <span className="text-xs text-muted-foreground/60">推荐比例 16:9</span>
+        </div>
+        <CoverEditor
+          coverUrl={coverUrl}
+          onChange={(url, file) => {
+            setCoverUrl(url)
             setCoverFile(file)
-            e.target.value = ''
           }}
         />
       </div>

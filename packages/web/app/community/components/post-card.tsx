@@ -49,7 +49,7 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
           <img
             src={post.coverUrl}
             alt={post.title}
-            className="max-h-48 w-full rounded-lg object-cover"
+            className="aspect-video w-full rounded-lg object-cover"
             loading="lazy"
           />
         )}

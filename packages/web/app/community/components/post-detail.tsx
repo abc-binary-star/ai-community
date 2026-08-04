@@ -220,11 +220,13 @@ export function PostDetailView({ id }: { id: string }) {
           </div>
           <h1 className="text-2xl font-semibold leading-snug">{post.title}</h1>
           {post.coverUrl && (
-            <img
-              src={post.coverUrl}
-              alt={post.title}
-              className="max-h-96 w-full rounded-lg object-cover"
-            />
+            <div className="aspect-video max-h-96 w-full overflow-hidden rounded-lg">
+              <img
+                src={post.coverUrl}
+                alt={post.title}
+                className="h-full w-full object-cover"
+              />
+            </div>
           )}
 
           {post.aiSummary && (
