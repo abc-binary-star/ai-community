@@ -79,7 +79,8 @@ func (s *AIService) Enrich(ctx context.Context, userID, title, content, only str
 	result := parseEnrichResult(text, only)
 	if result == nil {
 		log.Printf("[AI/Enrich] 解析失败，降级为单项调用，only=%q", only)
-		return s.enrichFallback(ctx, userID, title, content, only)
+		// 降级子调用只计 token、不计次数：本次用户请求已按 enrich 计 1 次。
+		return s.enrichFallback(ai.WithTokensOnlyQuota(ctx), userID, title, content, only)
 	}
 
 	log.Printf("[AI/Enrich] digest strategy=%s in=%d out=%d only=%q",

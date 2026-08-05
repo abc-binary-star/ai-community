@@ -20,8 +20,15 @@ type Config struct {
 	VolcASRKey    string
 	VolcASRResID  string
 	// AI 限流配置
-	AIConcurrentLimit   int
-	AIDailyTokenLimit   int
+	AIConcurrentLimit        int
+	AIDailyTokenLimit        int
+	AIFreeDailyTokenLimit    int
+	AIProDailyTokenLimit     int
+	AIFreeGlobalTokenPool    int
+	AIProGlobalTokenPool     int
+	AIFreeRewriteMaxChars    int
+	AIProRewriteMaxChars     int
+	AIFreeTranscribeMaxSecs  int
 	// 对象存储配置（S3 兼容：Cloudflare R2 / 阿里云 OSS）
 	S3Endpoint    string
 	S3Region      string
@@ -69,8 +76,15 @@ func Load() *Config {
 		DeepSeekModel: getEnvOrDefault("DEEPSEEK_MODEL", "deepseek-chat"),
 		VolcASRKey:    os.Getenv("VOLC_ASR_API_KEY"),
 		VolcASRResID:  getEnvOrDefault("VOLC_ASR_RESOURCE_ID", "volc.bigasr.sauc.duration"),
-		AIConcurrentLimit:   getEnvIntOrDefault("AI_CONCURRENT_LIMIT", 5),
-		AIDailyTokenLimit:   getEnvIntOrDefault("AI_DAILY_TOKEN_LIMIT", 2000000),
+		AIConcurrentLimit:       getEnvIntOrDefault("AI_CONCURRENT_LIMIT", 5),
+		AIDailyTokenLimit:       getEnvIntOrDefault("AI_DAILY_TOKEN_LIMIT", 2000000),
+		AIFreeDailyTokenLimit:   getEnvIntOrDefault("AI_FREE_DAILY_TOKEN_LIMIT", 100000),
+		AIProDailyTokenLimit:    getEnvIntOrDefault("AI_PRO_DAILY_TOKEN_LIMIT", 500000),
+		AIFreeGlobalTokenPool:   getEnvIntOrDefault("AI_FREE_GLOBAL_TOKEN_POOL", 700000),
+		AIProGlobalTokenPool:    getEnvIntOrDefault("AI_PRO_GLOBAL_TOKEN_POOL", 1300000),
+		AIFreeRewriteMaxChars:   getEnvIntOrDefault("AI_FREE_REWRITE_MAX_CHARS", 8000),
+		AIProRewriteMaxChars:    getEnvIntOrDefault("AI_PRO_REWRITE_MAX_CHARS", 40000),
+		AIFreeTranscribeMaxSecs: getEnvIntOrDefault("AI_FREE_TRANSCRIBE_MAX_SECONDS", 180),
 		S3Endpoint:          getEnvOrDefault("S3_ENDPOINT", ""),
 		S3Region:            getEnvOrDefault("S3_REGION", "auto"),
 		S3Bucket:            getEnvOrDefault("S3_BUCKET", ""),

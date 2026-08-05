@@ -35,10 +35,24 @@ func main() {
 	// 初始化 AI 限制器（速率限制 + 每日配额 + token 追踪）
 	ailimitCfg := ailimit.DefaultConfig()
 	ailimitCfg.GlobalMaxConcurrent = cfg.AIConcurrentLimit
-	ailimitCfg.GlobalDailyTokenLimit = cfg.AIDailyTokenLimit
+	ailimitCfg.OverallDailyTokenLimit = cfg.AIDailyTokenLimit
+
+	freePC := ailimitCfg.Plans[ailimit.PlanFree]
+	freePC.DailyTokenLimit = cfg.AIFreeDailyTokenLimit
+	freePC.GlobalTokenPool = cfg.AIFreeGlobalTokenPool
+	freePC.RewriteMaxRunes = cfg.AIFreeRewriteMaxChars
+	freePC.TranscribeMaxBytes = int64(cfg.AIFreeTranscribeMaxSecs) * 32000
+	ailimitCfg.Plans[ailimit.PlanFree] = freePC
+
+	proPC := ailimitCfg.Plans[ailimit.PlanPro]
+	proPC.DailyTokenLimit = cfg.AIProDailyTokenLimit
+	proPC.GlobalTokenPool = cfg.AIProGlobalTokenPool
+	proPC.RewriteMaxRunes = cfg.AIProRewriteMaxChars
+	ailimitCfg.Plans[ailimit.PlanPro] = proPC
+
 	ailimit.Init(dal.DB, ailimitCfg)
 
-	// 注入 AI 限制钩子（限制检查 + 用量记录）
+	// 注入 AI 限制钩子（限制检查 + 用量记录 + 并发控制）
 	ai.SetMaxConcurrent(cfg.AIConcurrentLimit)
 	limiter := ailimit.Get()
 
@@ -51,16 +65,21 @@ func main() {
 		return limiter.CheckAsError(ctx, userID, ailimit.Feature(feature))
 	})
 
+	// 分层并发控制：套餐级 + 全局
+	ai.SetAcquireHook(func(ctx context.Context, userID string) (func(), error) {
+		if limiter == nil {
+			return func() {}, nil
+		}
+		return limiter.AcquireConcurrent(ctx, userID)
+	})
+
 	// UsageHook: 在 ai.Chat 完成后自动记录 token 用量
 	ai.SetUsageHook(func(ctx context.Context, userID, feature, mdl string, usage ai.UsageInfo, durationMs int, err error) {
 		if limiter == nil || userID == "" {
 			return
 		}
-		errMsg := ""
-		if err != nil {
-			errMsg = err.Error()
-		}
-		limiter.RecordUsage(ctx, ailimit.UsageRecord{
+		// 默认完整计费；流式分片/降级子调用只计 token；系统任务只计全局池
+		rec := ailimit.UsageRecord{
 			UserID:           userID,
 			Feature:          ailimit.Feature(feature),
 			Model:            mdl,
@@ -69,8 +88,21 @@ func main() {
 			TotalTokens:      usage.TotalTokens,
 			DurationMs:       durationMs,
 			Success:          err == nil,
-			ErrorMessage:     errMsg,
-		})
+			ErrorMessage:     "",
+			CountQuota:       true,
+			TrackUser:        true,
+		}
+		if err != nil {
+			rec.ErrorMessage = err.Error()
+		}
+		switch ai.QuotaMode(ctx) {
+		case "tokens_only":
+			rec.CountQuota = false
+		case "system":
+			rec.CountQuota = false
+			rec.TrackUser = false
+		}
+		limiter.RecordUsage(ctx, rec)
 	})
 
 	// 初始化语音转文字客户端（未配置 API Key 时语音功能降级）

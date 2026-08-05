@@ -29,11 +29,13 @@ func (l *AIUsageLog) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// AIUserQuota 用户每日 AI 配额使用情况
+// AIUserQuota 用户每日 AI 配额使用情况（按功能独立计数）。
+// feature='total' 的行兼容旧数据；新写入按具体功能 upsert。
 type AIUserQuota struct {
 	ID           string    `gorm:"primaryKey" json:"id"`
-	UserID       string    `gorm:"uniqueIndex:idx_user_date;not null" json:"userId"`
-	Date         string    `gorm:"type:date;uniqueIndex:idx_user_date;not null" json:"date"`
+	UserID       string    `gorm:"uniqueIndex:idx_user_date_feature;not null" json:"userId"`
+	Date         string    `gorm:"type:date;uniqueIndex:idx_user_date_feature;not null" json:"date"`
+	Feature      string    `gorm:"type:varchar(50);default:'total';not null;uniqueIndex:idx_user_date_feature" json:"feature"`
 	RequestCount int       `gorm:"default:0" json:"requestCount"`
 	TotalTokens  int       `gorm:"default:0" json:"totalTokens"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -46,10 +48,12 @@ func (q *AIUserQuota) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// AIGlobalQuota 全局每日 AI 配额使用情况（单行表，按日期）
+// AIGlobalQuota 按「日期 + 套餐」的全局每日 AI 配额使用情况。
+// 免费用户与订阅用户各自独立分池，避免免费用户烧穿订阅用户预算。
 type AIGlobalQuota struct {
 	ID           string    `gorm:"primaryKey" json:"id"`
-	Date         string    `gorm:"type:date;uniqueIndex" json:"date"`
+	Plan         string    `gorm:"type:varchar(20);default:'free';not null" json:"plan"`
+	Date         string    `gorm:"type:date;uniqueIndex:idx_plan_date;not null" json:"date"`
 	RequestCount int       `gorm:"default:0" json:"requestCount"`
 	TotalTokens  int       `gorm:"default:0" json:"totalTokens"`
 	UpdatedAt    time.Time `json:"updatedAt"`

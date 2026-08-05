@@ -102,7 +102,8 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, userID
 		dto := threadSummaryToDTO(&cached, int(commentCount))
 		dto.Stale = stale
 		if stale {
-			go s.asyncGenerate(postID, userID)
+			// 新评论导致的自动刷新是系统任务，不计用户配额
+			go s.asyncGenerate(postID, userID, false)
 		}
 		return dto, nil
 	}
@@ -116,7 +117,7 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, userID
 		}, nil
 	}
 
-	go s.asyncGenerate(postID, userID)
+	go s.asyncGenerate(postID, userID, true)
 
 	return &types.ThreadSummaryDTO{
 		Status:       "generating",
@@ -125,7 +126,7 @@ func (s *ThreadSummaryService) GenerateThreadSummary(ctx context.Context, userID
 }
 
 // asyncGenerate 异步生成讨论摘要
-func (s *ThreadSummaryService) asyncGenerate(postID, userID string) {
+func (s *ThreadSummaryService) asyncGenerate(postID, userID string, chargeUser bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
@@ -148,7 +149,7 @@ func (s *ThreadSummaryService) asyncGenerate(postID, userID string) {
 		return
 	}
 
-	summaryText, err := generateThreadSummaryText(ctx, userID, &post, comments)
+	summaryText, err := generateThreadSummaryText(ctx, userID, &post, comments, chargeUser)
 	if err != nil {
 		log.Printf("[ThreadSummary/asyncGenerate] failed to generate summary text, postID=%s, err=%v", postID, err)
 		return
@@ -180,7 +181,12 @@ func (s *ThreadSummaryService) asyncGenerate(postID, userID string) {
 }
 
 // generateThreadSummaryText 调用 LLM 生成段落式讨论摘要
-func generateThreadSummaryText(ctx context.Context, userID string, post *model.Post, comments []model.Comment) (string, error) {
+func generateThreadSummaryText(ctx context.Context, userID string, post *model.Post, comments []model.Comment, chargeUser bool) (string, error) {
+	if !chargeUser {
+		// 系统任务：只计入全局分池，不扣用户配额
+		ctx = ai.WithSystemQuota(ctx)
+	}
+
 	// 截断帖子内容
 	postContent := post.Content
 	if runes := []rune(postContent); len(runes) > 2000 {

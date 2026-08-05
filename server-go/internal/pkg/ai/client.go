@@ -56,6 +56,36 @@ type UsageHook func(ctx context.Context, userID, feature, model string, usage Us
 // 由 ailimit 包在应用启动时注入。
 type PreCheckHook func(ctx context.Context, userID, feature string) error
 
+// AcquireHook 在 LLM 调用前获取并发槽位，返回释放函数。
+// 由 ailimit 包注入，实现按套餐分层的并发控制。
+type AcquireHook func(ctx context.Context, userID string) (func(), error)
+
+type quotaModeKey struct{}
+
+const (
+	// quotaModeTokensOnly 只记录 token 用量，不检查配额、不累计请求次数
+	// （用于流式润色分片、Enrich 降级子调用，由外层统一计次）。
+	quotaModeTokensOnly = "tokens_only"
+	// quotaModeSystem 系统后台任务：只计入全局 token 分池，不计用户配额。
+	quotaModeSystem = "system"
+)
+
+// WithTokensOnlyQuota 返回只记 token、不检查/不计次数的调用上下文。
+func WithTokensOnlyQuota(ctx context.Context) context.Context {
+	return context.WithValue(ctx, quotaModeKey{}, quotaModeTokensOnly)
+}
+
+// WithSystemQuota 返回系统任务调用上下文（全局分池计 token，不计用户配额）。
+func WithSystemQuota(ctx context.Context) context.Context {
+	return context.WithValue(ctx, quotaModeKey{}, quotaModeSystem)
+}
+
+// QuotaMode 返回上下文中携带的配额模式；空串表示默认完整配额。
+func QuotaMode(ctx context.Context) string {
+	v, _ := ctx.Value(quotaModeKey{}).(string)
+	return v
+}
+
 var (
 	apiKey     string
 	baseURL    string
@@ -64,6 +94,7 @@ var (
 
 	usageHook     UsageHook
 	preCheckHook  PreCheckHook
+	acquireHook   AcquireHook
 	concurrentSem chan struct{}
 )
 
@@ -97,6 +128,11 @@ func SetPreCheckHook(h PreCheckHook) {
 	preCheckHook = h
 }
 
+// SetAcquireHook 设置并发槽位钩子（由 ailimit 包注入）
+func SetAcquireHook(h AcquireHook) {
+	acquireHook = h
+}
+
 // SetMaxConcurrent 设置全局最大并发 AI 调用数
 func SetMaxConcurrent(n int) {
 	if n > 0 {
@@ -112,8 +148,9 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 		return "", fmt.Errorf("DEEPSEEK_API_KEY 未配置")
 	}
 
-	// 强制检查：限制器已注入但 UserID/Feature 为空时报错
-	if preCheckHook != nil {
+	// 强制检查：默认模式（非 tokens_only / system）下执行配额预检
+	mode := QuotaMode(ctx)
+	if preCheckHook != nil && mode == "" {
 		if req.UserID == "" {
 			return "", fmt.Errorf("ai.Chat: UserID 不能为空，请从 handler 传入用户 ID")
 		}
@@ -127,8 +164,14 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 
 	start := time.Now()
 
-	// 全局并发控制
-	if concurrentSem != nil {
+	// 全局并发控制：优先使用分层信号量钩子，未注入时退回全局信号量
+	if acquireHook != nil {
+		release, err := acquireHook(ctx, req.UserID)
+		if err != nil {
+			return "", err
+		}
+		defer release()
+	} else if concurrentSem != nil {
 		select {
 		case concurrentSem <- struct{}{}:
 			defer func() { <-concurrentSem }()

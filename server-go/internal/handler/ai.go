@@ -3,11 +3,15 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ailimit"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/stt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/service"
@@ -98,20 +102,25 @@ func Rewrite(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "输入不合法")
 		return
 	}
+	userID := middleware.GetCurrentUserID(c)
+	limiter := ailimit.Get()
+	maxRunes := 40000
+	if limiter != nil {
+		maxRunes = limiter.MaxRewriteRunes(ctx, userID)
+	}
 	if len([]rune(req.Content)) < 2 {
 		response.BadRequest(c, "内容太短")
 		return
 	}
-	if len([]rune(req.Content)) > 40000 {
-		response.BadRequest(c, "内容太长，最多 40000 字")
+	if len([]rune(req.Content)) > maxRunes {
+		response.BadRequest(c, rewriteTooLongMessage(maxRunes))
 		return
 	}
-	if len([]rune(req.Selection)) > 40000 {
-		response.BadRequest(c, "选段太长，最多 40000 字")
+	if len([]rune(req.Selection)) > maxRunes {
+		response.BadRequest(c, rewriteTooLongMessage(maxRunes))
 		return
 	}
 
-	userID := middleware.GetCurrentUserID(c)
 	result, err := aiService.Rewrite(ctx, userID, req.Content, req.Selection, req.Style)
 	if err != nil {
 		if !ai.Enabled() {
@@ -134,12 +143,18 @@ func RewriteStream(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "输入不合法")
 		return
 	}
+	userID := middleware.GetCurrentUserID(c)
+	limiter := ailimit.Get()
+	maxRunes := 40000
+	if limiter != nil {
+		maxRunes = limiter.MaxRewriteRunes(ctx, userID)
+	}
 	if len([]rune(req.Content)) < 2 {
 		response.BadRequest(c, "内容太短")
 		return
 	}
-	if len([]rune(req.Content)) > 40000 {
-		response.BadRequest(c, "内容太长，最多 40000 字")
+	if len([]rune(req.Content)) > maxRunes {
+		response.BadRequest(c, rewriteTooLongMessage(maxRunes))
 		return
 	}
 	// 流式润色仅支持全文，选段走原接口
@@ -152,7 +167,18 @@ func RewriteStream(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	userID := middleware.GetCurrentUserID(c)
+	// 流式润色一次用户请求只计 1 次配额：开始前预留，分片只记 token
+	if limiter != nil {
+		if err := limiter.ReserveRequest(ctx, userID, ailimit.FeatureRewrite); err != nil {
+			reason, retryAfter := limitErrorParts(err)
+			if retryAfter > 0 {
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+			}
+			response.Error(c, consts.StatusTooManyRequests, reason)
+			return
+		}
+		ctx = ai.WithTokensOnlyQuota(ctx)
+	}
 
 	// SSE 头
 	c.SetStatusCode(consts.StatusOK)
@@ -272,6 +298,13 @@ func Transcribe(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	userID := middleware.GetCurrentUserID(c)
+	limiter := ailimit.Get()
+	maxAudioSize := int64(25 << 20)
+	if limiter != nil {
+		maxAudioSize = limiter.MaxTranscribeBytes(ctx, userID)
+	}
+
 	// 从 multipart 表单读取音频文件
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -279,10 +312,8 @@ func Transcribe(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 限制文件大小 25MB（PCM 16kHz 16bit mono 约 32KB/s，25MB ≈ 13分钟）
-	const maxAudioSize = 25 << 20
-	if fileHeader.Size > maxAudioSize {
-		response.BadRequest(c, "音频文件太大，最多 25MB")
+	if int64(fileHeader.Size) > maxAudioSize {
+		response.BadRequest(c, transcribeTooLongMessage(maxAudioSize))
 		return
 	}
 
@@ -293,17 +324,108 @@ func Transcribe(ctx context.Context, c *app.RequestContext) {
 	}
 	defer file.Close()
 
+	start := time.Now()
 	text, err := stt.Transcribe(ctx, stt.TranscribeRequest{
 		AudioReader: file,
 		Filename:    fileHeader.Filename,
 		Language:    "zh",
 	})
+	durationMs := int(time.Since(start).Milliseconds())
+	if limiter != nil {
+		// 转写此前从未计量，这里补齐：成功计 1 次；失败只消费频率防刷
+		limiter.RecordUsage(ctx, ailimit.UsageRecord{
+			UserID:      userID,
+			Feature:     ailimit.FeatureTranscribe,
+			Model:       "volc-asr",
+			DurationMs:  durationMs,
+			Success:     err == nil,
+			ErrorMessage: errMessage(err),
+			CountQuota:  true,
+			TrackUser:   true,
+		})
+	}
 	if err != nil {
 		log.Printf("[STT] 语音识别失败: %v", err)
 		response.Error(c, consts.StatusServiceUnavailable, err.Error())
 		return
 	}
 	response.JSON(c, map[string]interface{}{"text": text})
+}
+
+// GetAIUsage 返回今日各功能剩余配额与 token 用量
+// GET /api/ai/usage
+func GetAIUsage(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	limiter := ailimit.Get()
+	if limiter == nil {
+		response.Error(c, consts.StatusServiceUnavailable, "AI 用量服务不可用")
+		return
+	}
+	summary, err := limiter.UsageSummary(ctx, userID)
+	if err != nil {
+		log.Printf("[AI/Usage] 获取用量失败: %v", err)
+		response.Error(c, 500, "获取 AI 用量失败")
+		return
+	}
+	response.JSON(c, summary)
+}
+
+// GetAIPlan 返回当前套餐信息
+// GET /api/ai/plan
+func GetAIPlan(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	limiter := ailimit.Get()
+	if limiter == nil {
+		response.Error(c, consts.StatusServiceUnavailable, "AI 套餐服务不可用")
+		return
+	}
+	summary, err := limiter.UsageSummary(ctx, userID)
+	if err != nil {
+		log.Printf("[AI/Plan] 获取套餐失败: %v", err)
+		response.Error(c, 500, "获取 AI 套餐失败")
+		return
+	}
+	response.JSON(c, map[string]interface{}{
+		"plan":          summary.Plan,
+		"planExpiresAt": summary.PlanExpiresAt,
+		"unlimited":     summary.Unlimited,
+		"dailyTokenLimit": summary.DailyTokenLimit,
+	})
+}
+
+// UpgradePlan 订阅升级占位接口（支付渠道接入前返回明确提示）
+// POST /api/billing/upgrade
+func UpgradePlan(ctx context.Context, c *app.RequestContext) {
+	response.Error(c, consts.StatusNotImplemented, "订阅支付功能尚未接入，请联系管理员开通")
+}
+
+func limitErrorParts(err error) (string, int) {
+	if le, ok := err.(*ailimit.LimitError); ok {
+		return le.Reason, le.RetryAfter
+	}
+	return err.Error(), 0
+}
+
+func errMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func rewriteTooLongMessage(maxRunes int) string {
+	if maxRunes >= 40000 {
+		return "内容太长，最多 40000 字"
+	}
+	return fmt.Sprintf("免费用户单次润色最多 %d 字，升级订阅可润色 40000 字", maxRunes)
+}
+
+func transcribeTooLongMessage(maxBytes int64) string {
+	if maxBytes >= 25<<20 {
+		return "音频文件太大，最多 25MB"
+	}
+	seconds := int(maxBytes / 32000)
+	return fmt.Sprintf("免费用户单次语音最长约 %d 分钟，升级订阅可上传最长 25MB", seconds/60)
 }
 
 // Summarize AI 摘要生成

@@ -73,6 +73,11 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	ai.POST("/summarize", middleware.AILimit(ailimit.FeatureSummarize), handler.Summarize)
 	ai.POST("/voice-polish", middleware.AILimit(ailimit.FeatureVoicePolish), handler.VoicePolish)
 	ai.POST("/transcribe", middleware.AILimit(ailimit.FeatureTranscribe), handler.Transcribe)
+	ai.GET("/usage", handler.GetAIUsage)
+	ai.GET("/plan", handler.GetAIPlan)
+
+	// --- 商业化占位 ---
+	h.POST("/api/billing/upgrade", middleware.Auth(), handler.UpgradePlan)
 
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)

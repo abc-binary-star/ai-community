@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Bell, Check, Loader2, Save, ShieldOff, Upload, X } from 'lucide-react'
+import { ArrowLeft, Ban, Bell, Check, Loader2, Save, ShieldOff, Sparkles, Upload, X } from 'lucide-react'
 import Cropper from 'react-easy-crop'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -18,6 +18,35 @@ import { CommunityShell } from '@/app/community/components/community-shell'
 import { cn, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { NotificationPreference, Paginated, PublicUser, User as UserType } from 'shared'
+
+type FeatureUsage = {
+  feature: string
+  usedToday: number
+  limitPerDay: number
+  limitPerMinute: number
+}
+
+type AIUsage = {
+  plan: 'free' | 'pro' | 'admin'
+  planExpiresAt: string | null
+  unlimited: boolean
+  dailyTokenLimit: number
+  tokensUsedToday: number
+  poolTokenLimit: number
+  poolTokensUsed: number
+  features: FeatureUsage[]
+}
+
+const featureLabels: Record<string, string> = {
+  enrich: 'AI 补全',
+  suggest_title: '标题建议',
+  summarize: '摘要生成',
+  suggest_tags: '标签建议',
+  rewrite: '润色',
+  voice_polish: '语音润色',
+  transcribe: '语音转文字',
+  thread_summary: '讨论摘要',
+}
 
 // 裁剪图片为 Blob：使用 Canvas 从原图截取选定区域，输出 256x256 PNG
 async function cropImageToBlob(
@@ -129,6 +158,13 @@ export default function SettingsPage() {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : '保存失败'),
   })
   const updatePref = (patch: Partial<NotificationPreference>) => prefsMutation.mutate(patch)
+
+  // AI 用量与套餐
+  const aiUsageQuery = useQuery({
+    queryKey: ['ai-usage'],
+    queryFn: () => api.get<AIUsage>('/ai/usage'),
+    enabled: !!token,
+  })
 
   const onCropComplete = useCallback((_area: unknown, areaPixels: { x: number; y: number; width: number; height: number }) => {
     setCroppedAreaPixels(areaPixels)
@@ -438,6 +474,95 @@ export default function SettingsPage() {
                   )}
                 </div>
               ) : null}
+            </CardContent>
+          </Card>
+
+          {/* AI 用量与套餐 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                AI 用量与套餐
+              </CardTitle>
+              <CardDescription>查看当前套餐与今日 AI 额度使用情况</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {aiUsageQuery.isLoading ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  加载中…
+                </div>
+              ) : aiUsageQuery.data ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">
+                        当前套餐：
+                        <span className="text-primary">
+                          {aiUsageQuery.data.plan === 'pro'
+                            ? '订阅版（Pro）'
+                            : aiUsageQuery.data.plan === 'admin'
+                              ? '管理员（不限量）'
+                              : '免费版'}
+                        </span>
+                      </p>
+                      {aiUsageQuery.data.plan === 'pro' && aiUsageQuery.data.planExpiresAt && (
+                        <p className="text-xs text-muted-foreground">
+                          有效期至 {new Date(aiUsageQuery.data.planExpiresAt).toLocaleDateString('zh-CN')}
+                        </p>
+                      )}
+                    </div>
+                    {aiUsageQuery.data.plan === 'free' && (
+                      <Button variant="outline" size="sm" disabled title="订阅支付功能接入中">
+                        升级订阅（即将上线）
+                      </Button>
+                    )}
+                  </div>
+
+                  {!aiUsageQuery.data.unlimited && aiUsageQuery.data.dailyTokenLimit > 0 && (
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>今日 token 用量</span>
+                        <span>
+                          {aiUsageQuery.data.tokensUsedToday.toLocaleString()} /{' '}
+                          {aiUsageQuery.data.dailyTokenLimit.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (aiUsageQuery.data.tokensUsedToday / aiUsageQuery.data.dailyTokenLimit) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {!aiUsageQuery.data.unlimited && aiUsageQuery.data.features.length > 0 && (
+                    <div className="divide-y divide-border rounded-lg border border-border">
+                      {aiUsageQuery.data.features.map((f) => (
+                        <div key={f.feature} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                          <span className="text-muted-foreground">{featureLabels[f.feature] || f.feature}</span>
+                          <span className="tabular-nums">
+                            {f.usedToday}/{f.limitPerDay} 次
+                            <span className="ml-2 text-xs text-muted-foreground">限 {f.limitPerMinute} 次/分</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {aiUsageQuery.data.unlimited && (
+                    <p className="text-sm text-muted-foreground">管理员账号不设 AI 用量限制。</p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 text-center text-sm text-muted-foreground">暂无法获取 AI 用量</p>
+              )}
             </CardContent>
           </Card>
       </div>

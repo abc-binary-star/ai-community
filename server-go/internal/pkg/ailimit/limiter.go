@@ -5,6 +5,7 @@
 // 设计原则：
 //   - 滑动窗口限流在内存中完成，无需 Redis，适合单实例部署
 //   - 每日配额持久化到 PostgreSQL，重启不丢失
+//   - 免费 / 订阅（Pro）用户使用不同的配额配置与全局 token 分池
 //   - 全局并发信号量防止 LLM API 被打满
 //   - token 用量逐条记录，便于成本分析与告警
 package ailimit
@@ -35,37 +36,88 @@ const (
 	FeatureEnrich Feature = "enrich"
 )
 
+// 套餐标识
+const (
+	PlanFree  = "free"
+	PlanPro   = "pro"
+	PlanAdmin = "admin"
+)
+
 // FeatureConfig 单个 AI 功能的限制配置
 type FeatureConfig struct {
 	MaxPerMinute int // 每用户每分钟最大请求数
-	MaxPerDay    int // 每用户每天最大请求数
+	MaxPerDay    int // 每用户每天最大请求数（按功能独立计数）
+}
+
+// PlanConfig 单个套餐的 AI 限制配置
+type PlanConfig struct {
+	DailyTokenLimit    int                       // 每用户每日 token 上限（0 = 不限制）
+	GlobalTokenPool    int                       // 该套餐全局每日 token 分池（0 = 不限制）
+	MaxConcurrent      int                       // 该套餐最大并发（0 = 不限制）
+	RewriteMaxRunes    int                       // 润色单次最大字数
+	TranscribeMaxBytes int64                     // 语音转文字单次最大音频字节数
+	FeatureConfigs     map[Feature]FeatureConfig // 功能级配额
 }
 
 // Config 全局限量配置
 type Config struct {
 	// GlobalMaxConcurrent 全局最大并发 AI 调用数（0 = 不限制）
 	GlobalMaxConcurrent int
-	// GlobalDailyTokenLimit 全局每日 token 上限（0 = 不限制）
-	GlobalDailyTokenLimit int
-	// FeatureConfigs 各功能的独立限制
-	FeatureConfigs map[Feature]FeatureConfig
+	// OverallDailyTokenLimit 全部套餐合计每日 token 上限（0 = 不限制）
+	OverallDailyTokenLimit int
+	// Plans 按套餐的配置
+	Plans map[string]PlanConfig
 }
 
-// DefaultConfig 返回合理的默认配置
+// DefaultConfig 返回合理的默认配置。
+// 免费档比最初建议稿更宽松：轻量功能 20 次/日，润色 10 次/日，语音 5 次/日。
 func DefaultConfig() Config {
 	return Config{
-		GlobalMaxConcurrent:   5,
-		GlobalDailyTokenLimit: 2_000_000,
-		FeatureConfigs: map[Feature]FeatureConfig{
-			FeatureSuggestTitle:  {MaxPerMinute: 10, MaxPerDay: 100},
-			FeatureRewrite:       {MaxPerMinute: 10, MaxPerDay: 50},
-			FeatureSummarize:     {MaxPerMinute: 10, MaxPerDay: 100},
-			FeatureVoicePolish:   {MaxPerMinute: 5, MaxPerDay: 50},
-			FeatureSuggestTags:   {MaxPerMinute: 10, MaxPerDay: 100},
-			FeatureThreadSummary: {MaxPerMinute: 3, MaxPerDay: 20},
-			FeatureTranscribe:    {MaxPerMinute: 5, MaxPerDay: 30},
-			// 合并调用一次出三个产物，配额按原先单项的量级给
-			FeatureEnrich: {MaxPerMinute: 10, MaxPerDay: 100},
+		GlobalMaxConcurrent:    5,
+		OverallDailyTokenLimit: 2_000_000,
+		Plans: map[string]PlanConfig{
+			PlanFree: {
+				DailyTokenLimit:    100_000,
+				GlobalTokenPool:    700_000,
+				MaxConcurrent:      2,
+				RewriteMaxRunes:    8000,
+				TranscribeMaxBytes: 180 * 32000, // PCM 16kHz 16bit mono，约 3 分钟
+				FeatureConfigs: map[Feature]FeatureConfig{
+					FeatureSuggestTitle:  {MaxPerMinute: 5, MaxPerDay: 20},
+					FeatureRewrite:       {MaxPerMinute: 5, MaxPerDay: 10},
+					FeatureSummarize:     {MaxPerMinute: 5, MaxPerDay: 20},
+					FeatureVoicePolish:   {MaxPerMinute: 5, MaxPerDay: 15},
+					FeatureSuggestTags:   {MaxPerMinute: 5, MaxPerDay: 20},
+					FeatureThreadSummary: {MaxPerMinute: 2, MaxPerDay: 5},
+					FeatureTranscribe:    {MaxPerMinute: 2, MaxPerDay: 5},
+					FeatureEnrich:        {MaxPerMinute: 5, MaxPerDay: 10},
+				},
+			},
+			PlanPro: {
+				DailyTokenLimit:    500_000,
+				GlobalTokenPool:    1_300_000,
+				MaxConcurrent:      4,
+				RewriteMaxRunes:    40000,
+				TranscribeMaxBytes: 25 << 20, // 25MB，约 13 分钟
+				FeatureConfigs: map[Feature]FeatureConfig{
+					FeatureSuggestTitle:  {MaxPerMinute: 10, MaxPerDay: 100},
+					FeatureRewrite:       {MaxPerMinute: 10, MaxPerDay: 100},
+					FeatureSummarize:     {MaxPerMinute: 10, MaxPerDay: 100},
+					FeatureVoicePolish:   {MaxPerMinute: 10, MaxPerDay: 50},
+					FeatureSuggestTags:   {MaxPerMinute: 10, MaxPerDay: 100},
+					FeatureThreadSummary: {MaxPerMinute: 5, MaxPerDay: 30},
+					FeatureTranscribe:    {MaxPerMinute: 5, MaxPerDay: 30},
+					FeatureEnrich:        {MaxPerMinute: 10, MaxPerDay: 100},
+				},
+			},
+			PlanAdmin: {
+				DailyTokenLimit:    0,
+				GlobalTokenPool:    0,
+				MaxConcurrent:      0,
+				RewriteMaxRunes:    40000,
+				TranscribeMaxBytes: 25 << 20,
+				FeatureConfigs:     map[Feature]FeatureConfig{},
+			},
 		},
 	}
 }
@@ -86,9 +138,7 @@ type LimitError struct {
 func (e *LimitError) Error() string { return e.Reason }
 
 // CheckAsError 检查并返回 error（供 ai.PreCheckHook 使用）。
-// 与 Check 一样是纯读、无副作用的，可安全重复调用：
-// 中间件先做一次快速拒绝，ai.Chat 内部再兜底一次。
-// 滑动窗口的时间戳消费发生在 RecordUsage，只在调用真正发生时计数。
+// 与 Check 一样是纯读、无副作用的，可安全重复调用。
 func (l *Limiter) CheckAsError(ctx context.Context, userID string, feature Feature) error {
 	r := l.Check(ctx, userID, feature)
 	if !r.Allowed {
@@ -108,6 +158,39 @@ type UsageRecord struct {
 	DurationMs       int
 	Success          bool
 	ErrorMessage     string
+	// CountQuota 是否计入请求次数。流式润色分片、系统任务传 false，
+	// 由外层在请求开始时统一计 1 次。
+	CountQuota bool
+	// TrackUser 是否计入用户级配额。系统后台任务传 false（只计全局分池）。
+	TrackUser bool
+}
+
+// FeatureUsage 单个功能的今日用量
+type FeatureUsage struct {
+	Feature        Feature `json:"feature"`
+	UsedToday      int     `json:"usedToday"`
+	LimitPerDay    int     `json:"limitPerDay"`
+	LimitPerMinute int     `json:"limitPerMinute"`
+}
+
+// UsageSummary 用户 AI 用量概览
+type UsageSummary struct {
+	Plan             string         `json:"plan"`
+	PlanExpiresAt    *time.Time     `json:"planExpiresAt"`
+	Unlimited        bool           `json:"unlimited"`
+	DailyTokenLimit  int            `json:"dailyTokenLimit"`
+	TokensUsedToday  int            `json:"tokensUsedToday"`
+	PoolTokenLimit   int            `json:"poolTokenLimit"`
+	PoolTokensUsed   int            `json:"poolTokensUsed"`
+	Features         []FeatureUsage `json:"features"`
+}
+
+// userSnapshot 限流所需的用户信息
+type userSnapshot struct {
+	UserID        string
+	Role          string
+	Plan          string
+	PlanExpiresAt *time.Time
 }
 
 // Limiter AI 调用限制器
@@ -119,8 +202,9 @@ type Limiter struct {
 	rateMu      sync.Mutex
 	rateWindows map[string][]time.Time
 
-	// 全局并发信号量
-	concurrentSem chan struct{}
+	// 套餐级并发信号量 + 全局并发信号量（先取套餐、再取全局）
+	planSems  map[string]chan struct{}
+	globalSem chan struct{}
 }
 
 var globalLimiter *Limiter
@@ -131,13 +215,19 @@ func Init(db *gorm.DB, cfg Config) {
 		db:          db,
 		config:      cfg,
 		rateWindows: make(map[string][]time.Time),
+		planSems:    make(map[string]chan struct{}),
+	}
+	for plan, pc := range cfg.Plans {
+		if pc.MaxConcurrent > 0 {
+			l.planSems[plan] = make(chan struct{}, pc.MaxConcurrent)
+		}
 	}
 	if cfg.GlobalMaxConcurrent > 0 {
-		l.concurrentSem = make(chan struct{}, cfg.GlobalMaxConcurrent)
+		l.globalSem = make(chan struct{}, cfg.GlobalMaxConcurrent)
 	}
 	globalLimiter = l
-	log.Printf("[AILimit] 初始化完成, 全局并发=%d, 全局日token上限=%d",
-		cfg.GlobalMaxConcurrent, cfg.GlobalDailyTokenLimit)
+	log.Printf("[AILimit] 初始化完成, 全局并发=%d, 全局日token上限=%d, 套餐数=%d",
+		cfg.GlobalMaxConcurrent, cfg.OverallDailyTokenLimit, len(cfg.Plans))
 }
 
 // Get 返回全局限制器实例
@@ -145,24 +235,64 @@ func Get() *Limiter {
 	return globalLimiter
 }
 
+func (l *Limiter) loadUser(ctx context.Context, userID string) userSnapshot {
+	snap := userSnapshot{UserID: userID, Plan: PlanFree}
+	var u model.User
+	if err := l.db.WithContext(ctx).
+		Select("role", "plan", "plan_expires_at").
+		First(&u, "id = ?", userID).Error; err == nil {
+		snap.Role = u.Role
+		snap.Plan = u.Plan
+		snap.PlanExpiresAt = u.PlanExpiresAt
+	}
+	return snap
+}
+
+// effectivePlan 返回用户实际生效的套餐（订阅到期自动降为免费）
+func effectivePlan(u userSnapshot) string {
+	if u.Plan == PlanPro && (u.PlanExpiresAt == nil || time.Now().Before(*u.PlanExpiresAt)) {
+		return PlanPro
+	}
+	return PlanFree
+}
+
+// recordPlan 返回用量记录应归属的套餐池
+func recordPlan(u userSnapshot) string {
+	if u.Role == "admin" {
+		return PlanAdmin
+	}
+	return effectivePlan(u)
+}
+
+func (l *Limiter) planConfig(plan string) PlanConfig {
+	if pc, ok := l.config.Plans[plan]; ok {
+		return pc
+	}
+	if pc, ok := l.config.Plans[PlanFree]; ok {
+		return pc
+	}
+	return PlanConfig{FeatureConfigs: map[Feature]FeatureConfig{}}
+}
+
+func featureConfig(pc PlanConfig, feature Feature) FeatureConfig {
+	if fc, ok := pc.FeatureConfigs[feature]; ok {
+		return fc
+	}
+	// 未配置的功能使用默认限制
+	return FeatureConfig{MaxPerMinute: 5, MaxPerDay: 30}
+}
+
 // Check 检查用户是否可以发起指定功能的 AI 调用（纯检查，无副作用）。
-// 可被多次调用：中间件层调一次做快速拒绝，ai.Chat 内部再调一次做兜底。
-// 滑动窗口的时间戳消费在 RecordUsage 中完成。
 // 管理员账号不受限制。
 func (l *Limiter) Check(ctx context.Context, userID string, feature Feature) CheckResult {
-	// 管理员不受限制
-	var user model.User
-	if err := l.db.WithContext(ctx).Select("role").First(&user, "id = ?", userID).Error; err == nil {
-		if user.Role == "admin" {
-			return CheckResult{Allowed: true}
-		}
+	u := l.loadUser(ctx, userID)
+	if u.Role == "admin" {
+		return CheckResult{Allowed: true}
 	}
 
-	fc, ok := l.config.FeatureConfigs[feature]
-	if !ok {
-		// 未配置的功能使用默认限制
-		fc = FeatureConfig{MaxPerMinute: 5, MaxPerDay: 30}
-	}
+	plan := effectivePlan(u)
+	pc := l.planConfig(plan)
+	fc := featureConfig(pc, feature)
 
 	// 1. 内存滑动窗口：每分钟频率检查（只读）
 	key := userID + ":" + string(feature)
@@ -178,16 +308,13 @@ func (l *Limiter) Check(ctx context.Context, userID string, feature Feature) Che
 		}
 	}
 	if count >= fc.MaxPerMinute {
-		l.rateMu.Unlock()
-		// 找到最早的未过期时间戳计算重试时间
 		var oldest time.Time
 		for _, ts := range timestamps {
-			if ts.After(windowStart) {
-				if oldest.IsZero() || ts.Before(oldest) {
-					oldest = ts
-				}
+			if ts.After(windowStart) && (oldest.IsZero() || ts.Before(oldest)) {
+				oldest = ts
 			}
 		}
+		l.rateMu.Unlock()
 		retryAfter := int(time.Until(oldest.Add(time.Minute)).Seconds()) + 1
 		return CheckResult{
 			Allowed:    false,
@@ -197,13 +324,14 @@ func (l *Limiter) Check(ctx context.Context, userID string, feature Feature) Che
 	}
 	l.rateMu.Unlock()
 
-	// 2. DB 检查：每日配额
 	today := now.Format("2006-01-02")
+
+	// 2. DB 检查：该功能今日次数
 	var quota model.AIUserQuota
-	result := l.db.WithContext(ctx).
-		Where("user_id = ? AND date = ?", userID, today).
-		First(&quota)
-	if result.Error == nil && quota.RequestCount >= fc.MaxPerDay {
+	qErr := l.db.WithContext(ctx).
+		Where("user_id = ? AND date = ? AND feature = ?", userID, today, string(feature)).
+		First(&quota).Error
+	if qErr == nil && quota.RequestCount >= fc.MaxPerDay {
 		return CheckResult{
 			Allowed:    false,
 			Reason:     "今日该功能的调用次数已达上限",
@@ -211,16 +339,47 @@ func (l *Limiter) Check(ctx context.Context, userID string, feature Feature) Che
 		}
 	}
 
-	// 3. DB 检查：全局每日 token 上限
-	if l.config.GlobalDailyTokenLimit > 0 {
+	// 3. DB 检查：用户每日 token 预算
+	if pc.DailyTokenLimit > 0 {
+		var tokenQuota model.AIUserQuota
+		if l.db.WithContext(ctx).
+			Where("user_id = ? AND date = ? AND feature = 'total'", userID, today).
+			First(&tokenQuota).Error == nil && tokenQuota.TotalTokens >= pc.DailyTokenLimit {
+			return CheckResult{
+				Allowed:    false,
+				Reason:     "今日 AI token 预算已用完，明天再来或升级订阅",
+				RetryAfter: secondsUntilMidnight(now),
+			}
+		}
+	}
+
+	// 4. DB 检查：套餐全局每日 token 分池
+	if pc.GlobalTokenPool > 0 {
 		var gq model.AIGlobalQuota
-		if l.db.WithContext(ctx).Where("date = ?", today).First(&gq).Error == nil {
-			if gq.TotalTokens >= l.config.GlobalDailyTokenLimit {
+		if l.db.WithContext(ctx).Where("date = ? AND plan = ?", today, plan).First(&gq).Error == nil {
+			if gq.TotalTokens >= pc.GlobalTokenPool {
 				return CheckResult{
 					Allowed:    false,
-					Reason:     "AI 服务今日用量已达上限，请明天再试",
+					Reason:     planReachPoolReason(plan),
 					RetryAfter: secondsUntilMidnight(now),
 				}
+			}
+		}
+	}
+
+	// 5. DB 检查：全套餐合计每日 token 上限（安全网）
+	if l.config.OverallDailyTokenLimit > 0 {
+		var sum struct{ Total int64 }
+		l.db.WithContext(ctx).
+			Model(&model.AIGlobalQuota{}).
+			Where("date = ?", today).
+			Select("COALESCE(SUM(total_tokens), 0) AS total").
+			Scan(&sum)
+		if sum.Total >= int64(l.config.OverallDailyTokenLimit) {
+			return CheckResult{
+				Allowed:    false,
+				Reason:     "AI 服务今日用量已达上限，请明天再试",
+				RetryAfter: secondsUntilMidnight(now),
 			}
 		}
 	}
@@ -228,7 +387,42 @@ func (l *Limiter) Check(ctx context.Context, userID string, feature Feature) Che
 	return CheckResult{Allowed: true}
 }
 
-// consumeRate 消费滑动窗口中的一个时间戳（在确认调用后执行）
+func planReachPoolReason(plan string) string {
+	if plan == PlanPro {
+		return "订阅用户今日 AI 用量已达上限，请明天再试"
+	}
+	return "免费用户今日 AI 用量已达上限，可升级订阅获得更多额度"
+}
+
+// ReserveRequest 为一次「多分片请求」（如流式润色）预留配额：
+// 检查 + 消费 1 次频率 + 增加 1 次请求计数。
+// 后续分片只记录 token，不再重复计次。
+func (l *Limiter) ReserveRequest(ctx context.Context, userID string, feature Feature) error {
+	r := l.Check(ctx, userID, feature)
+	if !r.Allowed {
+		return &LimitError{Reason: r.Reason, RetryAfter: r.RetryAfter}
+	}
+
+	l.consumeRate(userID, feature)
+	today := time.Now().Format("2006-01-02")
+	u := l.loadUser(ctx, userID)
+	plan := recordPlan(u)
+
+	l.upsertUserQuota(ctx, model.AIUserQuota{
+		UserID:       userID,
+		Date:         today,
+		Feature:      string(feature),
+		RequestCount: 1,
+	})
+	l.upsertGlobalQuota(ctx, model.AIGlobalQuota{
+		Plan:         plan,
+		Date:         today,
+		RequestCount: 1,
+	})
+	return nil
+}
+
+// consumeRate 消费滑动窗口中的一个时间戳（任何实际调用尝试都会消费，防刷）
 func (l *Limiter) consumeRate(userID string, feature Feature) {
 	key := userID + ":" + string(feature)
 	now := time.Now()
@@ -246,29 +440,75 @@ func (l *Limiter) consumeRate(userID string, feature Feature) {
 	l.rateMu.Unlock()
 }
 
-// AcquireConcurrent 获取全局并发槽位，返回释放函数。
-// 若已达到并发上限则阻塞等待或返回错误。
-func (l *Limiter) AcquireConcurrent(ctx context.Context) (func(), error) {
-	if l.concurrentSem == nil {
+// AcquireConcurrent 获取并发槽位：先取套餐级、再取全局，返回释放函数。
+// 管理员不受并发限制。
+func (l *Limiter) AcquireConcurrent(ctx context.Context, userID string) (func(), error) {
+	u := l.loadUser(ctx, userID)
+	if u.Role == "admin" {
 		return func() {}, nil
 	}
-	select {
-	case l.concurrentSem <- struct{}{}:
-		return func() { <-l.concurrentSem }, nil
-	case <-ctx.Done():
-		return func() {}, ctx.Err()
+
+	plan := effectivePlan(u)
+	releases := make([]func(), 0, 2)
+	releaseAll := func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
 	}
+
+	if sem := l.planSems[plan]; sem != nil {
+		select {
+		case sem <- struct{}{}:
+			releases = append(releases, func() { <-sem })
+		case <-ctx.Done():
+			return func() {}, ctx.Err()
+		}
+	}
+	if l.globalSem != nil {
+		select {
+		case l.globalSem <- struct{}{}:
+			releases = append(releases, func() { <-l.globalSem })
+		case <-ctx.Done():
+			releaseAll()
+			return func() {}, ctx.Err()
+		}
+	}
+
+	return func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
+	}, nil
+}
+
+// MaxRewriteRunes 返回该用户润色单次最大字数
+func (l *Limiter) MaxRewriteRunes(ctx context.Context, userID string) int {
+	u := l.loadUser(ctx, userID)
+	plan := effectivePlan(u)
+	if u.Role == "admin" {
+		plan = PlanAdmin
+	}
+	return l.planConfig(plan).RewriteMaxRunes
+}
+
+// MaxTranscribeBytes 返回该用户语音转文字单次最大音频字节数
+func (l *Limiter) MaxTranscribeBytes(ctx context.Context, userID string) int64 {
+	u := l.loadUser(ctx, userID)
+	plan := effectivePlan(u)
+	if u.Role == "admin" {
+		plan = PlanAdmin
+	}
+	if n := l.planConfig(plan).TranscribeMaxBytes; n > 0 {
+		return n
+	}
+	return 25 << 20
 }
 
 // RecordUsage 记录一次 AI 调用的实际用量并更新配额。
-// 同时消费滑动窗口时间戳（仅成功调用才消费，失败不计数）。
+// 频率始终消费（防刷）；每日请求次数与 token 仅在成功时扣减。
 func (l *Limiter) RecordUsage(ctx context.Context, rec UsageRecord) {
-	// 消费滑动窗口时间戳（仅在调用实际发生时）
 	l.consumeRate(rec.UserID, rec.Feature)
 
-	today := time.Now().Format("2006-01-02")
-
-	// 1. 写入审计日志
 	logEntry := model.AIUsageLog{
 		UserID:           rec.UserID,
 		Feature:          string(rec.Feature),
@@ -284,52 +524,155 @@ func (l *Limiter) RecordUsage(ctx context.Context, rec UsageRecord) {
 		log.Printf("[AILimit] 写入用量日志失败: %v", err)
 	}
 
-	// 2. 更新用户每日配额（upsert）
-	userQuota := model.AIUserQuota{
-		UserID:       rec.UserID,
-		Date:         today,
-		RequestCount: 1,
-		TotalTokens:  rec.TotalTokens,
-	}
-	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "user_id"}, {Name: "date"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
-			"request_count": gorm.Expr("ai_user_quota.request_count + 1"),
-			"total_tokens":  gorm.Expr("ai_user_quota.total_tokens + ?", rec.TotalTokens),
-		}),
-	}).Create(&userQuota).Error; err != nil {
-		log.Printf("[AILimit] 更新用户配额失败: %v", err)
+	if !rec.Success {
+		return
 	}
 
-	// 3. 更新全局每日配额（upsert）
-	globalQuota := model.AIGlobalQuota{
-		Date:         today,
-		RequestCount: 1,
-		TotalTokens:  rec.TotalTokens,
-	}
-	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "date"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
-			"request_count": gorm.Expr("ai_global_quota.request_count + 1"),
-			"total_tokens":  gorm.Expr("ai_global_quota.total_tokens + ?", rec.TotalTokens),
-		}),
-	}).Create(&globalQuota).Error; err != nil {
-		log.Printf("[AILimit] 更新全局配额失败: %v", err)
+	today := time.Now().Format("2006-01-02")
+	u := l.loadUser(ctx, rec.UserID)
+	plan := recordPlan(u)
+
+	count := 0
+	if rec.CountQuota {
+		count = 1
 	}
 
-	// 4. 全局 token 上限告警
-	if l.config.GlobalDailyTokenLimit > 0 {
-		var gq model.AIGlobalQuota
-		if l.db.WithContext(ctx).Where("date = ?", today).First(&gq).Error == nil {
-			if gq.TotalTokens >= l.config.GlobalDailyTokenLimit {
-				log.Printf("[AILimit] ⚠️ 全局每日 token 上限已达 (%d/%d)",
-					gq.TotalTokens, l.config.GlobalDailyTokenLimit)
-			} else if gq.TotalTokens >= l.config.GlobalDailyTokenLimit*80/100 {
-				log.Printf("[AILimit] ⚠️ 全局每日 token 用量已达 80%% (%d/%d)",
-					gq.TotalTokens, l.config.GlobalDailyTokenLimit)
-			}
+	if rec.TrackUser {
+		l.upsertUserQuota(ctx, model.AIUserQuota{
+			UserID:       rec.UserID,
+			Date:         today,
+			Feature:      string(rec.Feature),
+			RequestCount: count,
+			TotalTokens:  rec.TotalTokens,
+		})
+		// 用户级 token 预算按全功能合计统计（feature='total' 行）
+		l.upsertUserQuota(ctx, model.AIUserQuota{
+			UserID:      rec.UserID,
+			Date:        today,
+			Feature:     "total",
+			TotalTokens: rec.TotalTokens,
+		})
+	}
+
+	l.upsertGlobalQuota(ctx, model.AIGlobalQuota{
+		Plan:         plan,
+		Date:         today,
+		RequestCount: count,
+		TotalTokens:  rec.TotalTokens,
+	})
+
+	// 全局 token 上限告警
+	if l.config.OverallDailyTokenLimit > 0 {
+		var sum struct{ Total int64 }
+		l.db.WithContext(ctx).
+			Model(&model.AIGlobalQuota{}).
+			Where("date = ?", today).
+			Select("COALESCE(SUM(total_tokens), 0) AS total").
+			Scan(&sum)
+		limit := int64(l.config.OverallDailyTokenLimit)
+		if sum.Total >= limit {
+			log.Printf("[AILimit] ⚠️ 全局每日 token 上限已达 (%d/%d)", sum.Total, limit)
+		} else if sum.Total >= limit*80/100 {
+			log.Printf("[AILimit] ⚠️ 全局每日 token 用量已达 80%% (%d/%d)", sum.Total, limit)
 		}
 	}
+}
+
+func (l *Limiter) upsertUserQuota(ctx context.Context, q model.AIUserQuota) {
+	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "user_id"}, {Name: "date"}, {Name: "feature"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"request_count": gorm.Expr("ai_user_quota.request_count + ?", q.RequestCount),
+			"total_tokens":  gorm.Expr("ai_user_quota.total_tokens + ?", q.TotalTokens),
+			"updated_at":    time.Now(),
+		}),
+	}).Create(&q).Error; err != nil {
+		log.Printf("[AILimit] 更新用户配额失败: %v", err)
+	}
+}
+
+func (l *Limiter) upsertGlobalQuota(ctx context.Context, q model.AIGlobalQuota) {
+	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "plan"}, {Name: "date"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"request_count": gorm.Expr("ai_global_quota.request_count + ?", q.RequestCount),
+			"total_tokens":  gorm.Expr("ai_global_quota.total_tokens + ?", q.TotalTokens),
+			"updated_at":    time.Now(),
+		}),
+	}).Create(&q).Error; err != nil {
+		log.Printf("[AILimit] 更新全局配额失败: %v", err)
+	}
+}
+
+// UsageSummary 返回用户今日 AI 用量与套餐信息
+func (l *Limiter) UsageSummary(ctx context.Context, userID string) (*UsageSummary, error) {
+	u := l.loadUser(ctx, userID)
+	today := time.Now().Format("2006-01-02")
+
+	if u.Role == "admin" {
+		return &UsageSummary{
+			Plan:          PlanAdmin,
+			PlanExpiresAt: u.PlanExpiresAt,
+			Unlimited:     true,
+			Features:      []FeatureUsage{},
+		}, nil
+	}
+
+	plan := effectivePlan(u)
+	pc := l.planConfig(plan)
+
+	var rows []model.AIUserQuota
+	if err := l.db.WithContext(ctx).
+		Where("user_id = ? AND date = ?", userID, today).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	usedByFeature := make(map[string]int)
+	var totalRow model.AIUserQuota
+	l.db.WithContext(ctx).
+		Where("user_id = ? AND date = ? AND feature = 'total'", userID, today).
+		First(&totalRow)
+	for _, r := range rows {
+		usedByFeature[r.Feature] += r.RequestCount
+	}
+
+	var pool model.AIGlobalQuota
+	l.db.WithContext(ctx).Where("date = ? AND plan = ?", today, plan).First(&pool)
+
+	features := make([]FeatureUsage, 0, len(pc.FeatureConfigs))
+	for _, f := range featureOrder {
+		fc, ok := pc.FeatureConfigs[f]
+		if !ok {
+			continue
+		}
+		features = append(features, FeatureUsage{
+			Feature:        f,
+			UsedToday:      usedByFeature[string(f)],
+			LimitPerDay:    fc.MaxPerDay,
+			LimitPerMinute: fc.MaxPerMinute,
+		})
+	}
+
+	return &UsageSummary{
+		Plan:            plan,
+		PlanExpiresAt:   u.PlanExpiresAt,
+		DailyTokenLimit: pc.DailyTokenLimit,
+		TokensUsedToday: totalRow.TotalTokens,
+		PoolTokenLimit:  pc.GlobalTokenPool,
+		PoolTokensUsed:  pool.TotalTokens,
+		Features:        features,
+	}, nil
+}
+
+var featureOrder = []Feature{
+	FeatureEnrich,
+	FeatureSuggestTitle,
+	FeatureSummarize,
+	FeatureSuggestTags,
+	FeatureRewrite,
+	FeatureVoicePolish,
+	FeatureTranscribe,
+	FeatureThreadSummary,
 }
 
 // secondsUntilMidnight 计算到午夜的秒数
