@@ -145,7 +145,16 @@ func Get() *Limiter {
 // Check 检查用户是否可以发起指定功能的 AI 调用（纯检查，无副作用）。
 // 可被多次调用：中间件层调一次做快速拒绝，ai.Chat 内部再调一次做兜底。
 // 滑动窗口的时间戳消费在 RecordUsage 中完成。
+// 管理员账号不受限制。
 func (l *Limiter) Check(ctx context.Context, userID string, feature Feature) CheckResult {
+	// 管理员不受限制
+	var user model.User
+	if err := l.db.WithContext(ctx).Select("role").First(&user, "id = ?", userID).Error; err == nil {
+		if user.Role == "admin" {
+			return CheckResult{Allowed: true}
+		}
+	}
+
 	fc, ok := l.config.FeatureConfigs[feature]
 	if !ok {
 		// 未配置的功能使用默认限制

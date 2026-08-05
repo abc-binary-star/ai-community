@@ -834,7 +834,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
             {polishing
               ? polishProgress
-                ? `润色中 ${polishProgress.done}/${polishProgress.total}`
+                ? `润色中 ${Math.round((polishProgress.done / polishProgress.total) * 100)}%`
                 : '润色中…'
               : 'AI 润色'}
           </Button>

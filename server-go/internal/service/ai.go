@@ -96,15 +96,19 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 
 	var systemPrompt string
 	if isSelection {
-		// 选段润色：只做文字层面的修正，不调整整体排版格式
-		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色选中的文字片段，风格为%s。
+		// 选段润色：聚焦文字表达质量，主动改写措辞但不动整体排版
+		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请对用户选中的文字片段做实质性润色改写，风格为%s。
 
 要求：
-1. 修正错别字和语病，确保用词准确
-2. 优化句子结构和表达流畅度，使行文更自然
-3. 保持原意不变，不改写事实内容
-4. 不要调整段落结构、排版格式或增加表情符号（这些在全文润色时处理）
-5. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+1. 修正错别字、标点误用和语病
+2. 主动优化措辞：替换口语化、重复、笼统的表达，让用词更精准生动
+3. 重组句子结构：拆分冗长句、合并零碎句，让行文节奏更流畅
+4. 删除冗余的赘词和空话，让表达更凝练有力
+5. 保持原意和事实不变，不新增未提及的信息
+6. 保留原有的段落数量和换行位置，不增删空行、不添加标题或列表
+7. 不要增加表情符号，不要添加 Markdown 加粗等标记
+8. 即使原文已经通顺，也要在措辞和句式上做出可感知的优化
+9. 不要加任何前言、后语或解释，直接输出润色后的文字`, styleDesc)
 	} else {
 		// 全文润色：综合优化排版、格式、表情符号、加粗强调
 		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色整篇文章，风格为%s。
@@ -121,11 +125,17 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 9. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
 	}
 
+	// 选段润色用稍高温度，避免模型对已通顺的文字原样返回
+	temperature := 0.3
+	if isSelection {
+		temperature = 0.6
+	}
+
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
 		User:        truncated,
 		MaxTokens:   8000,
-		Temperature: 0.3,
+		Temperature: temperature,
 		UserID:      userID,
 		Feature:     "rewrite",
 	})

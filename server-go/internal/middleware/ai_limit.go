@@ -12,6 +12,7 @@ import (
 
 // AILimit AI 接口限流中间件。
 // 在 Auth 之后使用，根据 userID + feature 检查速率限制和每日配额。
+// 管理员账号不受限制（由 ailimit.Limiter.Check 内部判断）。
 func AILimit(feature ailimit.Feature) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		userID := GetCurrentUserID(c)
