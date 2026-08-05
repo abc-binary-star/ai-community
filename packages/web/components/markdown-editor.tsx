@@ -23,6 +23,14 @@ import { convertDocxToMarkdown, isDocxFile, isLegacyDocFile } from '@/lib/docx-i
 import { FONT_OPTIONS, fontFamily } from '@/lib/font-options'
 import { VoiceComposer } from '@/app/community/components/voice-composer'
 
+export const MAX_POST_CHARS = 40000
+export const MAX_POST_IMAGES = 100
+
+export function countMarkdownImages(text: string): number {
+  const matches = text.match(/!\[[^\]]*\]\([^)\s]+\)/g)
+  return matches ? matches.length : 0
+}
+
 export interface MarkdownEditorHandle {
   resolveImages: () => Promise<string>
 }
@@ -324,11 +332,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
   // 字数统计：按 Unicode 字符计数，与后端 len([]rune) 一致
   const charCount = [...value].length
-  // 图片数统计：匹配 markdown 图片语法 ![](url)
-  const imageCount = useMemo(() => {
-    const matches = value.match(/!\[[^\]]*\]\([^)\s]+\)/g)
-    return matches ? matches.length : 0
-  }, [value])
+  const imageCount = useMemo(() => countMarkdownImages(value), [value])
 
   // Word 文档解析中的提示态
   const [importing, setImporting] = useState(false)
@@ -901,10 +905,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           <div className="ml-auto flex items-center gap-3 pl-2">
             <span className={cn(
               'flex items-center gap-1 text-xs tabular-nums whitespace-nowrap',
-              imageCount > 40 ? 'text-destructive font-medium' : 'text-muted-foreground',
+              imageCount > MAX_POST_IMAGES ? 'text-destructive font-medium' : 'text-muted-foreground',
             )}>
               <ImageIcon className="size-3" />
-              {imageCount}/40
+              {imageCount}/{MAX_POST_IMAGES}
             </span>
             <span className={cn(
               'text-xs tabular-nums whitespace-nowrap',

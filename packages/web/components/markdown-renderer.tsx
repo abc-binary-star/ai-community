@@ -63,14 +63,19 @@ function renderTextWithMentions(text: string): React.ReactNode[] {
 }
 
 const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
-  // 在文本节点中解析 @提及
-  p: ({ children, ...props }) => (
-    <p {...props}>
-      {React.Children.map(children, (child) =>
-        typeof child === 'string' ? renderTextWithMentions(child) : child,
-      )}
-    </p>
-  ),
+  // 在文本节点中解析 @提及；若段落仅含图片则居中
+  p: ({ children, ...props }) => {
+    const hasImg = React.Children.toArray(children).some(
+      (child) => React.isValidElement(child) && child.type === 'img',
+    )
+    return (
+      <p {...props} className={hasImg ? 'text-center' : undefined}>
+        {React.Children.map(children, (child) =>
+          typeof child === 'string' ? renderTextWithMentions(child) : child,
+        )}
+      </p>
+    )
+  },
   // 代码块：添加滚动条和复制友好样式
   pre: ({ children, ...props }) => (
     <pre
@@ -87,14 +92,16 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
   ),
   // 图片：响应式 + 圆角
   img: ({ src, alt, ...props }) => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={typeof src === 'string' ? src : undefined}
-      alt={alt || ''}
-      className="max-w-full rounded-lg"
-      loading="lazy"
-      {...props}
-    />
+    <span className="block text-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={typeof src === 'string' ? src : undefined}
+        alt={alt || ''}
+        className="inline-block max-w-full rounded-lg"
+        loading="lazy"
+        {...props}
+      />
+    </span>
   ),
   // 链接：新标签打开
   a: ({ href, children, ...props }) => (

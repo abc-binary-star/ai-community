@@ -12,7 +12,7 @@ import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
 import { useAiEnrich } from '@/lib/use-ai-enrich'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
-import { MarkdownEditor, type MarkdownEditorHandle, compressImage } from '@/components/markdown-editor'
+import { MarkdownEditor, type MarkdownEditorHandle, MAX_POST_CHARS, MAX_POST_IMAGES, compressImage, countMarkdownImages } from '@/components/markdown-editor'
 import { CoverEditor } from '@/app/community/components/cover-editor'
 
 export default function EditPostPage({ params }: { params: { id: string } }) {
@@ -115,12 +115,27 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   const handleRegenSummary = () => runEnrich(title, content, 'summary')
   const handleRegenTags = () => runEnrich(title, content, 'tags')
 
+  const validatePostLimits = () => {
+    const charCount = [...content].length
+    const imageCount = countMarkdownImages(content)
+    if (charCount > MAX_POST_CHARS) {
+      toast.error(`正文超过 ${MAX_POST_CHARS.toLocaleString()} 字，无法保存或发布`)
+      return false
+    }
+    if (imageCount > MAX_POST_IMAGES) {
+      toast.error(`图片超过 ${MAX_POST_IMAGES} 张，无法保存或发布`)
+      return false
+    }
+    return true
+  }
+
   // 保存（已发布帖子更新 / 草稿保存）
   const handleSave = async (targetStatus: 'published' | 'draft') => {
     if (!content.trim()) {
       toast.error('内容为空')
       return
     }
+    if (!validatePostLimits()) return
     setSubmitting(true)
     try {
       const tags = parseTags()
@@ -162,6 +177,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
       toast.error('内容不能为空')
       return
     }
+    if (!validatePostLimits()) return
     setSubmitting(true)
     try {
       const tags = parseTags()
