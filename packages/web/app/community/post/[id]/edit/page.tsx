@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { api, apiFetch, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useChannels } from '@/lib/use-channels'
+import { useAiEnrich } from '@/lib/use-ai-enrich'
 import { CHANNELS, CHANNEL_LABELS, type Post } from 'shared'
 import { MarkdownEditor, type MarkdownEditorHandle, compressImage } from '@/components/markdown-editor'
 import { CoverEditor } from '@/app/community/components/cover-editor'
@@ -27,10 +28,8 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [suggestingTitle, setSuggestingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
   const [aiSummary, setAiSummary] = useState('')
-  const [summarizing, setSummarizing] = useState(false)
   const [editorHeight, setEditorHeight] = useState(600)
   const [coverUrl, setCoverUrl] = useState('')
   // 封面本地文件：选择后本地预览，保存/发布时统一上传 OSS
@@ -96,66 +95,25 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     }
   }
 
-  // AI 建议标题
-  const handleSuggestTitle = async () => {
-    if (!content || content.trim().length < 10) {
-      toast.error('内容至少 10 个字才能生成标题')
-      return
-    }
-    setSuggestingTitle(true)
-    setTitleSuggestions([])
-    try {
-      const data = await api.post<{ titles: string[] }>('/ai/suggest-title', { content })
-      if (data.titles.length === 0) {
-        toast.error('未能生成标题，请手动输入')
-        return
-      }
-      setTitleSuggestions(data.titles)
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'AI 生成失败，请手动输入')
-    } finally {
-      setSuggestingTitle(false)
-    }
-  }
+  // 标签合并：AI 结果与已填标签去重后截至 5 个
+  const mergeTags = useCallback((incoming: string[]) => {
+    setTagsInput((prev) => {
+      const existing = prev.split(/[,，\s]+/).map((t) => t.trim()).filter(Boolean)
+      return [...new Set([...existing, ...incoming])].slice(0, 5).join(', ')
+    })
+  }, [])
 
-  // AI 生成标签
-  const handleSuggestTags = useCallback(async () => {
-    if (!title.trim() || !content.trim()) {
-      toast.error('请先填写标题和内容')
-      return
-    }
-    try {
-      const data = await api.post<{ tags: string[] }>('/posts/suggest-tags', { title: title.trim(), content })
-      if (data.tags.length === 0) {
-        toast.error('未能生成标签，请手动输入')
-        return
-      }
-      const existing = parseTags()
-      const merged = [...new Set([...existing, ...data.tags])].slice(0, 5)
-      setTagsInput(merged.join(', '))
-      toast.success(`AI 生成了 ${data.tags.length} 个标签`)
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'AI 生成失败，请手动输入')
-    }
-  }, [title, content, tagsInput])
+  // AI 补全：一次出齐标题、摘要、标签
+  const { enriching, regenerating, run: runEnrich } = useAiEnrich({
+    onTitles: setTitleSuggestions,
+    onSummary: setAiSummary,
+    onTags: mergeTags,
+  })
 
-  // AI 生成摘要
-  const handleSummarize = async () => {
-    if (!content || content.trim().length < 10) {
-      toast.error('内容至少 10 个字才能生成摘要')
-      return
-    }
-    setSummarizing(true)
-    try {
-      const data = await api.post<{ summary: string }>('/ai/summarize', { content })
-      setAiSummary(data.summary)
-      toast.success('摘要已生成')
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'AI 摘要生成失败')
-    } finally {
-      setSummarizing(false)
-    }
-  }
+  const handleEnrich = () => runEnrich(title, content)
+  const handleRegenTitle = () => runEnrich(title, content, 'title')
+  const handleRegenSummary = () => runEnrich(title, content, 'summary')
+  const handleRegenTags = () => runEnrich(title, content, 'tags')
 
   // 保存（已发布帖子更新 / 草稿保存）
   const handleSave = async (targetStatus: 'published' | 'draft') => {
@@ -271,12 +229,12 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
             variant="ghost"
             size="sm"
             className="h-9 shrink-0 gap-1.5 text-xs text-primary"
-            disabled={suggestingTitle}
-            onClick={handleSuggestTitle}
-            title="根据内容 AI 生成标题"
+            disabled={enriching}
+            onClick={handleEnrich}
+            title="根据内容一次生成标题、摘要和标签"
           >
-            {suggestingTitle ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            AI 标题
+            {enriching ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            AI 补全
           </Button>
         </div>
         {titleSuggestions.length > 0 && (
@@ -308,11 +266,16 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
             variant="ghost"
             size="sm"
             className="h-9 shrink-0 gap-1.5 text-xs text-primary"
-            onClick={handleSuggestTags}
-            title="根据标题和内容 AI 生成标签"
+            disabled={regenerating === 'tags'}
+            onClick={handleRegenTags}
+            title="只重新生成标签"
           >
-            <Sparkles className="size-3.5" />
-            AI 标签
+            {regenerating === 'tags' ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            换标签
           </Button>
         </div>
       </div>
@@ -391,21 +354,40 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
             className="w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold">发布帖子</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">发布帖子</h2>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={enriching}
+                onClick={handleEnrich}
+                title="一次生成标题、摘要和标签"
+              >
+                {enriching ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                {enriching ? '生成中…' : 'AI 补全'}
+              </Button>
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="pub-title">标题</Label>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="h-7 gap-1.5 text-xs"
-                  disabled={suggestingTitle}
-                  onClick={handleSuggestTitle}
+                  className="h-7 gap-1.5 text-xs text-muted-foreground"
+                  disabled={regenerating === 'title'}
+                  onClick={handleRegenTitle}
+                  title="只重新生成标题"
                 >
-                  {suggestingTitle ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-                  {suggestingTitle ? '生成中…' : 'AI 建议标题'}
+                  {regenerating === 'title' ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3" />
+                  )}
+                  换一批
                 </Button>
               </div>
               <Input
@@ -462,13 +444,19 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
                 <Label htmlFor="pub-tags">标签</Label>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={handleSuggestTags}
+                  className="h-7 gap-1.5 text-xs text-muted-foreground"
+                  disabled={regenerating === 'tags'}
+                  onClick={handleRegenTags}
+                  title="只重新生成标签"
                 >
-                  <Sparkles className="size-3" />
-                  AI 生成标签
+                  {regenerating === 'tags' ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3" />
+                  )}
+                  换一批
                 </Button>
               </div>
               <Input
@@ -486,12 +474,17 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 gap-1.5 text-xs"
-                  disabled={summarizing}
-                  onClick={handleSummarize}
+                  className="h-7 gap-1.5 text-xs text-muted-foreground"
+                  disabled={regenerating === 'summary'}
+                  onClick={handleRegenSummary}
+                  title="只重新生成摘要"
                 >
-                  {summarizing ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-                  {summarizing ? '生成中…' : '生成摘要'}
+                  {regenerating === 'summary' ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3" />
+                  )}
+                  换一批
                 </Button>
               </div>
               <textarea

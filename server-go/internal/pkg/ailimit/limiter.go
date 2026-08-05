@@ -30,8 +30,9 @@ const (
 	FeatureVoicePolish   Feature = "voice_polish"
 	FeatureSuggestTags   Feature = "suggest_tags"
 	FeatureThreadSummary Feature = "thread_summary"
-	FeaturePostSummary   Feature = "post_summary"
 	FeatureTranscribe    Feature = "transcribe"
+	// FeatureEnrich 标题、摘要、标签三产物合并生成
+	FeatureEnrich Feature = "enrich"
 )
 
 // FeatureConfig 单个 AI 功能的限制配置
@@ -62,8 +63,9 @@ func DefaultConfig() Config {
 			FeatureVoicePolish:   {MaxPerMinute: 5, MaxPerDay: 50},
 			FeatureSuggestTags:   {MaxPerMinute: 10, MaxPerDay: 100},
 			FeatureThreadSummary: {MaxPerMinute: 3, MaxPerDay: 20},
-			FeaturePostSummary:   {MaxPerMinute: 3, MaxPerDay: 20},
 			FeatureTranscribe:    {MaxPerMinute: 5, MaxPerDay: 30},
+			// 合并调用一次出三个产物，配额按原先单项的量级给
+			FeatureEnrich: {MaxPerMinute: 10, MaxPerDay: 100},
 		},
 	}
 }
@@ -84,8 +86,9 @@ type LimitError struct {
 func (e *LimitError) Error() string { return e.Reason }
 
 // CheckAsError 检查并返回 error（供 ai.PreCheckHook 使用）。
-// 注意：此方法有副作用——会消费滑动窗口中的一个时间戳。
-// 因此它在一次请求中只应被调用一次（由 ai.Chat 内部调用）。
+// 与 Check 一样是纯读、无副作用的，可安全重复调用：
+// 中间件先做一次快速拒绝，ai.Chat 内部再兜底一次。
+// 滑动窗口的时间戳消费发生在 RecordUsage，只在调用真正发生时计数。
 func (l *Limiter) CheckAsError(ctx context.Context, userID string, feature Feature) error {
 	r := l.Check(ctx, userID, feature)
 	if !r.Allowed {
