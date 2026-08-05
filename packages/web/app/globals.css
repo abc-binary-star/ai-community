@@ -152,3 +152,8 @@ pre[class*="language-"] {
 .token.variable {
   color: hsl(30 90% 50%);
 }
+
+/* prose 内图片居中：仅对包含图片的段落设置居中 */
+.prose p:has(img) {
+  text-align: center;
+}
