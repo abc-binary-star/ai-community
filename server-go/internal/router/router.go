@@ -64,9 +64,12 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 
 	// --- AI 辅助创作路由 ---
 	ai := h.Group("/api/ai", middleware.Auth())
+	ai.POST("/enrich", middleware.AILimit(ailimit.FeatureEnrich), handler.Enrich)
 	ai.POST("/suggest-title", middleware.AILimit(ailimit.FeatureSuggestTitle), handler.SuggestTitle)
 	ai.POST("/rewrite", middleware.AILimit(ailimit.FeatureRewrite), handler.Rewrite)
-	ai.POST("/rewrite-stream", handler.RewriteStream)
+	// 流式润色按分片串行调用模型，一次请求可产生 N 次调用，是最耗 token 的接口，
+	// 必须在 SSE 开始前就拒绝超限请求，否则用户会遇到「润色到一半突然报错」。
+	ai.POST("/rewrite-stream", middleware.AILimit(ailimit.FeatureRewrite), handler.RewriteStream)
 	ai.POST("/summarize", middleware.AILimit(ailimit.FeatureSummarize), handler.Summarize)
 	ai.POST("/voice-polish", middleware.AILimit(ailimit.FeatureVoicePolish), handler.VoicePolish)
 	ai.POST("/transcribe", middleware.AILimit(ailimit.FeatureTranscribe), handler.Transcribe)

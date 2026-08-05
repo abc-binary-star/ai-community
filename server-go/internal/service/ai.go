@@ -7,17 +7,30 @@ import (
 	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/digest"
 )
 
 // AIService AI 辅助创作服务（无状态）
 type AIService struct{}
 
+// titleCache 标题建议缓存。标题、摘要各自独立缓存，
+// 因为同一篇正文的两种产物互不复用。
+var titleCache = digest.NewCache(digest.DefaultTTL, 0)
+
+// summaryCache 摘要缓存
+var summaryCache = digest.NewCache(digest.DefaultTTL, 0)
+
 // SuggestTitle 根据帖子内容生成 3 个候选标题
 func (s *AIService) SuggestTitle(ctx context.Context, userID, content string) ([]string, error) {
-	truncated := content
-	if runes := []rune(truncated); len(runes) > 2000 {
-		truncated = string(runes[:2000])
+	cacheKey := digest.NormHash("title", content)
+	if cached, ok := aiCacheGet(ctx, titleCache, "title", cacheKey); ok && cached != "" {
+		return strings.Split(cached, "\n"), nil
 	}
+
+	// 用摘录替代「截取前 2000 字」：长文的结论常在后半段，
+	// 前缀截断会让模型看不到，摘录覆盖全篇。
+	d := digest.For(content, digest.BudgetTitle)
+	truncated := d.Text
 
 	systemPrompt := `你是一个社区帖子标题助手。根据帖子内容，生成 3 个不同风格的标题供用户选择。
 
@@ -65,7 +78,32 @@ func (s *AIService) SuggestTitle(ctx context.Context, userID, content string) ([
 	if len(titles) == 0 {
 		return nil, fmt.Errorf("AI 未能生成合适的标题")
 	}
+
+	log.Printf("[AI/SuggestTitle] digest strategy=%s in=%d out=%d",
+		d.Strategy, len([]rune(content)), len([]rune(truncated)))
+	aiCacheSet(ctx, titleCache, "title", cacheKey, strings.Join(titles, "\n"))
 	return titles, nil
+}
+
+// selectionContext 定位 selection 在 content 中的位置，返回前后各 n 字的上下文。
+// 选段不在正文中（前端未同步、或用户改过正文）时返回空串，调用方退回无上下文模式。
+func selectionContext(content, selection string, n int) (before, after string) {
+	idx := strings.Index(content, selection)
+	if idx < 0 {
+		return "", ""
+	}
+
+	beforeRunes := []rune(content[:idx])
+	if len(beforeRunes) > n {
+		beforeRunes = beforeRunes[len(beforeRunes)-n:]
+	}
+
+	afterRunes := []rune(content[idx+len(selection):])
+	if len(afterRunes) > n {
+		afterRunes = afterRunes[:n]
+	}
+
+	return strings.TrimSpace(string(beforeRunes)), strings.TrimSpace(string(afterRunes))
 }
 
 // Rewrite 润色文本内容。selection 非空时只润色选段，否则润色全文。
@@ -79,6 +117,14 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 	truncated := target
 	if runes := []rune(truncated); len(runes) > 40000 {
 		truncated = string(runes[:40000])
+	}
+
+	// 选段润色时取选段在原文中的前后各 200 字作为上下文。
+	// 原先实现直接丢弃 content，模型看不到上下文，衔接处容易润色得突兀；
+	// 而前端仍传了整篇正文，这部分数据白白浪费。
+	var before, after string
+	if selection != "" {
+		before, after = selectionContext(content, selection, 200)
 	}
 
 	styleDesc := "简洁自然"
@@ -108,7 +154,8 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 6. 保留原有的段落数量和换行位置，不增删空行、不添加标题或列表
 7. 不要增加表情符号，不要添加 Markdown 加粗等标记
 8. 即使原文已经通顺，也要在措辞和句式上做出可感知的优化
-9. 不要加任何前言、后语或解释，直接输出润色后的文字`, styleDesc)
+9. 不要加任何前言、后语或解释，直接输出润色后的文字
+10. 若输入中含【上文】【下文】标记，它们只是上下文参考，用于让衔接更自然；只输出【需要润色的片段】的润色结果，不要输出上下文内容`, styleDesc)
 	} else {
 		// 全文润色：综合优化排版、格式、表情符号、加粗强调
 		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色整篇文章，风格为%s。
@@ -131,9 +178,27 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 		temperature = 0.6
 	}
 
+	userMsg := truncated
+	if isSelection && (before != "" || after != "") {
+		// 用显式标记划出待润色范围，避免模型把上下文也一起改写
+		var b strings.Builder
+		if before != "" {
+			b.WriteString("【上文，仅供参考，不要输出】\n")
+			b.WriteString(before)
+			b.WriteString("\n\n")
+		}
+		b.WriteString("【需要润色的片段】\n")
+		b.WriteString(truncated)
+		if after != "" {
+			b.WriteString("\n\n【下文，仅供参考，不要输出】\n")
+			b.WriteString(after)
+		}
+		userMsg = b.String()
+	}
+
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
-		User:        truncated,
+		User:        userMsg,
 		MaxTokens:   8000,
 		Temperature: temperature,
 		UserID:      userID,
@@ -167,7 +232,11 @@ func (s *AIService) RewriteChunk(ctx context.Context, userID, content, style str
 		styleDesc = "亲和友好"
 	}
 
-	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文章的第 %d/%d 部分，风格为%s。
+	// 分片序号放在 user message 而非 system prompt，让所有分片的 system prompt
+	// 完全一致。服务商对相同的 prompt 前缀提供上下文缓存优惠，
+	// 原先把「第 i/n 部分」嵌进 system prompt 会让每片前缀都不同，主动放弃了该折扣。
+	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文章，风格为%s。
+输入会标明当前是第几部分，请只润色该部分内容，并与相邻部分保持风格连贯。
 
 要求：
 1. 修正错别字和语病，确保用词准确
@@ -177,11 +246,13 @@ func (s *AIService) RewriteChunk(ctx context.Context, userID, content, style str
 5. 适度使用加粗强调重点
 6. 保持原意不变，不改写事实内容
 7. 保留代码块、链接、图片等 Markdown 元素
-8. 不要加任何前言或后语，直接输出润色后的内容`, index+1, total, styleDesc)
+8. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+
+	userMsg := fmt.Sprintf("【第 %d/%d 部分】\n%s", index+1, total, content)
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
-		User:        content,
+		User:        userMsg,
 		MaxTokens:   8000,
 		Temperature: 0.3,
 		UserID:      userID,
@@ -199,10 +270,15 @@ func (s *AIService) RewriteChunk(ctx context.Context, userID, content, style str
 
 // Summarize 根据帖子内容生成摘要（1-2 句话，供列表卡片展示）
 func (s *AIService) Summarize(ctx context.Context, userID, content string) (string, error) {
-	truncated := content
-	if runes := []rune(truncated); len(runes) > 40000 {
-		truncated = string(runes[:40000])
+	cacheKey := digest.NormHash("summary", content)
+	if cached, ok := aiCacheGet(ctx, summaryCache, "summary", cacheKey); ok && cached != "" {
+		return cached, nil
 	}
+
+	// 摘要预算给到 4000 字，社区帖子绝大多数在此范围内全文直通，
+	// 只有极长文才压缩，把质量损失限制在极少数场景。
+	d := digest.For(content, digest.BudgetSummarize)
+	truncated := d.Text
 
 	systemPrompt := `你是一个社区帖子摘要助手。根据帖子内容，生成一句话摘要。
 
@@ -227,6 +303,10 @@ func (s *AIService) Summarize(ctx context.Context, userID, content string) (stri
 	if text == "" {
 		return "", fmt.Errorf("AI 摘要结果为空")
 	}
+
+	log.Printf("[AI/Summarize] digest strategy=%s in=%d out=%d",
+		d.Strategy, len([]rune(content)), len([]rune(truncated)))
+	aiCacheSet(ctx, summaryCache, "summary", cacheKey, text)
 	return text, nil
 }
 

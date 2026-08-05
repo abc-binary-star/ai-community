@@ -19,6 +19,41 @@ import (
 
 var aiService = &service.AIService{}
 
+// Enrich AI 三产物合并生成（标题 + 摘要 + 标签）
+// POST /api/ai/enrich
+//
+// only 为空时一次出齐三项；传 title / summary / tags 时只重生成该项，
+// 用于「标题不满意，换一批」这类场景，避免把三项一起重算。
+func Enrich(ctx context.Context, c *app.RequestContext) {
+	var req types.EnrichReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+	if len([]rune(req.Content)) < 10 {
+		response.BadRequest(c, "内容太短，至少 10 个字")
+		return
+	}
+	if len([]rune(req.Content)) > 40000 {
+		response.BadRequest(c, "内容太长，最多 40000 字")
+		return
+	}
+
+	if !ai.Enabled() {
+		response.Error(c, consts.StatusServiceUnavailable, "AI 功能未开启")
+		return
+	}
+
+	userID := middleware.GetCurrentUserID(c)
+	result, err := aiService.Enrich(ctx, userID, req.Title, req.Content, req.Only)
+	if err != nil {
+		log.Printf("[Enrich] failed, err=%v", err)
+		response.Error(c, consts.StatusServiceUnavailable, "AI 生成失败，请稍后重试")
+		return
+	}
+	response.JSON(c, result)
+}
+
 // SuggestTitle AI 标题建议
 // POST /api/ai/suggest-title
 func SuggestTitle(ctx context.Context, c *app.RequestContext) {

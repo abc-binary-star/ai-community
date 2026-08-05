@@ -25,6 +25,16 @@ const (
 // ThreadSummaryService 讨论摘要 v2 服务
 type ThreadSummaryService struct{}
 
+// PostSummaryError 摘要业务错误。
+// 名字沿用 v1 时期的命名，是为了避免改动 handler 层的类型断言；
+// 实际使用者只有 v2 的讨论摘要链路。
+type PostSummaryError struct {
+	Msg  string
+	Code int
+}
+
+func (e *PostSummaryError) Error() string { return e.Msg }
+
 // GetThreadSummary 获取讨论摘要（仅读取缓存，不自动触发生成）
 // - 已有缓存且未过期 -> 直接返回
 // - 已有缓存但过期 -> 返回旧数据(标记 stale)

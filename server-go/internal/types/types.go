@@ -72,6 +72,23 @@ type SummarizeReq struct {
 	Content string `json:"content" vd:"len($)>=10"`
 }
 
+// EnrichReq 三产物合并生成请求（标题 + 摘要 + 标签）
+type EnrichReq struct {
+	Title   string `json:"title"`
+	Content string `json:"content" vd:"len($)>=10"`
+	// Only 限定只生成某一项，取值 title / summary / tags；
+	// 为空时三项全出。用于「标题不满意，换一批」这类单项重生成，
+	// 避免为了换标题把摘要和标签一起重算。
+	Only string `json:"only" vd:"in($, '', 'title', 'summary', 'tags')"`
+}
+
+// EnrichResult 三产物合并生成结果
+type EnrichResult struct {
+	Titles  []string `json:"titles"`
+	Summary string   `json:"summary"`
+	Tags    []string `json:"tags"`
+}
+
 type VoicePolishReq struct {
 	Content string `json:"content" vd:"len($)>=1"`
 	Style   string `json:"style" vd:"in($, '', 'formal', 'casual', 'friendly')"`

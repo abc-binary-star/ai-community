@@ -2,18 +2,15 @@ package service
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/digest"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -726,28 +723,24 @@ func (s *PostService) PopularTags(ctx context.Context) ([]map[string]interface{}
 	return items, nil
 }
 
-// tagCacheEntry 标签缓存条目
-type tagCacheEntry struct {
-	tags      []string
-	expiresAt time.Time
-}
+// tagCache 标签推荐缓存。
+// key 用归一化哈希，让「只改排版不改内容」的编辑仍然命中——
+// 用户发帖前反复调标点、加粗、改分段是常态，
+// 原先直接对原文取 md5 会导致缓存几乎永不命中。
+var tagCache = digest.NewCache(digest.DefaultTTL, 0)
 
-// tagCache 标签推荐内存缓存（TTL 7 天）
-var tagCache sync.Map
-
-// tagCacheTTL 缓存有效期
-const tagCacheTTL = 7 * 24 * time.Hour
+// tagCacheSep 分隔缓存值中的多个标签
+const tagCacheSep = "\x1f"
 
 // SuggestTags AI 标签推荐（含缓存 + 失败降级）
 func (s *PostService) SuggestTags(ctx context.Context, userID, title, content string) ([]string, error) {
-	// 构造缓存 key
-	key := tagCacheKey(title, content)
+	key := digest.NormHash("tags", title, content)
 
-	// 查缓存
-	if cached, ok := tagCache.Load(key); ok {
-		if entry, ok := cached.(*tagCacheEntry); ok && time.Now().Before(entry.expiresAt) {
-			return entry.tags, nil
+	if cached, ok := aiCacheGet(ctx, tagCache, "tags", key); ok {
+		if cached == "" {
+			return []string{}, nil
 		}
+		return strings.Split(cached, tagCacheSep), nil
 	}
 
 	truncatedTitle := title
@@ -755,10 +748,10 @@ func (s *PostService) SuggestTags(ctx context.Context, userID, title, content st
 		truncatedTitle = string(runes[:200])
 	}
 
-	truncatedContent := content
-	if runes := []rune(truncatedContent); len(runes) > 2000 {
-		truncatedContent = string(runes[:2000])
-	}
+	// 摘录替代前缀截断：标签需要判断全篇主题，
+	// 只看开头容易漏掉后半段才出现的领域信息。
+	d := digest.For(content, digest.BudgetTags)
+	truncatedContent := d.Text
 
 	systemPrompt := `你是一个社区分类标签助手。根据帖子标题和内容，为其分配 2-5 个分类标签，让帖子能被归到合适的类别下方便检索。
 
@@ -808,17 +801,11 @@ func (s *PostService) SuggestTags(ctx context.Context, userID, title, content st
 		}
 	}
 
+	log.Printf("[AI/SuggestTags] digest strategy=%s in=%d out=%d",
+		d.Strategy, len([]rune(content)), len([]rune(truncatedContent)))
+
 	// 写入缓存（即使结果为空也缓存，避免重复调用）
-	tagCache.Store(key, &tagCacheEntry{
-		tags:      tags,
-		expiresAt: time.Now().Add(tagCacheTTL),
-	})
+	aiCacheSet(ctx, tagCache, "tags", key, strings.Join(tags, tagCacheSep))
 
 	return tags, nil
-}
-
-// tagCacheKey 根据标题和内容生成缓存 key
-func tagCacheKey(title, content string) string {
-	h := md5.Sum([]byte(title + "\x00" + content))
-	return hex.EncodeToString(h[:])
 }

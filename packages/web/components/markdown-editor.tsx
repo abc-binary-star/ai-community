@@ -693,8 +693,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     try {
       setOriginalSnapshot(value)
       if (selection) {
+        // 只传选段前后各 200 字的上下文窗口，而非整篇正文。
+        // 服务端用它让润色在衔接处更自然；传全文对结果没有额外帮助，纯属浪费带宽。
+        const CONTEXT_CHARS = 200
+        const contextWindow = value.slice(
+          Math.max(0, start - CONTEXT_CHARS),
+          Math.min(value.length, end + CONTEXT_CHARS)
+        )
         const data = await api.post<{ result: string }>('/ai/rewrite', {
-          content: value,
+          content: contextWindow,
           selection,
           style: '',
         })
