@@ -22,6 +22,7 @@ import (
 )
 
 var aiService = &service.AIService{}
+var billingService = &service.BillingService{}
 
 // Enrich AI 三产物合并生成（标题 + 摘要 + 标签）
 // POST /api/ai/enrich
@@ -397,6 +398,26 @@ func GetAIPlan(ctx context.Context, c *app.RequestContext) {
 // POST /api/billing/upgrade
 func UpgradePlan(ctx context.Context, c *app.RequestContext) {
 	response.Error(c, consts.StatusNotImplemented, "订阅支付功能尚未接入，请联系管理员开通")
+}
+
+// GrantSubscription 管理员手动发放/调整订阅
+// POST /api/billing/subscription
+func GrantSubscription(ctx context.Context, c *app.RequestContext) {
+	var req struct {
+		UserID string `json:"userId"`
+		Plan   string `json:"plan"`
+		Days   int    `json:"days"`
+	}
+	if err := c.BindJSON(&req); err != nil || req.UserID == "" {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	user, err := billingService.GrantSubscription(ctx, req.UserID, req.Plan, req.Days)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.JSON(c, user)
 }
 
 func limitErrorParts(err error) (string, int) {

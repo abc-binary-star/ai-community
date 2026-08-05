@@ -78,6 +78,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 
 	// --- 商业化占位 ---
 	h.POST("/api/billing/upgrade", middleware.Auth(), handler.UpgradePlan)
+	h.POST("/api/billing/subscription", middleware.Auth(), middleware.RequireRole("admin"), handler.GrantSubscription)
 
 	// --- 评论路由 ---
 	h.GET("/api/posts/:id/comments", middleware.OptionalAuth(), handler.ListComments)
