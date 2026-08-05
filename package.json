@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "pnpm --filter web dev",
     "dev:server": "cd server-go && go run ./cmd/server",
+    "dev:all": "bash scripts/dev.sh",
+    "dev:restart": "bash scripts/dev.sh --restart",
     "build": "pnpm --filter web build && cd server-go && go build -o bin/server ./cmd/server",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
