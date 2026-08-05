@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
+	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -21,11 +23,12 @@ var uploader = &uploadLimiter{
 }
 
 const (
-	uploadWindow    = time.Minute   // 时间窗口
-	uploadMaxPerMin = 20            // 每窗口最大请求数
+	uploadWindow    = time.Minute // 时间窗口
+	uploadMaxPerMin = 40          // 每窗口最大请求数
 )
 
-// UploadLimit 上传频率限制中间件：每用户每分钟最多 20 次上传
+// UploadLimit 上传频率限制中间件：每用户每分钟最多 40 次上传
+// 管理员账号不受限制
 func UploadLimit() app.HandlerFunc {
 	// 定期清理过期记录
 	go uploader.cleanup()
@@ -36,6 +39,15 @@ func UploadLimit() app.HandlerFunc {
 			response.Unauthorized(c, "未登录")
 			c.Abort()
 			return
+		}
+
+		// 管理员不受上传限流
+		var user model.User
+		if err := dal.DB.WithContext(ctx).Select("role").First(&user, "id = ?", userID).Error; err == nil {
+			if user.Role == "admin" {
+				c.Next(ctx)
+				return
+			}
 		}
 
 		if !uploader.allow(userID) {

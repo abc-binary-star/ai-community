@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback, useImperativeHandle, forwardRef, type TextareaHTMLAttributes } from 'react'
+import { useRef, useState, useCallback, useImperativeHandle, forwardRef, useMemo, type TextareaHTMLAttributes } from 'react'
 import {
   Bold, Code, Code2, Eraser, Eye, EyeOff, FileText, Heading, Image as ImageIcon, Link2,
   List, ListOrdered, ListChecks, Mic, Quote, Sparkles, Loader2, Strikethrough,
@@ -324,6 +324,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
   // 字数统计：按 Unicode 字符计数，与后端 len([]rune) 一致
   const charCount = [...value].length
+  // 图片数统计：匹配 markdown 图片语法 ![](url)
+  const imageCount = useMemo(() => {
+    const matches = value.match(/!\[[^\]]*\]\([^)\s]+\)/g)
+    return matches ? matches.length : 0
+  }, [value])
 
   // Word 文档解析中的提示态
   const [importing, setImporting] = useState(false)
@@ -428,7 +433,22 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   const resolveLocalImages = useCallback(async (): Promise<string> => {
     const localImages = localImagesRef.current
     if (localImages.size === 0) return valueRef.current
+
+    // 先清理正文中已不存在的图片，得到实际上传数量
     let resolved = valueRef.current
+    for (const [blobUrl] of localImages) {
+      if (!resolved.includes(blobUrl)) {
+        URL.revokeObjectURL(blobUrl)
+        localImages.delete(blobUrl)
+      }
+    }
+    if (localImages.size === 0) return resolved
+
+    const total = localImages.size
+    toast.info(`正在上传 ${total} 张图片…`)
+    let uploaded = 0
+    let failed = 0
+
     for (const [blobUrl, file] of localImages) {
       if (!resolved.includes(blobUrl)) {
         URL.revokeObjectURL(blobUrl)
@@ -446,10 +466,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         resolved = resolved.replaceAll(blobUrl, data.url)
         URL.revokeObjectURL(blobUrl)
         localImages.delete(blobUrl)
+        uploaded++
       } catch (err) {
         console.error('[Upload] 图片上传失败:', err)
-        toast.error(`图片上传失败: ${file.name || '未知'}`)
+        failed++
+        // 失败的图片也清理掉，避免下次保存时重复尝试已失败的图片
+        URL.revokeObjectURL(blobUrl)
+        localImages.delete(blobUrl)
       }
+    }
+    if (failed > 0) {
+      toast.error(`${failed}/${total} 张图片上传失败`)
+    } else {
+      toast.success(`${uploaded} 张图片上传完成`)
     }
     onChange(resolved)
     return resolved
@@ -862,7 +891,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               转存中…
             </span>
           )}
-          <div className="ml-auto flex items-center gap-2 pl-2">
+          <div className="ml-auto flex items-center gap-3 pl-2">
+            <span className={cn(
+              'flex items-center gap-1 text-xs tabular-nums whitespace-nowrap',
+              imageCount > 40 ? 'text-destructive font-medium' : 'text-muted-foreground',
+            )}>
+              <ImageIcon className="size-3" />
+              {imageCount}/40
+            </span>
             <span className={cn(
               'text-xs tabular-nums whitespace-nowrap',
               charCount > 40000 ? 'text-destructive font-medium' : 'text-muted-foreground',
