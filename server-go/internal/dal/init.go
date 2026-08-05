@@ -66,6 +66,7 @@ func Init(cfg *conf.Config) {
 		&model.AIGlobalQuota{},
 		&model.AIContentDigest{},
 		&model.Image{},
+		&model.Highlight{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

@@ -390,6 +390,24 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }
   }, [onChange, mirrorExternalImages])
 
+  // Tab 键插入全角空格缩进（中文首行缩进习惯，不会被 markdown 折叠；ASCII 空格会被折叠）
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Tab') return
+    e.preventDefault()
+    const ta = textareaRef.current
+    if (!ta) return
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const indent = '　　'
+    const next = value.slice(0, start) + indent + value.slice(end)
+    handleTextareaChange(next)
+    requestAnimationFrame(() => {
+      ta.focus()
+      const pos = start + indent.length
+      ta.setSelectionRange(pos, pos)
+    })
+  }, [value, handleTextareaChange])
+
   // 同步滚动：按滚动比例在两栏间同步
   const syncScroll = (source: 'editor' | 'preview') => {
     if (syncingRef.current) return
@@ -949,6 +967,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               ref={textareaRef}
               value={value}
               onChange={(e) => handleTextareaChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               onScroll={() => syncScroll('editor')}
               onDrop={handleDrop}
               onDragOver={(e) => {
@@ -981,6 +1000,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             ref={textareaRef}
             value={value}
             onChange={(e) => handleTextareaChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             onDrop={handleDrop}
             onDragOver={(e) => {
               if (e.dataTransfer.types.includes('Files')) {

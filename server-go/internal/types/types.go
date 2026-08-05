@@ -440,3 +440,30 @@ type Message struct {
 	ReadAt         *string `json:"readAt"`
 	CreatedAt      string  `json:"createdAt"`
 }
+
+// --- 划线高亮 ---
+
+// CreateHighlightReq 创建划线请求
+type CreateHighlightReq struct {
+	Anchor       string `json:"anchor" vd:"len($)>=1 && len($)<=200"`
+	StartOffset  int    `json:"startOffset" vd:"$>=0"`
+	EndOffset    int    `json:"endOffset" vd:"$>=0"`
+	SelectedText string `json:"selectedText" vd:"len($)>=1 && len($)<=2000"`
+	Color        string `json:"color"`
+}
+
+// Highlight 划线记录 DTO
+type Highlight struct {
+	ID           string `json:"id"`
+	Anchor       string `json:"anchor"`
+	StartOffset  int    `json:"startOffset"`
+	EndOffset    int    `json:"endOffset"`
+	SelectedText string `json:"selectedText"`
+	Color        string `json:"color"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+// UpdateHighlightReq 更新划线颜色
+type UpdateHighlightReq struct {
+	Color string `json:"color"`
+}

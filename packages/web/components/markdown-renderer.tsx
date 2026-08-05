@@ -1,9 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { forwardRef, memo } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import rehypeRaw from 'rehype-raw'
 import rehypePrism from 'rehype-prism-plus'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
@@ -62,111 +63,129 @@ function renderTextWithMentions(text: string): React.ReactNode[] {
   return parts
 }
 
-const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
-  // 在文本节点中解析 @提及；若段落仅含图片则居中
-  p: ({ children, ...props }) => {
-    const hasImg = React.Children.toArray(children).some(
-      (child) => React.isValidElement(child) && child.type === 'img',
-    )
-    return (
-      <p {...props} className={hasImg ? 'text-center' : undefined}>
-        {React.Children.map(children, (child) =>
-          typeof child === 'string' ? renderTextWithMentions(child) : child,
-        )}
-      </p>
-    )
-  },
-  // 代码块：添加滚动条和复制友好样式
-  pre: ({ children, ...props }) => (
-    <pre
-      {...props}
-      className="overflow-x-auto rounded-lg bg-muted p-4 text-sm"
-    >
-      {children}
-    </pre>
-  ),
-  code: ({ className, children, ...props }) => (
-    <code className={cn('rounded', !className && 'bg-muted px-1.5 py-0.5 text-sm', className)} {...props}>
-      {children}
-    </code>
-  ),
-  // 图片：响应式 + 圆角
-  img: ({ src, alt, ...props }) => (
-    <span className="block text-center">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={typeof src === 'string' ? src : undefined}
-        alt={alt || ''}
-        className="inline-block max-w-full rounded-lg"
-        loading="lazy"
-        {...props}
-      />
-    </span>
-  ),
-  // 链接：新标签打开
-  a: ({ href, children, ...props }) => (
-    <Link
-      href={href || '#'}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-primary hover:underline"
-      onClick={(e) => e.stopPropagation()}
-      {...props}
-    >
-      {children}
-    </Link>
-  ),
-  // 表格：添加边框和滚动容器
-  table: ({ children, ...props }) => (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm" {...props}>
-        {children}
-      </table>
-    </div>
-  ),
-  th: ({ children, ...props }) => (
-    <th className="border border-border bg-muted px-3 py-2 text-left font-medium" {...props}>
-      {children}
-    </th>
-  ),
-  td: ({ children, ...props }) => (
-    <td className="border border-border px-3 py-2" {...props}>
-      {children}
-    </td>
-  ),
-}
+// 可被划线选中的块级元素标签
+const BLOCK_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'] as const
 
-export function MarkdownRenderer({
-  content,
-  className,
-  fontFamily,
-}: {
+export interface MarkdownRendererProps {
   content: string
   className?: string
   fontFamily?: string
-}) {
-  return (
-    <div
-      className={cn(
-        'prose prose-sm dark:prose-invert max-w-none break-words',
-        'prose-headings:scroll-mt-20',
-        'prose-pre:bg-muted prose-pre:p-4',
-        'prose-code:before:content-none prose-code:after:content-none',
-        className,
-      )}
-      style={fontFamily ? { fontFamily } : undefined}
-    >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypeRaw], [rehypePrism, { ignoreMissing: true }], [rehypeSanitize, sanitizeSchema]]}
-        components={components}
-        urlTransform={(url) =>
-          // 放行编辑器本地预览的 blob:/data: 图片地址（发帖后为 http/https）
-          /^(blob|data|https?|mailto|tel):/i.test(url) ? url : ''
-        }
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
-  )
+  // 开启后标记块级元素（data-block），供划线定位后处理生成锚点
+  enableBlocks?: boolean
 }
+
+export const MarkdownRenderer = memo(
+  forwardRef<HTMLDivElement, MarkdownRendererProps>(
+  function MarkdownRenderer({ content, className, fontFamily, enableBlocks }, ref) {
+    const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
+      // 在文本节点中解析 @提及；若段落仅含图片则居中
+      p: ({ children, ...props }) => {
+        const hasImg = React.Children.toArray(children).some(
+          (child) => React.isValidElement(child) && child.type === 'img',
+        )
+        return (
+          <p
+            {...props}
+            data-block={enableBlocks ? '' : undefined}
+            className={hasImg ? 'text-center' : undefined}
+          >
+            {React.Children.map(children, (child) =>
+              typeof child === 'string' ? renderTextWithMentions(child) : child,
+            )}
+          </p>
+        )
+      },
+      // 代码块：添加滚动条和复制友好样式
+      pre: ({ children, ...props }) => (
+        <pre {...props} className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
+          {children}
+        </pre>
+      ),
+      code: ({ className, children, ...props }) => (
+        <code className={cn('rounded', !className && 'bg-muted px-1.5 py-0.5 text-sm', className)} {...props}>
+          {children}
+        </code>
+      ),
+      // 图片：响应式 + 圆角
+      img: ({ src, alt, ...props }) => (
+        <span className="block text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={typeof src === 'string' ? src : undefined}
+            alt={alt || ''}
+            className="inline-block max-w-full rounded-lg"
+            loading="lazy"
+            {...props}
+          />
+        </span>
+      ),
+      // 链接：新标签打开
+      a: ({ href, children, ...props }) => (
+        <Link
+          href={href || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+          onClick={(e) => e.stopPropagation()}
+          {...props}
+        >
+          {children}
+        </Link>
+      ),
+      // 表格：添加边框和滚动容器
+      table: ({ children, ...props }) => (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm" {...props}>
+            {children}
+          </table>
+        </div>
+      ),
+      th: ({ children, ...props }) => (
+        <th className="border border-border bg-muted px-3 py-2 text-left font-medium" {...props}>
+          {children}
+        </th>
+      ),
+      td: ({ children, ...props }) => (
+        <td className="border border-border px-3 py-2" {...props}>
+          {children}
+        </td>
+      ),
+    }
+
+    // 开启划线时，为其余块级元素附加锚点
+    if (enableBlocks) {
+      const dyn = components as unknown as Record<string, (p: any) => React.ReactElement>
+      for (const tag of BLOCK_TAGS) {
+        dyn[tag] = ({ children, ...props }: React.ComponentProps<'h1'>) =>
+          React.createElement(tag, { ...props, 'data-block': '' }, children)
+      }
+    }
+
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'prose prose-sm dark:prose-invert max-w-none break-words',
+          'prose-headings:scroll-mt-20',
+          'prose-pre:bg-muted prose-pre:p-4',
+          'prose-code:before:content-none prose-code:after:content-none',
+          className,
+        )}
+        style={fontFamily ? { fontFamily } : undefined}
+      >
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkBreaks]}
+          rehypePlugins={[[rehypeRaw], [rehypePrism, { ignoreMissing: true }], [rehypeSanitize, sanitizeSchema]]}
+          components={components}
+          urlTransform={(url) =>
+            // 放行编辑器本地预览的 blob:/data: 图片地址（发帖后为 http/https）
+            /^(blob|data|https?|mailto|tel):/i.test(url) ? url : ''
+          }
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    )
+  },
+  ),
+)

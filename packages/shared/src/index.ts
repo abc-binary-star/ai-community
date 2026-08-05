@@ -234,3 +234,14 @@ export interface FollowGroup {
   createdAt: string
 }
 
+
+// 帖子划线高亮
+export interface Highlight {
+  id: string
+  anchor: string
+  startOffset: number
+  endOffset: number
+  selectedText: string
+  color: string
+  createdAt: string
+}

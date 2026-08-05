@@ -15,6 +15,7 @@ import { useHydrated } from '@/lib/use-hydrated'
 import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
+import { HighlightableContent } from './highlightable-content'
 import { fontFamily } from '@/lib/font-options'
 import { getChannelLabel, type Comment, type Paginated, type Post, type ThreadSummary } from 'shared'
 import { CommentTree } from './comment-tree'
@@ -353,7 +354,7 @@ export function PostDetailView({ id }: { id: string }) {
               </div>
             ) : (
               <>
-                <MarkdownRenderer content={post.content} fontFamily={fontFamily(post.font)} />
+                <HighlightableContent postId={post.id} content={post.content} fontFamily={fontFamily(post.font)} />
                 {isLongContent && (
                   <div className="mt-3 flex items-center justify-center">
                     <Button

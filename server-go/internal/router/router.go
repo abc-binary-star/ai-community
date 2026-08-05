@@ -62,6 +62,12 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/posts/:id/like", middleware.Auth(), handler.LikePost)
 	h.DELETE("/api/posts/:id/like", middleware.Auth(), handler.UnlikePost)
 
+	// --- 划线高亮路由 ---
+	h.GET("/api/posts/:id/highlights", middleware.OptionalAuth(), handler.ListHighlights)
+	h.POST("/api/posts/:id/highlights", middleware.Auth(), handler.CreateHighlight)
+	h.DELETE("/api/posts/:id/highlights/:highlightId", middleware.Auth(), handler.DeleteHighlight)
+	h.PUT("/api/posts/:id/highlights/:highlightId", middleware.Auth(), handler.UpdateHighlight)
+
 	// --- AI 辅助创作路由 ---
 	ai := h.Group("/api/ai", middleware.Auth())
 	ai.POST("/enrich", middleware.AILimit(ailimit.FeatureEnrich), handler.Enrich)
