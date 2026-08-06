@@ -83,16 +83,16 @@ export function HellBoardView() {
 
   return (
     <div className="min-h-screen bg-[#f7f6ed] text-stone-900 [background-image:radial-gradient(#d6d3c5_0.8px,transparent_0.8px)] [background-size:18px_18px]">
-      <div className="mx-auto max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7 lg:py-6">
-        <header className="mb-5 border-b-2 border-stone-800 pb-4 lg:mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="mx-auto max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7 lg:py-4">
+        <header className="mb-4 border-b-2 border-stone-800 pb-3 lg:mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="hidden size-12 shrink-0 rotate-[-3deg] items-center justify-center rounded-lg border-2 border-stone-800 bg-[#ffd166] shadow-[4px_4px_0_#292524] sm:flex">
-                <BookOpen className="size-6" />
+              <div className="hidden size-10 shrink-0 rotate-[-3deg] items-center justify-center rounded-lg border-2 border-stone-800 bg-[#ffd166] shadow-[4px_4px_0_#292524] sm:flex">
+                <BookOpen className="size-5" />
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-black text-stone-900 sm:text-2xl lg:text-3xl">无限循环读书地狱</h1>
+                  <h1 className="text-lg font-black text-stone-900 sm:text-xl lg:text-2xl">无限循环读书地狱</h1>
                 </div>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-stone-600 lg:text-sm">
                   <span className="inline-flex items-center gap-1"><Sparkles className="size-3.5 text-amber-600" />推理小说群月度活动</span>
@@ -137,69 +137,79 @@ export function HellBoardView() {
           </div>
         </header>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_350px] xl:gap-6">
-          <div className="min-w-0 space-y-4 lg:space-y-5">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
+          <div className="min-w-0">
             {showTextView ? (
               <BoardTextView teams={teams} currentTeam={currentTeam} />
             ) : (
-              /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
               <div className="mx-auto max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3">
                 <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
               </div>
             )}
-
-            {currentTeam ? (
-              <CurrentTaskPanel
-                team={currentTeam}
-                isCaptain={isCaptain}
-                readOnly={archived}
-                onOpenCheckIn={() => setShowCheckInForm(true)}
-              />
-            ) : (
-              <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
-                <p className="flex items-center gap-2 text-sm font-black"><Users className="size-4 text-emerald-700" />观战模式</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-stone-600">
-                  {enrolled
-                    ? '你已报名，等待选择小组加入后即可打卡与掷骰。'
-                    : '你已登录，但不在本次活动的任何小组中。报名并选择小组后即可参与。'}
-                </p>
-                {!archived && <EnrollWizard />}
-              </div>
-            )}
           </div>
 
-          <aside className="space-y-4 xl:sticky xl:top-5">
-            <div className="xl:hidden">
-              <div
-                role="tablist"
-                aria-label="侧边栏切换"
-                className="grid grid-cols-2 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
-              >
-                {([
-                  ['team', '队伍'],
-                  ['ranking', '榜单'],
-                ] as const).map(([key, label]) => (
-                  <button
-                    key={key}
-                    role="tab"
-                    type="button"
-                    aria-selected={sideTab === key}
-                    onClick={() => setSideTab(key)}
-                    className={cn(
-                      'rounded px-2 py-2 text-xs font-bold transition-colors',
-                      sideTab === key
-                        ? 'bg-[#ffd166] text-stone-900'
-                        : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+          {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单收进切换栏，
+              使电脑端与棋盘同屏，打卡无需滚动 */}
+          <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:max-h-[calc(100vh-2rem)] xl:flex-col">
+            <div className="xl:shrink-0">
+              {currentTeam ? (
+                <CurrentTaskPanel
+                  team={currentTeam}
+                  isCaptain={isCaptain}
+                  readOnly={archived}
+                  onOpenCheckIn={() => setShowCheckInForm(true)}
+                />
+              ) : (
+                <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
+                  <p className="flex items-center gap-2 text-sm font-black"><Users className="size-4 text-emerald-700" />观战模式</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-stone-600">
+                    {enrolled
+                      ? '你已报名，等待选择小组加入后即可打卡与掷骰。'
+                      : '你已登录，但不在本次活动的任何小组中。报名并选择小组后即可参与。'}
+                  </p>
+                  {!archived && <EnrollWizard />}
+                </div>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <div className={cn('xl:block', sideTab !== 'team' && 'hidden')}>
+            <div
+              role="tablist"
+              aria-label="侧边栏切换"
+              className="grid shrink-0 grid-cols-2 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
+            >
+              {([
+                ['team', '队伍'],
+                ['ranking', '榜单'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  id={`side-tab-${key}`}
+                  role="tab"
+                  type="button"
+                  aria-selected={sideTab === key}
+                  aria-controls={`side-panel-${key}`}
+                  onClick={() => setSideTab(key)}
+                  className={cn(
+                    'rounded px-2 py-2 text-xs font-bold transition-colors',
+                    sideTab === key
+                      ? 'bg-[#ffd166] text-stone-900'
+                      : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* 榜单可达 10 行，超出时只让面板区内部滚动，
+                避免顶部打卡入口被挤出视口 */}
+            <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1 xl:scrollbar-thin">
+              <div
+                id="side-panel-team"
+                role="tabpanel"
+                aria-labelledby="side-tab-team"
+                hidden={sideTab !== 'team'}
+              >
                 {currentTeam ? (
                   <TeamPanel team={currentTeam} currentMemberId={myMemberId ?? ''} />
                 ) : (
@@ -208,7 +218,12 @@ export function HellBoardView() {
                   </p>
                 )}
               </div>
-              <div className={cn('xl:block', sideTab !== 'ranking' && 'hidden')}>
+              <div
+                id="side-panel-ranking"
+                role="tabpanel"
+                aria-labelledby="side-tab-ranking"
+                hidden={sideTab !== 'ranking'}
+              >
                 <RankingPanel />
               </div>
             </div>

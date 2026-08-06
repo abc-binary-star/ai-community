@@ -1,7 +1,10 @@
 package dal
 
 import (
+	"errors"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/conf"
@@ -142,32 +145,40 @@ var defaultChannels = []model.Channel{
 	{Name: "life", Label: "生活方式", Icon: "leaf", SortOrder: 5},
 }
 
+// defaultSuperAdminEmail 超级管理员账号邮箱。
+// 邮箱是注册时写死且唯一的标识，用户名和显示名都可被用户改掉，
+// 因此这里按邮箱匹配，避免改名后 seed 失效。可用 SUPER_ADMIN_EMAIL 覆盖。
+const defaultSuperAdminEmail = "463556354@qq.com"
+
 // seedSuperAdmin 幂等地确保超级管理员账号角色为 admin。
-// 按用户名或显示名匹配：账号可能直接以中文名注册，也可能仅把中文名设为显示名。
 // 账号未注册时仅记录提示（避免在代码里伪造密码建号），注册后重启服务即自动提升；
 // 已为 admin 或账号不存在时无任何副作用，可安全重复执行。
 func seedSuperAdmin() {
-	const superAdminName = "栗悟饭与龟波功"
+	email := strings.TrimSpace(os.Getenv("SUPER_ADMIN_EMAIL"))
+	if email == "" {
+		email = defaultSuperAdminEmail
+	}
 
-	var users []model.User
-	if err := DB.Where("username = ? OR display_name = ?", superAdminName, superAdminName).Find(&users).Error; err != nil {
+	var user model.User
+	// 邮箱大小写不敏感匹配，避免注册时大写导致查不到
+	err := DB.Where("LOWER(email) = ?", strings.ToLower(email)).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("超级管理员账号「%s」尚未注册，注册后重启服务将自动提升为管理员", email)
+		return
+	}
+	if err != nil {
 		log.Printf("Warning: 检查超级管理员账号失败: %v", err)
 		return
 	}
-	if len(users) == 0 {
-		log.Printf("超级管理员账号「%s」尚未注册，注册后重启服务将自动提升为管理员", superAdminName)
+	if user.Role == "admin" {
+		log.Printf("超级管理员「%s」已是 admin，跳过", user.Username)
 		return
 	}
-	for i := range users {
-		if users[i].Role == "admin" {
-			continue
-		}
-		if err := DB.Model(&model.User{}).Where("id = ?", users[i].ID).Update("role", "admin").Error; err != nil {
-			log.Printf("Warning: 提升「%s」为管理员失败: %v", users[i].Username, err)
-			continue
-		}
-		log.Printf("已将「%s」(id=%s) 设为超级管理员", users[i].Username, users[i].ID)
+	if err := DB.Model(&model.User{}).Where("id = ?", user.ID).Update("role", "admin").Error; err != nil {
+		log.Printf("Warning: 提升「%s」为管理员失败: %v", user.Username, err)
+		return
 	}
+	log.Printf("已将「%s」(%s) 设为超级管理员", user.Username, email)
 }
 
 // seedDefaultChannels 频道表为空时插入默认分组和频道

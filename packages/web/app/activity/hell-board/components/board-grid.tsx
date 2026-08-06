@@ -11,6 +11,7 @@ import {
 } from '../lib/board'
 import { useActivityStore } from '../lib/store'
 import type { Team } from '../lib/types'
+import { BoardCenter } from './board-center'
 import { BoardTile } from './board-tile'
 import { PieceStack } from './team-piece'
 
@@ -82,7 +83,7 @@ export function BoardGrid({
         )
       })}
 
-      {/* 棋盘中心留白：活动标题与规则要点 + 图例 */}
+      {/* 棋盘中心：活动标题 + 点亮进度战况 */}
       <div className="board-ring-center relative flex flex-col items-center justify-center overflow-hidden p-2.5 text-center md:p-5">
         {/* 羊皮纸底卡 */}
         <div className="absolute inset-0 rounded-xl border-2 border-[#8b6b2c]/40 bg-gradient-to-b from-[#fffdf4] via-[#fbf3dc] to-[#f0e4c4] shadow-[inset_0_2px_6px_rgba(139,107,44,0.15)]" />
@@ -92,38 +93,7 @@ export function BoardGrid({
         <span aria-hidden className="absolute bottom-2 left-2 size-2.5 rounded-full border border-[#c9a84c] bg-[#fff3d6]" />
         <span aria-hidden className="absolute bottom-2 right-2 size-2.5 rounded-full border border-[#c9a84c] bg-[#fff3d6]" />
 
-        <div className="relative flex flex-col items-center">
-          <span className="rounded border border-[#8b6b2c]/50 bg-[#efe6cd] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#6b4e15]">
-            Reading Hell
-          </span>
-          <h2 className="mt-2 text-base font-black leading-tight text-stone-900 md:mt-2.5 md:text-xl lg:text-2xl">
-            无限循环读书地狱
-          </h2>
-          <div className="mt-1.5 h-px w-20 bg-gradient-to-r from-transparent via-[#c9a84c] to-transparent" />
-          {/* 手机竖屏中心区仅约 162px 宽，长段落会碎成十几行，规则详情走格子详情弹窗 */}
-          <p className="mt-2 hidden max-w-sm text-[11px] font-medium leading-relaxed text-stone-600 md:block">
-            20 格环形棋盘，完成当前格任务后掷骰前进。骰子会跨过格子，需绕圈多轮才能点亮全部格子；已点亮格子再次落入仍需完成任务，但不重复计入点亮数。
-          </p>
-
-          <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1.5 text-[10px] font-bold text-stone-600 md:mt-4 md:grid-cols-2 md:gap-y-2 md:text-[11px]">
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden className="inline-block size-3.5 rounded-sm border border-stone-800 bg-[#ffd166] shadow-[1px_1px_0_rgba(139,107,44,0.4)]" />
-              已点亮
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden className="inline-block size-3.5 rounded-sm border-2 border-emerald-700 bg-white" />
-              本队当前位置
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden className="inline-block size-3.5 rounded-sm border border-stone-800 bg-[#a78bfa]" />
-              特殊判定
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden className="inline-block size-3.5 rounded-sm border border-stone-800 bg-[#f5e6a0]" />
-              计时惩罚
-            </span>
-          </div>
-        </div>
+        <BoardCenter teams={teams} currentTeam={currentTeam} />
       </div>
     </div>
   )
