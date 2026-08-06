@@ -15,10 +15,10 @@ import (
 
 // Service 存储服务，支持本地文件系统（开发）和阿里云 OSS（生产）
 type Service struct {
-	localDir  string
-	publicURL string
+	localDir   string
+	publicURL  string
 	ossEnabled bool
-	ossBucket *oss.Bucket
+	ossBucket  *oss.Bucket
 }
 
 var defaultSvc *Service

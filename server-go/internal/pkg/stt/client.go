@@ -33,10 +33,10 @@ const (
 	msgServerError       = 0xF // 服务端处理错误
 
 	// Message type specific flags
-	flagNoSeq      = 0x0 // header 后无 sequence number
-	flagSeqPos     = 0x1 // header 后有 sequence number，正数
-	flagLastNoSeq  = 0x2 // header 后无 sequence number，最后一包
-	flagSeqNeg     = 0x3 // header 后有 sequence number，负数（最后一包）
+	flagNoSeq     = 0x0 // header 后无 sequence number
+	flagSeqPos    = 0x1 // header 后有 sequence number，正数
+	flagLastNoSeq = 0x2 // header 后无 sequence number，最后一包
+	flagSeqNeg    = 0x3 // header 后有 sequence number，负数（最后一包）
 
 	// Serialization
 	serializeJSON = 0x1
@@ -106,7 +106,7 @@ func Transcribe(ctx context.Context, req TranscribeRequest) (string, error) {
 		HandshakeTimeout: 10 * time.Second,
 	}
 	header := http.Header{
-		"X-Api-Key":        {apiKey},
+		"X-Api-Key":         {apiKey},
 		"X-Api-Resource-Id": {resourceID},
 		"X-Api-Request-Id":  {requestID},
 		"X-Api-Connect-Id":  {connectID},

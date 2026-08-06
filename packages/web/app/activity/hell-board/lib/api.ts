@@ -1,0 +1,213 @@
+import { ApiError, apiFetch } from '@/lib/api'
+import type {
+  BoardSnapshot,
+  BookLibraryItem,
+  CheckInDraftBook,
+  EnrollmentItem,
+  RankingMetric,
+  RankingRow,
+  RankingSubject,
+  ReviewQueueItem,
+  RollResult,
+  ServerCheckIn,
+  ServerJudgement,
+  TileDetail,
+  TimelineEvent,
+} from './types'
+
+// 活动接口挂在独立路由分组下，与社区业务解耦（PRD 第 12 节）
+const BASE = '/activity/hell-board'
+
+/** 查重拦截错误：命中书名 → 已打卡的格子编号（P1-8 / 验收标准 10） */
+export class DuplicateBookError extends Error {
+  duplicates: Record<string, number>
+  titles: string[]
+
+  constructor(message: string, titles: string[], duplicates: Record<string, number>) {
+    super(message)
+    this.name = 'DuplicateBookError'
+    this.titles = titles
+    this.duplicates = duplicates
+  }
+}
+
+/** 棋盘全局快照 */
+export function fetchBoard(): Promise<BoardSnapshot> {
+  return apiFetch<BoardSnapshot>(`${BASE}/board`)
+}
+
+/** 本队打卡列表 */
+export async function fetchCheckIns(): Promise<ServerCheckIn[]> {
+  const res = await apiFetch<{ items: ServerCheckIn[] }>(`${BASE}/checkins`)
+  return res.items ?? []
+}
+
+/**
+ * 提交打卡。服务端查重命中时抛 DuplicateBookError，
+ * 携带书名与所在格子供前端提示。
+ */
+export async function submitCheckIn(payload: {
+  tileIndex: number
+  books: CheckInDraftBook[]
+  evidenceUrl?: string
+}): Promise<ServerCheckIn> {
+  try {
+    return await apiFetch<ServerCheckIn>(`${BASE}/checkins`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      const detail = err.body as
+        | { titles?: string[]; duplicates?: Record<string, number> }
+        | null
+        | undefined
+      // 只有带 duplicates 的 409 才是查重命中，其余冲突（计时中、已完成）原样抛出
+      if (detail?.duplicates) {
+        throw new DuplicateBookError(err.message, detail.titles ?? [], detail.duplicates)
+      }
+    }
+    throw err
+  }
+}
+
+/** 撤回未进入终审的打卡（PRD 8.4） */
+export function deleteCheckIn(checkInId: string): Promise<void> {
+  return apiFetch<void>(`${BASE}/checkins/${checkInId}`, { method: 'DELETE' })
+}
+
+/** 队长掷骰前进。点数由服务端生成（PRD 10.3 防篡改） */
+export function rollDice(): Promise<RollResult> {
+  return apiFetch<RollResult>(`${BASE}/roll`, { method: 'POST' })
+}
+
+/** 读取当前判定会话，当前格无特殊判定时返回 null */
+export function fetchJudgement(): Promise<ServerJudgement | null> {
+  return apiFetch<ServerJudgement | null>(`${BASE}/judgement`)
+}
+
+/** 参与特殊判定掷骰（P0-2） */
+export function rollJudgement(): Promise<ServerJudgement> {
+  return apiFetch<ServerJudgement>(`${BASE}/judgement/roll`, { method: 'POST' })
+}
+
+/** 格子打卡记录（PRD 8.2） */
+export function fetchTileDetail(index: number): Promise<TileDetail> {
+  return apiFetch<TileDetail>(`${BASE}/tiles/${index}`)
+}
+
+/** 四榜（PRD 第 11 节） */
+export async function fetchRanking(
+  metric: RankingMetric,
+  subject: RankingSubject,
+): Promise<RankingRow[]> {
+  const res = await apiFetch<{ items: RankingRow[] }>(
+    `${BASE}/ranking?metric=${metric}&subject=${subject}`,
+  )
+  return res.items ?? []
+}
+
+/** 点亮进度榜，活动主进度看板 */
+export async function fetchLitRanking(): Promise<RankingRow[]> {
+  const res = await apiFetch<{ items: RankingRow[] }>(`${BASE}/ranking/lit`)
+  return res.items ?? []
+}
+
+/** 队伍时间线（PRD 10.3） */
+export async function fetchTimeline(): Promise<TimelineEvent[]> {
+  const res = await apiFetch<{ items: TimelineEvent[] }>(`${BASE}/timeline`)
+  return res.items ?? []
+}
+
+/** 第 20 格候选书库，支持关键词搜索选书 */
+export async function fetchBookLibrary(keyword: string): Promise<BookLibraryItem[]> {
+  const q = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
+  const res = await apiFetch<{ items: BookLibraryItem[] }>(`${BASE}/library${q}`)
+  return res.items ?? []
+}
+
+// --- 人工终审台（PRD 9.3，仅管理员与版主） ---
+
+/** 审核队列 */
+export function fetchReviewQueue(params: {
+  teamId?: string
+  tileIndex?: number
+  status?: string
+  page?: number
+}): Promise<{ items: ReviewQueueItem[]; total: number; totalPages: number; page: number }> {
+  const q = new URLSearchParams()
+  if (params.teamId) q.set('teamId', params.teamId)
+  if (params.tileIndex) q.set('tileIndex', String(params.tileIndex))
+  if (params.status) q.set('status', params.status)
+  if (params.page) q.set('page', String(params.page))
+  const suffix = q.toString() ? `?${q.toString()}` : ''
+  return apiFetch(`${BASE}/admin/reviews${suffix}`)
+}
+
+/** 终审单条书目。驳回与撤销必须带理由 */
+export function reviewBook(
+  bookId: string,
+  payload: {
+    action: 'approve' | 'reject' | 'revoke'
+    reason?: string
+    countsForTask?: boolean
+    violation?: boolean
+  },
+): Promise<void> {
+  return apiFetch<void>(`${BASE}/admin/reviews/${bookId}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** 批量确认 AI 通过项 */
+export function batchApprove(bookIds: string[]): Promise<{ approved: number }> {
+  return apiFetch(`${BASE}/admin/reviews/batch-approve`, {
+    method: 'POST',
+    body: JSON.stringify({ bookIds }),
+  })
+}
+
+/** 更新队伍信息（运营后台：仅管理员与版主）。name / color 必填，emblem 为形象 key */
+export function updateTeam(
+  teamId: string,
+  payload: { name: string; color: string; emblem?: string },
+): Promise<void> {
+  return apiFetch<void>(`${BASE}/admin/teams/${teamId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+// --- 报名与队长管理 ---
+
+/** 报名活动（入队的前提）。重复报名幂等返回当前状态 */
+export function enroll(): Promise<EnrollmentItem> {
+  return apiFetch<EnrollmentItem>(`${BASE}/enroll`, { method: 'POST' })
+}
+
+/** 报名名单（仅队长可见）：已报名人员及入队状态 */
+export async function fetchEnrollments(): Promise<EnrollmentItem[]> {
+  const res = await apiFetch<{ items: EnrollmentItem[] }>(`${BASE}/team/enrollments`)
+  return res.items ?? []
+}
+
+/** 队长更新队名 / 一次性选择队伍形象。形象一经确定不可更换 */
+export function captainUpdateTeam(payload: {
+  name: string
+  color: string
+  emblem?: string
+}): Promise<void> {
+  return apiFetch<void>(`${BASE}/team`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** 队长从报名名单拉人入队 */
+export function captainAddMember(userId: string): Promise<unknown> {
+  return apiFetch(`${BASE}/team/members`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}

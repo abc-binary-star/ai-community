@@ -175,14 +175,14 @@ type FeatureUsage struct {
 
 // UsageSummary 用户 AI 用量概览
 type UsageSummary struct {
-	Plan             string         `json:"plan"`
-	PlanExpiresAt    *time.Time     `json:"planExpiresAt"`
-	Unlimited        bool           `json:"unlimited"`
-	DailyTokenLimit  int            `json:"dailyTokenLimit"`
-	TokensUsedToday  int            `json:"tokensUsedToday"`
-	PoolTokenLimit   int            `json:"poolTokenLimit"`
-	PoolTokensUsed   int            `json:"poolTokensUsed"`
-	Features         []FeatureUsage `json:"features"`
+	Plan            string         `json:"plan"`
+	PlanExpiresAt   *time.Time     `json:"planExpiresAt"`
+	Unlimited       bool           `json:"unlimited"`
+	DailyTokenLimit int            `json:"dailyTokenLimit"`
+	TokensUsedToday int            `json:"tokensUsedToday"`
+	PoolTokenLimit  int            `json:"poolTokenLimit"`
+	PoolTokensUsed  int            `json:"poolTokensUsed"`
+	Features        []FeatureUsage `json:"features"`
 }
 
 // userSnapshot 限流所需的用户信息

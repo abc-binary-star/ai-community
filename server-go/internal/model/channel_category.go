@@ -10,9 +10,9 @@ import (
 // ChannelCategory 频道分组
 type ChannelCategory struct {
 	ID        string    `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"uniqueIndex;type:varchar(30);not null" json:"name"`   // URL slug
-	Label     string    `gorm:"type:varchar(50);not null" json:"label"`              // 显示名称
-	Icon      string    `gorm:"type:varchar(10)" json:"icon"`                         // emoji 图标
+	Name      string    `gorm:"uniqueIndex;type:varchar(30);not null" json:"name"` // URL slug
+	Label     string    `gorm:"type:varchar(50);not null" json:"label"`            // 显示名称
+	Icon      string    `gorm:"type:varchar(10)" json:"icon"`                      // emoji 图标
 	SortOrder int       `gorm:"default:0" json:"sortOrder"`
 	CreatedAt time.Time `gorm:"index" json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

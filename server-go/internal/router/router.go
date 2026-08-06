@@ -177,6 +177,46 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/messages/conversations/:id/messages", middleware.Auth(), handler.SendMessage)
 	h.POST("/api/messages/conversations/:id/read", middleware.Auth(), handler.MarkConversationRead)
 
+	// --- 活动「无限循环读书地狱」路由 ---
+	// 挂在独立路由分组下，与社区业务解耦（PRD 第 12 节隔离要求）。
+	// 全部接口强制登录：活动页不开放游客浏览（P1-9 / 验收标准 9）。
+	activity := h.Group("/api/activity/hell-board", middleware.Auth())
+	activity.GET("/board", handler.GetActivityBoard)
+	activity.GET("/checkins", handler.ListActivityCheckIns)
+	activity.POST("/checkins", handler.CreateActivityCheckIn)
+	activity.DELETE("/checkins/:id", handler.DeleteActivityCheckIn)
+	activity.POST("/roll", handler.RollActivityDice)
+	activity.GET("/judgement", handler.GetActivityJudgement)
+	activity.POST("/judgement/roll", handler.RollActivityJudgement)
+	activity.GET("/tiles/:index", handler.GetActivityTileDetail)
+	activity.GET("/ranking", handler.GetActivityRanking)
+	activity.GET("/ranking/lit", handler.GetActivityLitRanking)
+	activity.GET("/timeline", handler.ListActivityTimeline)
+	activity.GET("/library", handler.ListActivityBookLibrary)
+	activity.POST("/enroll", handler.EnrollActivity)
+
+	// 队长管理（报名名单拉人 / 换队名 / 一次性选形象）
+	captain := h.Group("/api/activity/hell-board/team", middleware.Auth())
+	captain.PUT("", handler.UpdateTeamByCaptain)
+	captain.GET("/enrollments", handler.ListActivityEnrollments)
+	captain.POST("/members", handler.AddTeamMemberByCaptain)
+
+	// 人工终审台与运营后台（PRD 9.3 / 第 13 节）
+	activityAdmin := h.Group("/api/activity/hell-board/admin",
+		middleware.Auth(), middleware.RequireRole("admin", "moderator"))
+	activityAdmin.GET("/reviews", handler.ListActivityReviewQueue)
+	activityAdmin.POST("/reviews/batch-approve", handler.BatchApproveActivityBooks)
+	activityAdmin.POST("/reviews/:bookId", handler.ReviewActivityBook)
+	activityAdmin.GET("/export", handler.ExportActivityResults)
+	activityAdmin.POST("/teams", handler.CreateActivityTeam)
+	activityAdmin.PUT("/teams/:id", handler.UpdateActivityTeam)
+	activityAdmin.DELETE("/teams/:id", handler.DeleteActivityTeam)
+	activityAdmin.POST("/teams/:id/members", handler.AddActivityMember)
+	activityAdmin.POST("/teams/:id/manual-fix", handler.ManualFixActivityTeam)
+	activityAdmin.DELETE("/members/:memberId", handler.RemoveActivityMember)
+	activityAdmin.PUT("/members/:memberId/captain", handler.SetActivityCaptain)
+	activityAdmin.PUT("/tiles/:index", handler.UpdateActivityTile)
+
 	// --- 文件上传路由 ---
 	// 静态文件服务（本地存储模式时使用）
 	h.Static("/uploads", "./uploads")

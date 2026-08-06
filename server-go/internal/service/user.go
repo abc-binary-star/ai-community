@@ -35,17 +35,17 @@ func (e *ServiceError) Error() string { return e.Msg }
 
 // ErrUserNotFound / ErrPostNotFound 复用 auth.go 与 comment.go 中已声明的同名错误
 var (
-	ErrCannotFollowSelf = &ServiceError{Msg: "不能关注自己", Code: 400}
-	ErrInvalidInput     = &ServiceError{Msg: "输入不合法", Code: 400}
+	ErrCannotFollowSelf     = &ServiceError{Msg: "不能关注自己", Code: 400}
+	ErrInvalidInput         = &ServiceError{Msg: "输入不合法", Code: 400}
 	ErrCannotModifySelfRole = &ServiceError{Msg: "不能修改自己的角色", Code: 400}
 	ErrCannotBlockSelf      = &ServiceError{Msg: "不能屏蔽自己", Code: 400}
 )
 
 // validRoles 允许的用户角色
 var validRoles = map[string]bool{
-	"user":       true,
-	"moderator":  true,
-	"admin":      true,
+	"user":      true,
+	"moderator": true,
+	"admin":     true,
 }
 
 // blockedUserIDs 返回当前用户屏蔽的用户 ID 集合
@@ -756,8 +756,8 @@ func (s *UserService) batchPublicUserStats(ctx context.Context, userIDs []string
 
 	// 获赞总数（批量）
 	type likeRow struct {
-		ID     string `gorm:"column:author_id"`
-		Likes  int    `gorm:"column:sum_likes"`
+		ID    string `gorm:"column:author_id"`
+		Likes int    `gorm:"column:sum_likes"`
 	}
 	var likeRows []likeRow
 	dal.DB.WithContext(ctx).Model(&model.Post{}).

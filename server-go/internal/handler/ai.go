@@ -335,14 +335,14 @@ func Transcribe(ctx context.Context, c *app.RequestContext) {
 	if limiter != nil {
 		// 转写此前从未计量，这里补齐：成功计 1 次；失败只消费频率防刷
 		limiter.RecordUsage(ctx, ailimit.UsageRecord{
-			UserID:      userID,
-			Feature:     ailimit.FeatureTranscribe,
-			Model:       "volc-asr",
-			DurationMs:  durationMs,
-			Success:     err == nil,
+			UserID:       userID,
+			Feature:      ailimit.FeatureTranscribe,
+			Model:        "volc-asr",
+			DurationMs:   durationMs,
+			Success:      err == nil,
 			ErrorMessage: errMessage(err),
-			CountQuota:  true,
-			TrackUser:   true,
+			CountQuota:   true,
+			TrackUser:    true,
 		})
 	}
 	if err != nil {
@@ -387,9 +387,9 @@ func GetAIPlan(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	response.JSON(c, map[string]interface{}{
-		"plan":          summary.Plan,
-		"planExpiresAt": summary.PlanExpiresAt,
-		"unlimited":     summary.Unlimited,
+		"plan":            summary.Plan,
+		"planExpiresAt":   summary.PlanExpiresAt,
+		"unlimited":       summary.Unlimited,
 		"dailyTokenLimit": summary.DailyTokenLimit,
 	})
 }

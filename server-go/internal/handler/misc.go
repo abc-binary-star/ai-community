@@ -36,6 +36,16 @@ func handleServiceError(c *app.RequestContext, err error) {
 		response.Error(c, e.Code, e.Msg)
 	case *service.PostSummaryError:
 		response.Error(c, e.Code, e.Msg)
+	case *service.ActivityError:
+		response.Error(c, e.Code, e.Msg)
+	case *service.DuplicateBookError:
+		// 查重拦截需要把命中书名与所在格子回传，前端才能提示
+		// 「这本书已在第 N 格打卡」（P1-8 / 验收标准 10）
+		c.JSON(consts.StatusConflict, map[string]any{
+			"error":      e.Error(),
+			"duplicates": e.Detail,
+			"titles":     e.Titles,
+		})
 	default:
 		log.Printf("[Service] 未预期的错误: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")

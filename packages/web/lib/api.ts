@@ -1,12 +1,21 @@
+import type { User } from 'shared'
 import { useAuthStore } from './store'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
+/** 拉取当前登录用户完整信息（含 role），用于修复旧缓存 user 缺字段的问题 */
+export function fetchMe(): Promise<User> {
+  return apiFetch<User>('/auth/me')
+}
+
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** 原始响应体，供需要结构化错误详情的调用方读取（如查重命中的书名与格子） */
+  body?: unknown
+  constructor(message: string, status: number, body?: unknown) {
     super(message)
     this.status = status
+    this.body = body
     this.name = 'ApiError'
   }
 }
@@ -108,7 +117,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const data = await res.json().catch(() => null)
   if (!res.ok) {
-    throw new ApiError(data?.error || `请求失败 (${res.status})`, res.status)
+    throw new ApiError(data?.error || `请求失败 (${res.status})`, res.status, data)
   }
   return data as T
 }

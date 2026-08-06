@@ -24,9 +24,9 @@ type ChannelCategoryError struct {
 func (e *ChannelCategoryError) Error() string { return e.Msg }
 
 var (
-	ErrCategoryNotFound   = &ChannelCategoryError{Msg: "频道分组不存在", Code: 404}
-	ErrCategoryNameExists = &ChannelCategoryError{Msg: "频道分组标识已存在", Code: 409}
-	ErrCategoryInvalid    = &ChannelCategoryError{Msg: "频道分组标识只允许小写字母、数字和连字符", Code: 400}
+	ErrCategoryNotFound    = &ChannelCategoryError{Msg: "频道分组不存在", Code: 404}
+	ErrCategoryNameExists  = &ChannelCategoryError{Msg: "频道分组标识已存在", Code: 409}
+	ErrCategoryInvalid     = &ChannelCategoryError{Msg: "频道分组标识只允许小写字母、数字和连字符", Code: 400}
 	ErrCategoryHasChannels = &ChannelCategoryError{Msg: "该分组下还有频道，无法删除", Code: 400}
 )
 

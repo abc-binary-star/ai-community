@@ -72,6 +72,17 @@ func Init(cfg *conf.Config) {
 		&model.AnnotationLike{},
 		&model.Announcement{},
 		&model.AnnouncementRead{},
+		// 活动「无限循环读书地狱」，表统一带 activity_ 前缀与社区业务解耦
+		&model.ActivityTile{},
+		&model.ActivityTeam{},
+		&model.ActivityMember{},
+		&model.ActivityTeamProgress{},
+		&model.ActivityCheckIn{},
+		&model.ActivityCheckInBook{},
+		&model.ActivityDiceRoll{},
+		&model.ActivityReview{},
+		&model.ActivityEvent{},
+		&model.ActivityEnrollment{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -84,6 +95,9 @@ func Init(cfg *conf.Config) {
 
 	// 初始化默认频道数据
 	seedDefaultChannels()
+
+	// 初始化活动棋盘 20 格定义
+	seedActivityTiles()
 
 	log.Println("数据库连接和迁移成功")
 

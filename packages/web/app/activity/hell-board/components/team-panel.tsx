@@ -1,0 +1,139 @@
+'use client'
+
+import { useState } from 'react'
+import { Crown, Settings2, Star, UserRoundPlus } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { formatWords, litCount } from '../lib/rules'
+import { TILE_COUNT, useActivityStore } from '../lib/store'
+import type { Team } from '../lib/types'
+import { TeamEmblem } from './team-emblem'
+import { TeamManageDialog } from './team-manage-dialog'
+
+/** 队伍成员满编 5 人，不足时用空槽占位，保证布局稳定 */
+const TEAM_SIZE = 5
+
+/** 20 格点亮状态一览缩略图（PRD 10.1 队伍区） */
+function LitOverview({ team }: { team: Team }) {
+  return (
+    <div className="rounded-md border border-[#d9c9a3] bg-[#faf5e6] p-3 shadow-[inset_0_1px_0_#fff,2px_2px_0_#e0d6ba]">
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs font-black tracking-wide text-[#6b4e15]">点亮进度</span>
+        <span className="rounded-full border border-[#c9b98f] bg-[#fff8e5] px-2 py-0.5 text-xs font-black text-[#7a5c1e]">
+          {litCount(team)} / 20 格
+        </span>
+      </div>
+      <ul className="mt-2.5 grid grid-cols-10 gap-1" aria-label="20 格点亮状态一览">
+        {Array.from({ length: TILE_COUNT }, (_, i) => i + 1).map((index) => {
+          const lit = Boolean(team.litTiles[index])
+          return (
+            <li
+              key={index}
+              title={`第 ${index} 格 ${lit ? '已点亮' : '未点亮'}`}
+              className={cn(
+                'flex aspect-square items-center justify-center rounded-[3px] border text-[9px] font-black',
+                lit
+                  ? 'border-[#8b6b2c] bg-[#ffd166] text-[#5c430d] shadow-[1px_1px_0_rgba(139,107,44,0.4)]'
+                  : 'border-[#d5c79e] bg-[#efe7cf] text-[#b3a276]',
+                team.position === index && 'ring-2 ring-emerald-600',
+              )}
+            >
+              {index}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+export function TeamPanel({ team, currentMemberId }: { team: Team; currentMemberId: string }) {
+  // 队伍管理仅对队长开放：改队名 / 一次性选形象 / 从报名名单拉人
+  const isCaptain = useActivityStore((s) => s.isCaptain)
+  const [showTeamManage, setShowTeamManage] = useState(false)
+
+  // 成员不足 5 人时用空槽补齐，保持卡片高度稳定
+  const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
+
+  return (
+    <section
+      aria-labelledby="team-heading"
+      className="rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fffdf4] to-[#f4edda] p-4 shadow-[4px_4px_0_#292524]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h2 id="team-heading" className="flex min-w-0 items-center gap-2.5 text-sm font-black text-stone-900">
+          <span className="shrink-0 rounded-full border-2 border-[#8b6b2c] bg-gradient-to-b from-[#fffdf4] to-[#efe6cd] p-[3px] shadow-[2px_2px_0_#292524]">
+            <TeamEmblem emblem={team.emblem} size={40} className="block" />
+          </span>
+          <span className="truncate">{team.name}</span>
+        </h2>
+        {isCaptain && (
+          <button
+            type="button"
+            onClick={() => setShowTeamManage(true)}
+            aria-label="队伍管理"
+            title="队伍管理"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 py-1 text-[11px] font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:text-amber-800 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+          >
+            <Settings2 className="size-3.5" />
+            队伍管理
+          </button>
+        )}
+      </div>
+
+      <div className="mt-4">
+        <LitOverview team={team} />
+      </div>
+
+      <div className="mt-4 border-t border-dashed border-[#dccfa8] pt-3.5">
+        <h3 className="flex items-center gap-1.5 text-xs font-black tracking-wide text-[#6b4e15]">
+          <span aria-hidden className="size-1.5 rotate-45 bg-[#d9a441]" />
+          队伍成员
+          <span className="ml-auto text-[11px] font-medium text-stone-400">
+            {team.members.length} / {TEAM_SIZE}
+          </span>
+        </h3>
+        <ul className="mt-2 space-y-1.5">
+          {slots.map((member, i) =>
+            member ? (
+              <li
+                key={member.id}
+                className={cn(
+                  'flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-xs shadow-[1.5px_1.5px_0_#e0d6ba]',
+                  member.id === currentMemberId
+                    ? 'border-[#d9a441] bg-[#fff3d6] ring-1 ring-[#d9a441]/40'
+                    : 'border-[#dccfa8] bg-white/80 hover:bg-[#fdf9ec]',
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-1.5 text-stone-800">
+                  <span className="truncate">{member.name}</span>
+                  {member.isCaptain && <Crown aria-label="队长" className="size-3 shrink-0 text-amber-600" />}
+                  {member.id === currentMemberId && <span className="shrink-0 text-[10px] text-emerald-700">你</span>}
+                </span>
+                <span className="shrink-0 tabular-nums text-stone-500">
+                  <span className="inline-flex items-center gap-0.5 text-[#7a5c1e]">
+                    <Star aria-hidden className="size-3" />
+                    {member.bookCount} 本
+                  </span>
+                  <span className="ml-2">{formatWords(member.wordCount)}</span>
+                </span>
+              </li>
+            ) : (
+              <li
+                key={`empty-${i}`}
+                aria-hidden
+                className="flex items-center gap-2 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-2.5 py-2 text-xs text-stone-400"
+              >
+                <UserRoundPlus className="size-3.5" />
+                空位 · 等待队长拉人
+              </li>
+            ),
+          )}
+        </ul>
+      </div>
+
+      {showTeamManage && (
+        <TeamManageDialog team={team} onClose={() => setShowTeamManage(false)} />
+      )}
+    </section>
+  )
+}
