@@ -99,6 +99,9 @@ func Init(cfg *conf.Config) {
 	// 初始化活动棋盘 20 格定义
 	seedActivityTiles()
 
+	// 队伍表为空时创建默认队伍（生产初始化，幂等）
+	seedActivityTeams()
+
 	log.Println("数据库连接和迁移成功")
 
 	// 搜索增强：pg_trgm 扩展 + GIN 三元组索引，加速 ILIKE 模糊搜索与相关度排序
