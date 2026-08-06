@@ -18,7 +18,6 @@ import type {
   ServerTile,
   Team,
   Tile,
-  TimelineEvent,
 } from './types'
 
 // 掷骰点数、进度累加、点亮判定、保底触发、计时到期全部由 server-go 计算并落库，
@@ -97,7 +96,6 @@ interface ActivityState {
   tiles: Tile[]
   teams: Team[]
   checkIns: CheckIn[]
-  timeline: TimelineEvent[]
   judgement: JudgementSession | null
   litRanking: RankingRow[]
 
@@ -168,7 +166,6 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
   tiles: [],
   teams: [],
   checkIns: [],
-  timeline: [],
   judgement: null,
   litRanking: [],
 
@@ -202,24 +199,38 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     await get().refresh()
   },
 
-  /** 轮询刷新：棋盘 + 本队数据（PRD 第 12 节实时性） */
+  /** 轮询刷新：棋盘 + 本队数据（PRD 第 12 节实时性）。
+   *  数据未变化时不触发 set，避免每 10 秒整页重渲染（发热/空转来源）。 */
   refresh: async () => {
     try {
-      const [snapshot, checkIns, timeline, judgement, litRanking] = await Promise.all([
+      const [snapshot, checkIns, judgement, litRanking] = await Promise.all([
         api.fetchBoard(),
         api.fetchCheckIns().catch(() => []),
-        api.fetchTimeline().catch(() => []),
         api.fetchJudgement().catch(() => null),
         api.fetchLitRanking().catch(() => []),
       ])
-      set({
+      const next = {
         ...applySnapshot(snapshot),
         checkIns: checkIns.map(toCheckIn),
-        timeline,
         judgement: toJudgement(judgement),
         litRanking,
         error: null,
-      })
+      }
+      // 服务端数据未变化则跳过 set：Zustand 仅做浅比较，直接 set 会
+      // 使所有订阅组件（棋盘/榜单/队伍/任务面板）整体重渲染
+      const cur = get()
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+      if (
+        same(next.teams, cur.teams) &&
+        same(next.checkIns, cur.checkIns) &&
+        same(next.judgement, cur.judgement) &&
+        same(next.litRanking, cur.litRanking) &&
+        next.myTeamId === cur.myTeamId &&
+        next.enrolled === cur.enrolled
+      ) {
+        return
+      }
+      set(next)
     } catch (err) {
       set({ error: errMessage(err, '刷新失败') })
     }

@@ -29,6 +29,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder /app/packages/web/.next/standalone ./
 # 5. 拷贝静态资源到 standalone 对应的 web 目录
 COPY --from=builder /app/packages/web/.next/static ./packages/web/.next/static
+# 6. standalone 产物不含 public 静态资源，需显式拷贝（队伍徽章 /emblems/*.png 等）
+COPY --from=builder /app/packages/web/public ./packages/web/public
 
 EXPOSE 3000
 

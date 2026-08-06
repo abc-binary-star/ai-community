@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -25,6 +25,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [showPwd, setShowPwd] = useState(false)
   const {
@@ -38,7 +39,10 @@ export default function RegisterPage() {
       const data = await api.post<AuthResponse>('/auth/register', values)
       setAuth(data.token, data.refreshToken, data.user)
       toast.success('注册成功，已自动登录')
-      router.push('/community')
+      // 与登录页一致：支持 redirect 参数跳回原页面（校验防止开放重定向）
+      const redirect = searchParams.get('redirect')
+      const safeRedirect = redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/community'
+      router.push(safeRedirect)
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '注册失败，请重试')
     }

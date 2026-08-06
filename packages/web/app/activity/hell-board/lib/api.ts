@@ -12,7 +12,6 @@ import type {
   ServerCheckIn,
   ServerJudgement,
   TileDetail,
-  TimelineEvent,
 } from './types'
 
 // 活动接口挂在独立路由分组下，与社区业务解耦（PRD 第 12 节）
@@ -113,11 +112,6 @@ export async function fetchLitRanking(): Promise<RankingRow[]> {
   return res.items ?? []
 }
 
-/** 队伍时间线（PRD 10.3） */
-export async function fetchTimeline(): Promise<TimelineEvent[]> {
-  const res = await apiFetch<{ items: TimelineEvent[] }>(`${BASE}/timeline`)
-  return res.items ?? []
-}
 
 /** 第 20 格候选书库，支持关键词搜索选书 */
 export async function fetchBookLibrary(keyword: string): Promise<BookLibraryItem[]> {

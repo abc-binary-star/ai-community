@@ -25,6 +25,12 @@ type FormValues = z.infer<typeof schema>
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // 「立即注册」透传 redirect，注册成功后同样跳回原页面
+  const rawRedirect = searchParams.get('redirect')
+  const redirectParam =
+    rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
+      ? `?redirect=${encodeURIComponent(rawRedirect)}`
+      : ''
   const setAuth = useAuthStore((s) => s.setAuth)
   const [showPwd, setShowPwd] = useState(false)
   const {
@@ -87,7 +93,10 @@ export default function LoginPage() {
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             还没有账号？{' '}
-            <Link href="/register" className="font-medium text-primary hover:underline">
+            <Link
+              href={`/register${redirectParam}`}
+              className="font-medium text-primary hover:underline"
+            >
               立即注册
             </Link>
           </p>
