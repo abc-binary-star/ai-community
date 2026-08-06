@@ -223,9 +223,10 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activityAdmin.GET("/export", handler.ExportActivityResults)
 	activityAdmin.POST("/teams", handler.CreateActivityTeam)
 	activityAdmin.PUT("/teams/:id", handler.UpdateActivityTeam)
-	activityAdmin.DELETE("/teams/:id", handler.DeleteActivityTeam)
+	activityAdmin.DELETE("/teams/:id", middleware.RequireRole("admin"), handler.DeleteActivityTeam)
 	activityAdmin.POST("/teams/:id/members", handler.AddActivityMember)
-	activityAdmin.POST("/teams/:id/manual-fix", handler.ManualFixActivityTeam)
+	// 手工修正会直接改写队伍位置与点亮状态且不可逆，限定仅 admin（与社区破坏性操作分级一致）
+	activityAdmin.POST("/teams/:id/manual-fix", middleware.RequireRole("admin"), handler.ManualFixActivityTeam)
 	activityAdmin.DELETE("/members/:memberId", handler.RemoveActivityMember)
 	activityAdmin.PUT("/members/:memberId/captain", handler.SetActivityCaptain)
 	activityAdmin.PUT("/tiles/:index", handler.UpdateActivityTile)

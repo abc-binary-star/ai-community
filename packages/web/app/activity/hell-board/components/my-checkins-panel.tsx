@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BookX, Loader2, RefreshCcw } from 'lucide-react'
+import { BookX, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { fetchMyBooks } from '../lib/api'
+import { deleteCheckIn, fetchMyBooks } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam } from '../lib/store'
 import type { ServerBook } from '../lib/types'
@@ -29,6 +29,7 @@ export function MyCheckInsPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [resubmitBook, setResubmitBook] = useState<ServerBook | null>(null)
+  const [withdrawing, setWithdrawing] = useState<string | null>(null)
 
   const team = useCurrentTeam()
   const archived = useActivityStore((s) => s.archived)
@@ -52,6 +53,21 @@ export function MyCheckInsPanel() {
 
   // 重新提交仅当队伍在场且活动未归档时可用（提交位置 = 队伍当前格）
   const canResubmit = Boolean(team) && !archived
+
+  // 撤回未进入终审的打卡（PRD 8.4）：一次撤回整次提交
+  const handleWithdraw = async (book: ServerBook) => {
+    if (withdrawing) return
+    if (!book.checkInId) return
+    setWithdrawing(book.checkInId)
+    try {
+      await deleteCheckIn(book.checkInId)
+      void load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '撤回失败')
+    } finally {
+      setWithdrawing(null)
+    }
+  }
 
   return (
     <div className="flex h-full flex-col rounded-lg border-2 border-stone-800 bg-white shadow-[4px_4px_0_#292524]">
@@ -125,6 +141,17 @@ export function MyCheckInsPanel() {
                     {b.aiReason}
                   </p>
                 )}
+                {tab === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleWithdraw(b)}
+                    disabled={archived || withdrawing === b.checkInId}
+                    className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 text-[11px] font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                  >
+                    <Trash2 className="size-3" />
+                    {withdrawing === b.checkInId ? '撤回中…' : '撤回'}
+                  </button>
+                )}
                 {tab === 'rejected' && (
                   <button
                     type="button"
@@ -151,7 +178,11 @@ export function MyCheckInsPanel() {
       {resubmitBook && team && (
         <CheckInFormDialog
           tileIndex={team.position}
-          onClose={() => setResubmitBook(null)}
+          onClose={() => {
+            setResubmitBook(null)
+            // 重新提交成功或关闭后刷新列表，避免旧状态残留
+            void load()
+          }}
           initialBooks={[
             {
               title: resubmitBook.title,

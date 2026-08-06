@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { AlertCircle, Copy, Plus, Trash2, X } from 'lucide-react'
-import { DuplicateBookError } from '../lib/api'
+import { useEffect, useRef, useState } from 'react'
+import { AlertCircle, Copy, Plus, Search, Trash2, X } from 'lucide-react'
+import { DuplicateBookError, fetchBookLibrary } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam, useTile } from '../lib/store'
-import type { CheckInDraftBook } from '../lib/types'
+import type { BookLibraryItem, CheckInDraftBook } from '../lib/types'
 import { ImageUploadField } from './image-upload-field'
 
 interface BookFormRow {
@@ -84,6 +84,54 @@ export function CheckInFormDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 群内交叉格（第 20 格）：从群内已通过书库搜索选书，自动回填书名/作者/字数
+  const isGroupCross = tile?.taskType === 'group-cross'
+  const [libraryKeyword, setLibraryKeyword] = useState('')
+  const [libraryResults, setLibraryResults] = useState<BookLibraryItem[]>([])
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const libraryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!isGroupCross || libraryKeyword.trim().length < 1) {
+      setLibraryResults([])
+      setLibraryOpen(false)
+      return
+    }
+    if (libraryTimer.current) clearTimeout(libraryTimer.current)
+    libraryTimer.current = setTimeout(async () => {
+      setLibraryLoading(true)
+      try {
+        setLibraryResults(await fetchBookLibrary(libraryKeyword.trim()))
+        setLibraryOpen(true)
+      } catch {
+        setLibraryResults([])
+      } finally {
+        setLibraryLoading(false)
+      }
+    }, 250)
+    return () => {
+      if (libraryTimer.current) clearTimeout(libraryTimer.current)
+    }
+  }, [isGroupCross, libraryKeyword])
+
+  // 选择书库条目：回填到第一个书名为空的行，否则追加一行
+  const pickLibraryBook = (item: BookLibraryItem) => {
+    setRows((prev) => {
+      const target = prev.find((r) => !r.title.trim())
+      const fill = {
+        title: item.title,
+        author: item.author,
+        wanWords: item.wordCount > 0 ? String(item.wordCount / 10000) : '',
+      }
+      if (target) return prev.map((r) => (r.id === target.id ? { ...r, ...fill } : r))
+      return [...prev, { ...emptyRow(), ...fill }]
+    })
+    setLibraryKeyword('')
+    setLibraryResults([])
+    setLibraryOpen(false)
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -106,9 +154,23 @@ export function CheckInFormDialog({
 
   const handleSubmit = async () => {
     if (submitting) return
-    const valid = rows.filter((r) => r.title.trim() && r.author.trim() && wanToWords(r.wanWords) > 0)
+    // 累计时长格必填阅读时长，其余格子时长可留空（服务端同样校验）
+    const isDurationTile = tile?.taskType === 'total-duration'
+    const rowMinutes = (r: BookFormRow) =>
+      (parseInt(r.durationHours, 10) || 0) * 60 + (parseInt(r.durationMins, 10) || 0)
+    const valid = rows.filter(
+      (r) =>
+        r.title.trim() &&
+        r.author.trim() &&
+        wanToWords(r.wanWords) > 0 &&
+        (!isDurationTile || rowMinutes(r) > 0),
+    )
     if (valid.length === 0) {
-      setError('请至少填写一本书的书名、作者与字数')
+      setError(isDurationTile ? '本格为累计时长任务，请为每本书填写书名、作者、字数与阅读时长' : '请至少填写一本书的书名、作者与字数')
+      return
+    }
+    if (isDurationTile && valid.length < rows.length) {
+      setError('本格为累计时长任务，请为每本书都填写阅读时长')
       return
     }
     if (needCover && valid.some((r) => !r.coverUrl)) {
@@ -285,6 +347,61 @@ export function CheckInFormDialog({
           >
             {error}
           </p>
+        )}
+
+        {isGroupCross && (
+          <div className="relative mt-4">
+            <p className="mb-1.5 text-xs font-bold text-stone-600">
+              本格为群内交叉：从群内已通过的书库选书
+            </p>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                value={libraryKeyword}
+                onChange={(e) => setLibraryKeyword(e.target.value)}
+                onFocus={() => libraryResults.length > 0 && setLibraryOpen(true)}
+                placeholder="输入书名或作者搜索…"
+                className="h-9 w-full rounded-md border-2 border-stone-300 bg-white pl-8 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
+              />
+              {libraryLoading && (
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">
+                  搜索中…
+                </span>
+              )}
+            </div>
+            {libraryOpen && libraryResults.length > 0 && (
+              <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border-2 border-stone-300 bg-white shadow-lg">
+                {libraryResults.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => pickLibraryBook(item)}
+                      className="flex w-full items-start gap-2 px-2.5 py-2 text-left transition-colors hover:bg-emerald-50"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-bold text-stone-900">
+                          《{item.title}》
+                        </span>
+                        <span className="block text-[10px] text-stone-500">
+                          {item.author} · {formatWords(item.wordCount)}
+                          {item.teamName ? ` · ${item.teamName}` : ''}
+                        </span>
+                      </span>
+                      <span className="shrink-0 self-center rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                        选用
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {libraryOpen && libraryKeyword.trim() && libraryResults.length === 0 && !libraryLoading && (
+              <p className="absolute z-10 mt-1 w-full rounded-md border-2 border-stone-300 bg-white px-2.5 py-2 text-[11px] text-stone-400 shadow-lg">
+                未在群内书库中找到匹配书目
+              </p>
+            )}
+          </div>
         )}
 
         <div className="mt-4 space-y-3">

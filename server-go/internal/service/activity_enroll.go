@@ -129,7 +129,8 @@ func (s *ActivityService) Enrollments(ctx context.Context, captainUserID string)
 	}
 
 	var enrolls []model.ActivityEnrollment
-	if err := dal.DB.WithContext(ctx).Order("created_at asc").Find(&enrolls).Error; err != nil {
+	// 必须 Preload User，否则报名者姓名与头像恒为空串
+	if err := dal.DB.WithContext(ctx).Preload("User").Order("created_at asc").Find(&enrolls).Error; err != nil {
 		return nil, err
 	}
 	var members []model.ActivityMember
@@ -228,7 +229,14 @@ func (s *ActivityService) JoinTeam(ctx context.Context, userID, teamID string, w
 			IsCaptain: wantCaptain,
 			Nickname:  e.Nickname,
 		}
-		return tx.Create(&member).Error
+		if err := tx.Create(&member).Error; err != nil {
+			// 唯一索引兜底并发重复入队
+			if isUniqueViolation(err) {
+				return ErrActivityAlreadyInTeam
+			}
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -331,7 +339,14 @@ func (s *ActivityService) CaptainAddMember(ctx context.Context, captainUserID, u
 			return err
 		}
 		member = model.ActivityMember{TeamID: cap.TeamID, UserID: userID, IsCaptain: false, Nickname: e.Nickname}
-		return tx.Create(&member).Error
+		if err := tx.Create(&member).Error; err != nil {
+			// 唯一索引兜底并发重复入队
+			if isUniqueViolation(err) {
+				return ErrActivityAlreadyInTeam
+			}
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err

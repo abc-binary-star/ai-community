@@ -93,19 +93,19 @@ func (s *ActivityService) GetMemberCheckIns(ctx context.Context, userID, memberI
 			bookDTOs = append(bookDTOs, bookToDTO(b, "", ""))
 		}
 		items = append(items, types.ActivityMemberCheckInDTO{
-			CheckInID:  checkInID,
-			TileIndex:  bs[0].TileIndex,
-			Lap:        bs[0].Lap,
-			CreatedAt:  createdAt[checkInID].Format(time.RFC3339),
-			Books:      bookDTOs,
-			LikeCount:  likeCount[checkInID],
-			LikedByMe:  likedByMe[checkInID],
+			CheckInID: checkInID,
+			TileIndex: bs[0].TileIndex,
+			Lap:       bs[0].Lap,
+			CreatedAt: createdAt[checkInID].Format(time.RFC3339),
+			Books:     bookDTOs,
+			LikeCount: likeCount[checkInID],
+			LikedByMe: likedByMe[checkInID],
 		})
 	}
 
 	return &types.ActivityMemberProfileDTO{
 		MemberID:        member.ID,
-		MemberName:      displayNameOf(&member.User),
+		MemberName:      memberNameOf(&member),
 		TeamID:          member.TeamID,
 		TeamName:        teamNames[member.TeamID],
 		BookCount:       len(books),

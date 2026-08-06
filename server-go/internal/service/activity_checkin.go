@@ -75,6 +75,10 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 		if b.Title == "" || b.Author == "" || b.WordCount <= 0 {
 			return nil, ErrActivityInvalidInput
 		}
+		// 累计时长格必填阅读时长，避免 0 分钟提交进审核流
+		if tile.TaskType == model.TaskTypeTotalDuration && b.DurationMinutes <= 0 {
+			return nil, ErrActivityInvalidInput
+		}
 		key := hellboard.DedupKey(me.ID, b.Title, b.Author)
 		if seen[key] {
 			return nil, &DuplicateBookError{Titles: []string{b.Title}}
@@ -92,7 +96,8 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 	}
 
 	// 审核路由（三档，按格子规则分派）：
-	// 情况三封面类无法自动判定 → 直接进队长投票池；其余先走 AI 初审。
+	// 封面颜色类主观性强，不做 AI 初审，直接进队长投票池由人工判断；
+	// 其余任务类型先走 AI 初审（本地规则 + 大模型，见 activity_ai_review.go）。
 	initialStatus := model.ReviewStatusPendingAI
 	if tile.TaskType == model.TaskTypeCoverColor {
 		initialStatus = model.ReviewStatusInVoting
@@ -376,25 +381,27 @@ func (s *ActivityService) DeleteCheckIn(ctx context.Context, userID, checkInID s
 		return err
 	}
 
-	var checkIn model.ActivityCheckIn
-	if err := dal.DB.WithContext(ctx).Preload("Books").First(&checkIn, "id = ?", checkInID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return ErrActivityBookNotFound
-		}
-		return err
-	}
-	// 本人可删自己的，队长可撤回本队任意未审打卡
-	if checkIn.MemberID != me.ID && !(me.IsCaptain && checkIn.TeamID == me.TeamID) {
-		return ErrActivityNotMember
-	}
-	// 已通过审核的打卡仅管理员可撤销（PRD 8.4）
-	for _, b := range checkIn.Books {
-		if b.ReviewStatus == model.ReviewStatusApproved {
-			return ErrActivityNotEditable
-		}
-	}
-
 	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 事务内加锁重新加载并复检，避免与审核并发时出现「读旧状态 → 删除」的 TOCTOU 竞态：
+		// 若事务外读取时不加锁，审核恰好在此间通过，删除仍会执行并造成进度已累加但书目被删
+		var checkIn model.ActivityCheckIn
+		if err := tx.Clauses(lockForUpdate()).Preload("Books").First(&checkIn, "id = ?", checkInID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return ErrActivityBookNotFound
+			}
+			return err
+		}
+		// 本人可删自己的，队长可撤回本队任意未审打卡
+		if checkIn.MemberID != me.ID && !(me.IsCaptain && checkIn.TeamID == me.TeamID) {
+			return ErrActivityNotMember
+		}
+		// 已通过审核的打卡仅管理员可撤销（PRD 8.4）
+		for _, b := range checkIn.Books {
+			if b.ReviewStatus == model.ReviewStatusApproved {
+				return ErrActivityNotEditable
+			}
+		}
+
 		if err := tx.Delete(&model.ActivityCheckIn{}, "id = ?", checkInID).Error; err != nil {
 			return err
 		}

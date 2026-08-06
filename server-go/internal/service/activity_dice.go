@@ -126,6 +126,7 @@ func (s *ActivityService) RollDice(ctx context.Context, userID string) (*types.A
 			Value:    value,
 			FromTile: from,
 			ToTile:   to,
+			Lap:      team.Lap,
 		}).Error; err != nil {
 			return err
 		}

@@ -69,6 +69,18 @@ func (s *ActivityService) DeleteTeam(ctx context.Context, teamID string) error {
 		if err := tx.Delete(&model.ActivityDiceRoll{}, "team_id = ?", teamID).Error; err != nil {
 			return err
 		}
+		// 审核日志按书目关联、点赞按打卡关联，先清关联表再删书目/打卡，避免悬挂数据
+		if err := tx.Delete(&model.ActivityReview{},
+			"book_id IN (SELECT id FROM activity_checkin_books WHERE team_id = ?)", teamID).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.ActivityBookVote{}, "team_id = ?", teamID).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.ActivityCheckInLike{},
+			"check_in_id IN (SELECT id FROM activity_checkins WHERE team_id = ?)", teamID).Error; err != nil {
+			return err
+		}
 		// 打卡与书目一并清理，避免残留数据污染榜单与书库
 		if err := tx.Delete(&model.ActivityCheckInBook{}, "team_id = ?", teamID).Error; err != nil {
 			return err
@@ -99,21 +111,22 @@ func (s *ActivityService) AddMember(ctx context.Context, teamID string, req type
 		return nil, err
 	}
 
-	var existing int64
-	if err := dal.DB.WithContext(ctx).Model(&model.ActivityMember{}).
-		Where("user_id = ?", user.ID).Count(&existing).Error; err != nil {
-		return nil, err
-	}
-	if existing > 0 {
-		return nil, &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
-	}
-
 	member := model.ActivityMember{
 		TeamID:    teamID,
 		UserID:    user.ID,
 		IsCaptain: req.IsCaptain,
 	}
 	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 一用户一组的检查放事务内：并发请求同时通过事务外检查时，
+		// 由唯一索引（idx_activity_members_user）兜底拦截第二条插入
+		var existing int64
+		if err := tx.Model(&model.ActivityMember{}).
+			Where("user_id = ?", user.ID).Count(&existing).Error; err != nil {
+			return err
+		}
+		if existing > 0 {
+			return &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
+		}
 		// 每组仅一名队长：设新队长时清掉旧队长标记
 		if req.IsCaptain {
 			if err := tx.Model(&model.ActivityMember{}).Where("team_id = ?", teamID).
@@ -121,7 +134,13 @@ func (s *ActivityService) AddMember(ctx context.Context, teamID string, req type
 				return err
 			}
 		}
-		return tx.Create(&member).Error
+		if err := tx.Create(&member).Error; err != nil {
+			if isUniqueViolation(err) {
+				return &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
+			}
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -139,14 +158,20 @@ func (s *ActivityService) AddMember(ctx context.Context, teamID string, req type
 
 // RemoveMember 移出成员
 func (s *ActivityService) RemoveMember(ctx context.Context, memberID string) error {
-	res := dal.DB.WithContext(ctx).Delete(&model.ActivityMember{}, "id = ?", memberID)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return &ActivityError{Msg: "成员不存在", Code: 404}
-	}
-	return nil
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var member model.ActivityMember
+		if err := tx.First(&member, "id = ?", memberID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return &ActivityError{Msg: "成员不存在", Code: 404}
+			}
+			return err
+		}
+		// 已离队成员的投票一并删除：残留票会被票数统计继续计入，推动书目通过
+		if err := tx.Delete(&model.ActivityBookVote{}, "voter_member_id = ?", memberID).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.ActivityMember{}, "id = ?", memberID).Error
+	})
 }
 
 // SetCaptain 指定队长
@@ -322,7 +347,7 @@ func (s *ActivityService) ExportResults(ctx context.Context) (map[string]any, er
 		}
 		names := make([]string, 0, len(membersByTeam[t.ID]))
 		for j := range membersByTeam[t.ID] {
-			names = append(names, displayNameOf(&membersByTeam[t.ID][j].User))
+			names = append(names, memberNameOf(&membersByTeam[t.ID][j]))
 		}
 		lottery = append(lottery, map[string]any{
 			"teamId":   t.ID,

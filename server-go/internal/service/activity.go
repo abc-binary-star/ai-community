@@ -50,6 +50,7 @@ var (
 	ErrActivityTeamFull        = &ActivityError{Msg: "该队伍已满员", Code: 409}
 	ErrActivityCaptainTaken    = &ActivityError{Msg: "该队伍已有队长，队长位不可重复选择", Code: 409}
 	ErrActivityEmblemLocked    = &ActivityError{Msg: "队伍形象已确定，一次性选择后不可更换", Code: 409}
+	ErrActivityVoteOwnTeam     = &ActivityError{Msg: "不能给自己队伍的书目投票，避免利益冲突", Code: 409}
 )
 
 // --- 内部查询辅助 ---
@@ -217,8 +218,9 @@ func (s *ActivityService) markLitTx(tx *gorm.DB, team *model.ActivityTeam, tileI
 		}).Error; err != nil {
 			return err
 		}
+		// LastLitAt 用于周期结束时的并列比较（P1-7），仅首次点亮时更新：
+		// 绕圈重复经过已点亮格若刷新它，绕圈多的队伍反而显得更晚达成，比较基准被污染
+		team.LastLitAt = &now
 	}
-	// LastLitAt 用于周期结束时的并列比较（P1-7）
-	team.LastLitAt = &now
 	return nil
 }

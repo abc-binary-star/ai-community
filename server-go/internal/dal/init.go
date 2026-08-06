@@ -86,6 +86,8 @@ func Init(cfg *conf.Config) {
 		&model.ActivityReview{},
 		&model.ActivityEvent{},
 		&model.ActivityEnrollment{},
+		&model.ActivityBookVote{},
+		&model.ActivityCheckInLike{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -105,6 +107,9 @@ func Init(cfg *conf.Config) {
 	// 时长格单位迁移：第 19 格由小时改为分钟存储（幂等）
 	migrateDurationTileToMinutes()
 
+	// 活动表索引与存量数据迁移（幂等，失败仅告警不阻断启动）
+	initActivityIndexes()
+
 	// 队伍表为空时创建默认队伍（生产初始化，幂等）
 	seedActivityTeams()
 
@@ -115,6 +120,53 @@ func Init(cfg *conf.Config) {
 
 	// 搜索增强：pg_trgm 扩展 + GIN 三元组索引，加速 ILIKE 模糊搜索与相关度排序
 	initSearchIndexes()
+}
+
+// initActivityIndexes 活动表索引与存量数据迁移（幂等）。
+// 全部语句失败仅告警不阻断启动：索引缺失不影响功能正确性，只影响性能与并发兜底。
+func initActivityIndexes() {
+	// 判定掷骰表新增 lap 列后的存量回填：此前记录未区分圈数，全部视为第 1 圈。
+	// 判定记录按圈隔离后，第 1 圈的旧记录才能被正常读取。
+	runActivityMigrate("UPDATE activity_dice_rolls SET lap = 1 WHERE lap = 0",
+		"回填活动掷骰记录的圈数")
+
+	// 一名用户只能属于一个小组：无重复数据时才建唯一索引，
+	// 避免存量脏数据导致建索引失败（AddMember/JoinTeam 的应用层校验已有并发兜底）。
+	var dupCount int64
+	if err := DB.Raw("SELECT count(*) - count(DISTINCT user_id) FROM activity_members").Scan(&dupCount).Error; err != nil {
+		log.Printf("Warning: 检查活动成员重复数据失败: %v", err)
+	} else if dupCount > 0 {
+		log.Printf("Warning: activity_members 存在 %d 条同用户多组数据，跳过唯一索引创建（请先人工清理）", dupCount)
+	} else {
+		runActivityMigrate("CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_members_user ON activity_members (user_id)",
+			"为 activity_members.user_id 创建唯一索引")
+	}
+
+	// 队伍进度按 (队, 格, 轮) 唯一：防并发下插出重复进度行
+	runActivityMigrate("CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_progress_team_tile_lap ON activity_team_progress (team_id, tile_index, lap)",
+		"为 activity_team_progress 创建唯一复合索引")
+
+	// 判定掷骰：同队同圈同轮同一人至多一次（防御纵深，应用层先查后插）
+	runActivityMigrate("CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_dice_judgement_once ON activity_dice_rolls (team_id, lap, roller_id, from_tile, judgement_round) WHERE is_judgement = true",
+		"为判定掷骰创建部分唯一索引")
+
+	// 高频查询复合索引：本队打卡 / 时间线均按 team_id + created_at 倒序
+	runActivityMigrate("CREATE INDEX IF NOT EXISTS idx_activity_checkins_team_created ON activity_checkins (team_id, created_at DESC)",
+		"为 activity_checkins 创建复合索引")
+	runActivityMigrate("CREATE INDEX IF NOT EXISTS idx_activity_events_team_created ON activity_events (team_id, created_at DESC)",
+		"为 activity_events 创建复合索引")
+	// 审核队列组合过滤（人工终审台最热分页查询）
+	runActivityMigrate("CREATE INDEX IF NOT EXISTS idx_activity_books_review_queue ON activity_checkin_books (review_status, team_id, tile_index, created_at)",
+		"为审核队列创建复合索引")
+
+	log.Println("活动表索引初始化完成")
+}
+
+// runActivityMigrate 执行单条迁移语句，失败仅记录告警
+func runActivityMigrate(stmt, desc string) {
+	if err := DB.Exec(stmt).Error; err != nil {
+		log.Printf("Warning: %s失败（可忽略，不影响功能）: %v", desc, err)
+	}
 }
 
 // initSearchIndexes 创建全文搜索相关扩展与索引

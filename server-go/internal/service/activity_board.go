@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
@@ -154,10 +155,11 @@ func (s *ActivityService) settleExpiredTimers(ctx context.Context, now time.Time
 	}
 	for i := range teams {
 		team := &teams[i]
+		// 单队结算失败仅记录告警并继续，避免一个异常队伍让整个棋盘读接口不可用
 		if err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			return s.settleTimerTx(tx, team, now)
 		}); err != nil {
-			return err
+			log.Printf("结算队伍 %s 的惩罚计时失败: %v", team.ID, err)
 		}
 	}
 	return nil
