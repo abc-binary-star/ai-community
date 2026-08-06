@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AlertTriangle, ExternalLink } from 'lucide-react'
-import { formatWords } from '../lib/rules'
+import { formatReadingMinutes, formatWords } from '../lib/rules'
 import type { ReviewQueueItem } from '../lib/types'
 import { ReviewBadge } from '../components/review-badge'
 
@@ -39,7 +39,7 @@ export function ReviewCard({
           <h2 className="truncate text-sm font-semibold text-stone-900">{book.title}</h2>
           <p className="mt-0.5 text-xs text-stone-500">
             {book.author} · {formatWords(book.wordCount)}
-            {book.durationMinutes ? ` · ${book.durationMinutes} 分钟` : ''}
+            {book.durationMinutes ? ` · ${formatReadingMinutes(book.durationMinutes)}` : ''}
           </p>
           <p className="mt-1 text-[11px] text-stone-500">
             {book.memberName}

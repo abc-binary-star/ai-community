@@ -3,18 +3,20 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Copy, Plus, Trash2, X } from 'lucide-react'
 import { DuplicateBookError } from '../lib/api'
+import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam, useTile } from '../lib/store'
 import type { CheckInDraftBook } from '../lib/types'
+import { ImageUploadField } from './image-upload-field'
 
 interface BookFormRow {
   id: string
   title: string
   author: string
-  wordCount: string
-  durationMinutes: string
+  /** 单位为万字，允许小数，提交时乘 10000 转整数 */
+  wanWords: string
+  durationHours: string
+  durationMins: string
   coverUrl: string
-  genre: string
-  note: string
 }
 
 let rowSeq = 1
@@ -24,12 +26,17 @@ function emptyRow(): BookFormRow {
     id: `row-${rowSeq}`,
     title: '',
     author: '',
-    wordCount: '',
-    durationMinutes: '',
+    wanWords: '',
+    durationHours: '',
+    durationMins: '',
     coverUrl: '',
-    genre: '',
-    note: '',
   }
+}
+
+/** 万字转真实字数：0.5 → 5000。四舍五入避免浮点误差留下 4999 */
+function wanToWords(wan: string): number {
+  const n = Number.parseFloat(wan)
+  return Number.isFinite(n) ? Math.round(n * 10000) : 0
 }
 
 /**
@@ -49,6 +56,9 @@ export function CheckInFormDialog({
   const findDuplicates = useActivityStore((s) => s.findDuplicates)
   const submitCheckIn = useActivityStore((s) => s.submitCheckIn)
   const currentMemberId = useActivityStore((s) => s.myMemberId ?? '')
+
+  // 颜色类任务需靠封面图核验，其余格子不展示封面字段
+  const needCover = tile?.taskType === 'cover-color'
 
   const [rows, setRows] = useState<BookFormRow[]>([emptyRow()])
   const [evidenceUrl, setEvidenceUrl] = useState('')
@@ -79,8 +89,16 @@ export function CheckInFormDialog({
 
   const handleSubmit = async () => {
     if (submitting) return
-    const valid = rows.filter((r) => r.title.trim() && r.author.trim() && r.wordCount.trim())
-    if (valid.length === 0) return
+    const valid = rows.filter((r) => r.title.trim() && r.author.trim() && wanToWords(r.wanWords) > 0)
+    if (valid.length === 0) {
+      setError('请至少填写一本书的书名、作者与字数')
+      return
+    }
+    if (needCover && valid.some((r) => !r.coverUrl)) {
+      setError('本格任务需核验封面颜色，请为每本书上传封面图')
+      return
+    }
+    setError(null)
 
     // 本地查重先给即时反馈，权威查重仍在服务端（P1-8）
     const dups = findDuplicates(
@@ -92,15 +110,17 @@ export function CheckInFormDialog({
       return
     }
 
-    const books: CheckInDraftBook[] = valid.map((r) => ({
-      title: r.title.trim(),
-      author: r.author.trim(),
-      wordCount: parseInt(r.wordCount, 10) || 0,
-      durationMinutes: r.durationMinutes ? parseInt(r.durationMinutes, 10) : undefined,
-      coverUrl: r.coverUrl.trim() || undefined,
-      genre: r.genre.trim() || undefined,
-      note: r.note.trim() || undefined,
-    }))
+    const books: CheckInDraftBook[] = valid.map((r) => {
+      const totalMins =
+        (parseInt(r.durationHours, 10) || 0) * 60 + (parseInt(r.durationMins, 10) || 0)
+      return {
+        title: r.title.trim(),
+        author: r.author.trim(),
+        wordCount: wanToWords(r.wanWords),
+        durationMinutes: totalMins > 0 ? totalMins : undefined,
+        coverUrl: r.coverUrl || undefined,
+      }
+    })
 
     setSubmitting(true)
     setError(null)
@@ -124,7 +144,10 @@ export function CheckInFormDialog({
     }
 
     const text = books
-      .map((b) => `《${b.title}》 ${b.author} ${b.wordCount.toLocaleString('zh-CN')} 字`)
+      .map((b) => {
+        const dur = b.durationMinutes ? ` ${formatReadingMinutes(b.durationMinutes)}` : ''
+        return `《${b.title}》 ${b.author} ${formatWords(b.wordCount)}${dur}`
+      })
       .join('\n')
     setGroupText(`#地狱打卡 ${team?.name ?? ''}-第${tileIndex}格-${books.length}本\n${text}`)
   }
@@ -271,56 +294,76 @@ export function CheckInFormDialog({
                   onChange={(e) => updateRow(row.id, 'author', e.target.value)}
                   className="h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
                 />
-                <input
-                  type="text"
-                  placeholder="字数 *"
-                  value={row.wordCount}
-                  onChange={(e) => updateRow(row.id, 'wordCount', e.target.value.replace(/\D/g, ''))}
-                  className="h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  placeholder="封面图 URL（颜色类任务必填）"
-                  value={row.coverUrl}
-                  onChange={(e) => updateRow(row.id, 'coverUrl', e.target.value)}
-                  className="h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  placeholder="题材 / 分类（题材分类类任务必填）"
-                  value={row.genre}
-                  onChange={(e) => updateRow(row.id, 'genre', e.target.value)}
-                  className="h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  placeholder="阅读时长（分钟，时长类任务必填）"
-                  value={row.durationMinutes}
-                  onChange={(e) =>
-                    updateRow(row.id, 'durationMinutes', e.target.value.replace(/\D/g, ''))
-                  }
-                  className="h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
-                />
-                <textarea
-                  placeholder="备注（选填）"
-                  value={row.note}
-                  onChange={(e) => updateRow(row.id, 'note', e.target.value)}
-                  rows={2}
-                  className="w-full resize-none rounded-md border-2 border-stone-300 bg-white px-3 py-2 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
-                />
+                {/* 字数以万字为单位，允许小数，如 12.5 表示 12.5 万字 */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="字数 *"
+                    value={row.wanWords}
+                    onChange={(e) =>
+                      updateRow(row.id, 'wanWords', e.target.value.replace(/[^\d.]/g, ''))
+                    }
+                    className="h-9 min-w-0 flex-1 rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
+                  />
+                  <span className="shrink-0 text-xs font-bold text-stone-500">万字</span>
+                </div>
+
+                {/* 阅读时长拆成小时 + 分钟两个下拉，避免手填分钟数 */}
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-xs text-stone-500">阅读时长</span>
+                  <select
+                    value={row.durationHours}
+                    onChange={(e) => updateRow(row.id, 'durationHours', e.target.value)}
+                    aria-label="阅读小时数"
+                    className="h-9 min-w-0 flex-1 rounded-md border-2 border-stone-300 bg-white px-2 text-xs text-stone-900 focus:border-emerald-600 focus:outline-none"
+                  >
+                    <option value="">0</option>
+                    {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
+                      <option key={h} value={String(h)}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="shrink-0 text-xs font-bold text-stone-500">小时</span>
+                  <select
+                    value={row.durationMins}
+                    onChange={(e) => updateRow(row.id, 'durationMins', e.target.value)}
+                    aria-label="阅读分钟数"
+                    className="h-9 min-w-0 flex-1 rounded-md border-2 border-stone-300 bg-white px-2 text-xs text-stone-900 focus:border-emerald-600 focus:outline-none"
+                  >
+                    <option value="">0</option>
+                    {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
+                      <option key={m} value={String(m)}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="shrink-0 text-xs font-bold text-stone-500">分钟</span>
+                </div>
+
+                {needCover && (
+                  <ImageUploadField
+                    value={row.coverUrl}
+                    onChange={(url) => updateRow(row.id, 'coverUrl', url)}
+                    label="上传封面图（本格任务需核验封面颜色）"
+                    disabled={submitting}
+                  />
+                )}
               </div>
             </div>
           ))}
         </div>
 
         {/* 阅读记录、书页或读书软件截图，供人工终审核验（PRD 8.1） */}
-        <input
-          type="text"
-          placeholder="证据截图 URL（阅读记录 / 书页 / 读书软件截图）"
-          value={evidenceUrl}
-          onChange={(e) => setEvidenceUrl(e.target.value)}
-          className="mt-3 h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
-        />
+        <div className="mt-3">
+          <ImageUploadField
+            value={evidenceUrl}
+            onChange={setEvidenceUrl}
+            label="上传证据截图（阅读记录 / 书页 / 软件截图）"
+            disabled={submitting}
+          />
+        </div>
 
         <button
           type="button"

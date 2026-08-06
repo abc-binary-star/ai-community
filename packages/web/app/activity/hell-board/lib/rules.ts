@@ -94,6 +94,19 @@ export function formatProgressValue(value: number, tile: Tile): string {
   return `${value} ${tile.unit}`
 }
 
+/**
+ * 格式化阅读时长（入参为分钟），与打卡表单的「几小时几分钟」口径一致。
+ * 注意与下方 formatDuration 区分：后者服务惩罚格倒计时，入参是毫秒。
+ */
+export function formatReadingMinutes(minutes: number): string {
+  if (minutes <= 0) return '0 分钟'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m} 分钟`
+  if (m === 0) return `${h} 小时`
+  return `${h} 小时 ${m} 分钟`
+}
+
 /** 剩余计时格式化为「Xh Ym」 */
 export function formatDuration(ms: number): string {
   const totalMinutes = Math.floor(ms / 60_000)

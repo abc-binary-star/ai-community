@@ -3,9 +3,14 @@ import { useAuthStore } from './store'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
-/** 拉取当前登录用户完整信息（含 role），用于修复旧缓存 user 缺字段的问题 */
-export function fetchMe(): Promise<User> {
-  return apiFetch<User>('/auth/me')
+/**
+ * 拉取当前登录用户完整信息（含 role），用于修复旧缓存 user 缺字段的问题。
+ * 注意 /auth/me 的响应体是 { user: {...} }，必须解包后再返回，
+ * 否则存进 store 的是包装对象，user.role 恒为 undefined。
+ */
+export async function fetchMe(): Promise<User> {
+  const data = await apiFetch<{ user: User }>('/auth/me')
+  return data.user
 }
 
 export class ApiError extends Error {

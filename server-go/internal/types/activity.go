@@ -216,10 +216,11 @@ type ActivityReviewQueueDTO struct {
 // ActivityBookReq 提交打卡中的单条书目。
 // 书名、作者、字数为必填三要素，缺一不可提交（PRD 8.1）。
 type ActivityBookReq struct {
-	Title           string `json:"title" vd:"len($)>=1 && len($)<=200"`
-	Author          string `json:"author" vd:"len($)>=1 && len($)<=100"`
-	WordCount       int64  `json:"wordCount" vd:"$>0 && $<=50000000"`
-	DurationMinutes int    `json:"durationMinutes"`
+	Title     string `json:"title" vd:"len($)>=1 && len($)<=200"`
+	Author    string `json:"author" vd:"len($)>=1 && len($)<=100"`
+	WordCount int64  `json:"wordCount" vd:"$>0 && $<=50000000"`
+	// 上限 7 天，下限 0：负值会让 taskDelta 反向扣减 TileProgress
+	DurationMinutes int    `json:"durationMinutes" vd:"$>=0 && $<=10080"`
 	CoverURL        string `json:"coverUrl" vd:"len($)<=500"`
 	Genre           string `json:"genre" vd:"len($)<=50"`
 	Note            string `json:"note" vd:"len($)<=500"`
