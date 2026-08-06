@@ -17,9 +17,11 @@ import (
 
 // judgementRound 计算当前判定轮次。
 // 取该队在该格已有判定掷骰的最大轮次；若该轮已全员掷完则进入下一轮。
+// 记录按圈（lap）隔离：跨圈再次落入同一判定格时，上一圈的记录不参与本轮判定。
 func (s *ActivityService) judgementRound(tx *gorm.DB, teamID string, tileIndex, lap, memberCount int) (int, error) {
 	var rolls []model.ActivityDiceRoll
-	if err := tx.Where("team_id = ? AND is_judgement = ? AND from_tile = ?", teamID, true, tileIndex).
+	if err := tx.Where("team_id = ? AND lap = ? AND is_judgement = ? AND from_tile = ?",
+		teamID, lap, true, tileIndex).
 		Order("judgement_round asc").Find(&rolls).Error; err != nil {
 		return 0, err
 	}
@@ -72,8 +74,8 @@ func (s *ActivityService) GetJudgement(ctx context.Context, userID string) (*typ
 
 	var rolls []model.ActivityDiceRoll
 	if err := dal.DB.WithContext(ctx).
-		Where("team_id = ? AND is_judgement = ? AND from_tile = ? AND judgement_round = ?",
-			team.ID, true, team.Position, round).
+		Where("team_id = ? AND lap = ? AND is_judgement = ? AND from_tile = ? AND judgement_round = ?",
+			team.ID, team.Lap, true, team.Position, round).
 		Find(&rolls).Error; err != nil {
 		return nil, err
 	}
@@ -140,11 +142,11 @@ func (s *ActivityService) RollJudgement(ctx context.Context, userID string) (*ty
 			return err
 		}
 
-		// 同一轮内每人只能掷一次
+		// 同一轮内每人只能掷一次（记录按圈隔离）
 		var existing int64
 		if err := tx.Model(&model.ActivityDiceRoll{}).
-			Where("team_id = ? AND is_judgement = ? AND from_tile = ? AND judgement_round = ? AND roller_id = ?",
-				team.ID, true, team.Position, round, me.ID).
+			Where("team_id = ? AND lap = ? AND is_judgement = ? AND from_tile = ? AND judgement_round = ? AND roller_id = ?",
+				team.ID, team.Lap, true, team.Position, round, me.ID).
 			Count(&existing).Error; err != nil {
 			return err
 		}
@@ -159,6 +161,7 @@ func (s *ActivityService) RollJudgement(ctx context.Context, userID string) (*ty
 			Value:          value,
 			FromTile:       team.Position,
 			ToTile:         team.Position,
+			Lap:            team.Lap,
 			IsJudgement:    true,
 			JudgementRound: round,
 		}).Error; err != nil {
@@ -166,8 +169,8 @@ func (s *ActivityService) RollJudgement(ctx context.Context, userID string) (*ty
 		}
 
 		var rolls []model.ActivityDiceRoll
-		if err := tx.Where("team_id = ? AND is_judgement = ? AND from_tile = ? AND judgement_round = ?",
-			team.ID, true, team.Position, round).Find(&rolls).Error; err != nil {
+		if err := tx.Where("team_id = ? AND lap = ? AND is_judgement = ? AND from_tile = ? AND judgement_round = ?",
+			team.ID, team.Lap, true, team.Position, round).Find(&rolls).Error; err != nil {
 			return err
 		}
 		values := make([]int, 0, len(rolls))

@@ -53,6 +53,19 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 	// 补提交历史格子的书目仍进榜单，但不影响当前格进度。
 	isCurrent := book.TileIndex == team.Position && book.Lap == team.Lap
 	if !isCurrent {
+		// 队伍已离开原格：当前格进度与保底计数不受影响，
+		// 但原格该轮次的保底展示计数（book_count）仍应扣减，与实际审核通过量保持一致
+		var row model.ActivityTeamProgress
+		err := tx.Where("team_id = ? AND tile_index = ? AND lap = ?",
+			team.ID, book.TileIndex, book.Lap).First(&row).Error
+		if err == nil && row.BookCount > 0 {
+			if err := tx.Model(&row).
+				Update("book_count", gorm.Expr("GREATEST(book_count - 1, 0)")).Error; err != nil {
+				return err
+			}
+		} else if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
 		return nil
 	}
 

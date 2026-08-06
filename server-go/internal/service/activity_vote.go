@@ -125,6 +125,10 @@ func (s *ActivityService) CastVote(ctx context.Context, userID, bookID string, r
 		if book.ReviewStatus != model.ReviewStatusInVoting {
 			return ErrActivityInvalidInput
 		}
+		// 不能给自己队伍的书目投票：队长数极少时（如仅 1 名队长）自投即可过半，利益冲突
+		if book.TeamID == me.TeamID {
+			return ErrActivityVoteOwnTeam
+		}
 
 		// 幂等写票：同人同书已有票则改票
 		var existing model.ActivityBookVote

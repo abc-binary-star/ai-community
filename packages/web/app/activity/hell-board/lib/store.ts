@@ -24,9 +24,10 @@ import type {
 // 前端只做展示与提交（PRD 第 12 节服务端权威）。
 export const TILE_COUNT = 20
 
-/** 书名归一化后比对，仅用于表单内即时提示；权威查重在服务端（P1-8） */
+/** 书名归一化后比对，仅用于表单内即时提示；权威查重在服务端（P1-8）。
+ *  字符集需与服务端 bookNoiseChars 保持一致（含『』与全角空格）。 */
 export function normalizeBookKey(title: string, author: string): string {
-  const clean = (s: string) => s.replace(/[《》〈〉「」【】（）()[\]\s]/g, '').toLowerCase()
+  const clean = (s: string) => s.replace(/[《》〈〉「」『』【】（）()[\]\s\u3000]/g, '').toLowerCase()
   return `${clean(title)}::${clean(author)}`
 }
 
@@ -220,13 +221,21 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       // 使所有订阅组件（棋盘/榜单/队伍/任务面板）整体重渲染
       const cur = get()
       const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+      // 漏比较的字段会让对应状态失效（如 archived 翻转、队长身份变更、格子文案调整）：
+      // 全部服务端下发字段都参与比对，数据变化才会触发重渲染
       if (
+        same(next.tiles, cur.tiles) &&
         same(next.teams, cur.teams) &&
         same(next.checkIns, cur.checkIns) &&
         same(next.judgement, cur.judgement) &&
         same(next.litRanking, cur.litRanking) &&
         next.myTeamId === cur.myTeamId &&
-        next.enrolled === cur.enrolled
+        next.myMemberId === cur.myMemberId &&
+        next.isCaptain === cur.isCaptain &&
+        next.enrolled === cur.enrolled &&
+        next.archived === cur.archived &&
+        next.cycleStarted === cur.cycleStarted &&
+        next.fallbackThreshold === cur.fallbackThreshold
       ) {
         return
       }

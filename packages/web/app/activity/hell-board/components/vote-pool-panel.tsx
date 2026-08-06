@@ -105,6 +105,8 @@ export function VotePoolPanel() {
           <ul className="space-y-2">
             {items.map((item) => {
               const { book, tile } = item
+              // 队长数为 0 时避免除零得到 NaN 宽度
+              const captainBase = item.totalCaptains > 0 ? item.totalCaptains : 1
               const need = Math.floor(item.totalCaptains / 2) + 1
               const totalVoted = item.yesCount + item.noCount
               return (
@@ -138,11 +140,11 @@ export function VotePoolPanel() {
                     <div className="mt-1 flex h-2 overflow-hidden rounded-full border border-stone-200 bg-stone-100">
                       <div
                         className="h-full bg-emerald-500 transition-all"
-                        style={{ width: `${(item.yesCount / item.totalCaptains) * 100}%` }}
+                        style={{ width: `${(item.yesCount / captainBase) * 100}%` }}
                       />
                       <div
                         className="h-full bg-rose-400 transition-all"
-                        style={{ width: `${(item.noCount / item.totalCaptains) * 100}%` }}
+                        style={{ width: `${(item.noCount / captainBase) * 100}%` }}
                       />
                     </div>
                   </div>

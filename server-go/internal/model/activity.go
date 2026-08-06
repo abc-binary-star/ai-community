@@ -157,7 +157,7 @@ type ActivityEnrollment struct {
 	User   User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
 	// Nickname 报名时填写的活动内昵称，仅活动内展示（榜单/成员列表），
 	// 为空时回退到社区账号昵称
-	Nickname  string `gorm:"size:50" json:"nickname,omitempty"`
+	Nickname  string    `gorm:"size:50" json:"nickname,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -267,6 +267,8 @@ type ActivityDiceRoll struct {
 	Value    int    `gorm:"not null" json:"value"`
 	FromTile int    `gorm:"not null" json:"fromTile"`
 	ToTile   int    `gorm:"not null" json:"toTile"`
+	// Lap 掷骰时队伍所在圈数。判定记录按圈隔离，避免跨圈回到同一判定格时状态被旧记录污染
+	Lap int `gorm:"not null" json:"lap"`
 	// IsJudgement 为 true 时是特殊判定掷骰，不产生移动
 	IsJudgement bool `gorm:"default:false;index" json:"isJudgement"`
 	// JudgementRound 判定轮次，同一轮内每人只能掷一次

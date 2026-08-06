@@ -190,7 +190,7 @@ func (s *ActivityService) rankInputs(ctx context.Context, subject, myTeamID, myM
 		team := teamByID[m.TeamID]
 		row := rankInput{
 			id:        m.ID,
-			name:      displayNameOf(&m.User),
+			name:      memberNameOf(m),
 			bookCount: m.BookCount,
 			wordCount: m.WordCount,
 			litCount:  litCounts[m.TeamID],
