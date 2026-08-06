@@ -1,5 +1,5 @@
 import { FALLBACK_THRESHOLD, PENALTY_TILE_INDEX, TILE_COUNT } from './board'
-import type { JudgementSession, Team, Tile } from './types'
+import type { JudgementSession, Team, Tile, TileTaskType } from './types'
 
 // 展示层规则函数，对应 PRD 第 7 节游戏流程与 7.2 状态机。
 //
@@ -88,10 +88,23 @@ export function formatWords(n: number): string {
   return `${n.toLocaleString('zh-CN')} 字`
 }
 
-/** 格式化任务进度数值，字数类任务用万字表示 */
-export function formatProgressValue(value: number, tile: Tile): string {
+/**
+ * 格式化任务进度数值。字数类用万字，时长类内部以分钟存储、展示换算回小时。
+ * 时长换算保留一位小数：90 分钟显示「1.5 小时」而非丢掉余数的「1 小时」。
+ */
+export function formatProgressValue(value: number, tile: { taskType: TileTaskType; target: number; unit: string }): string {
   if (tile.taskType === 'total-words') return formatWords(value)
+  if (tile.taskType === 'total-duration') {
+    const h = value / 60
+    return `${Number.isInteger(h) ? h : h.toFixed(1).replace(/\.0$/, '')} 小时`
+  }
   return `${value} ${tile.unit}`
+}
+
+/** 格式化格子目标值，口径与 formatProgressValue 一致，供「目标 X」文案复用 */
+export function formatTileTarget(tile: { taskType: TileTaskType; target: number; unit: string }): string {
+  if (tile.taskType === 'total-duration') return formatProgressValue(tile.target, tile)
+  return `${tile.target.toLocaleString('zh-CN')} ${tile.unit}`
 }
 
 /**

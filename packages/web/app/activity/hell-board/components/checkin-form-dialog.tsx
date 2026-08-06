@@ -43,13 +43,18 @@ function wanToWords(wan: string): number {
  * 打卡提交表单（PRD 8.1 / 验收标准 10）。
  * 书名 + 作者 + 字数为必填三要素，提交时按成员 + 书名 + 作者查重，
  * 命中则拦截并提示已在第 N 格打卡。
+ *
+ * initialBooks 用于「驳回后重新提交」：预填被驳回的书目信息，
+ * 提交仍落在队伍当前格（服务端校验），原驳回记录被新提交替换。
  */
 export function CheckInFormDialog({
   tileIndex,
   onClose,
+  initialBooks,
 }: {
   tileIndex: number
   onClose: () => void
+  initialBooks?: CheckInDraftBook[]
 }) {
   const team = useCurrentTeam()
   const tile = useTile(tileIndex)
@@ -60,7 +65,19 @@ export function CheckInFormDialog({
   // 颜色类任务需靠封面图核验，其余格子不展示封面字段
   const needCover = tile?.taskType === 'cover-color'
 
-  const [rows, setRows] = useState<BookFormRow[]>([emptyRow()])
+  const [rows, setRows] = useState<BookFormRow[]>(() => {
+    if (!initialBooks?.length) return [emptyRow()]
+    return initialBooks.map((b) => ({
+      id: `row-${(rowSeq += 1)}`,
+      title: b.title,
+      author: b.author,
+      wanWords: b.wordCount > 0 ? String(b.wordCount / 10000) : '',
+      durationHours: b.durationMinutes ? String(Math.floor(b.durationMinutes / 60)) : '',
+      durationMins: b.durationMinutes ? String(b.durationMinutes % 60 || '') : '',
+      coverUrl: b.coverUrl ?? '',
+    }))
+  })
+  const isResubmit = Boolean(initialBooks?.length)
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [duplicates, setDuplicates] = useState<string[]>([])
   const [groupText, setGroupText] = useState('')
@@ -173,7 +190,7 @@ export function CheckInFormDialog({
             提交成功
           </h2>
           <p className="mt-1 text-xs font-medium text-stone-500">
-            已进入 AI 初审队列，审核通过后计入任务进度与榜单。
+            已进入审核流程：AI 初审或队长投票通过后计入任务进度与榜单。
           </p>
           <div className="mt-4 rounded-md border border-stone-300 bg-white p-3">
             <p className="text-[11px] font-medium text-stone-500">群内打卡格式（可复制同步到群内接龙）</p>
@@ -233,6 +250,12 @@ export function CheckInFormDialog({
         <p className="mt-3 rounded-md border border-amber-300 bg-[#fff0b8] px-3 py-2 text-xs font-bold text-amber-900">
           书名、作者、字数为必填三要素，缺一不可提交。同一本书全期只能打卡一次。
         </p>
+
+        {isResubmit && (
+          <p className="mt-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
+            重新提交：将计入队伍当前格（第 {tileIndex} 格），提交后原驳回记录会被替换。
+          </p>
+        )}
 
         {duplicates.length > 0 && (
           <div className="mt-3 rounded-md border-2 border-rose-300 bg-rose-50 p-3">

@@ -89,6 +89,8 @@ export type ReviewStatus =
   | 'ai-passed'
   | 'ai-unsure'
   | 'ai-rejected'
+  /** 已进入队长投票池，等待过半赞成（情况三封面直进，情况一/二 AI 未过进入） */
+  | 'in-voting'
   | 'approved'
   | 'rejected'
   /** 已通过后被管理员撤销，进度与榜单数据同步回滚（PRD 8.4 / 验收标准 8） */
@@ -341,6 +343,45 @@ export interface ReviewQueueItem {
   /** 该书目是否被本队重复提交 */
   duplicateInTeam: boolean
   tile: ServerTile
+}
+
+/** 队长投票池条目。审核池对全员可见（只读），仅队长可投票。 */
+export interface VotePoolItem {
+  book: ServerBook
+  tile: ServerTile
+  /** 当前赞成 / 反对票数 */
+  yesCount: number
+  noCount: number
+  /** 当前活动内队长总数，赞成过半即通过 */
+  totalCaptains: number
+  /** 当前用户已投的票：approve / reject，未投为空 */
+  myVote?: 'approve' | 'reject'
+  /** 本次操作是否使该条目出池（通过） */
+  resolved?: boolean
+}
+
+/** 成员单次打卡（已通过），用于成员档案 */
+export interface MemberCheckInItem {
+  checkInId: string
+  tileIndex: number
+  lap: number
+  createdAt: string
+  books: ServerBook[]
+  likeCount: number
+  likedByMe: boolean
+}
+
+/** 成员阅读档案（点击「全部队伍」中的成员查看），仅统计已通过审核的打卡 */
+export interface MemberProfile {
+  memberId: string
+  memberName: string
+  teamId: string
+  teamName?: string
+  bookCount: number
+  wordCount: number
+  /** 总时长（分钟），展示层换算小时 */
+  durationMinutes: number
+  checkIns: MemberCheckInItem[]
 }
 
 /** 报名名单条目（队长可见）：已报名人员及其入队状态 */

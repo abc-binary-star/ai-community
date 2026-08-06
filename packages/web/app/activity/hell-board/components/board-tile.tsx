@@ -3,6 +3,7 @@
 import { Dices, Flame, Hourglass, Lock, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TASK_TYPE_LABEL } from '../lib/board'
+import { formatTileTarget } from '../lib/rules'
 import type { LitReason, Tile } from '../lib/types'
 
 interface BoardTileProps {
@@ -72,7 +73,7 @@ export function BoardTile({ tile, litReason, isCurrent, onSelect }: BoardTilePro
         <p className="text-[10px] font-bold text-stone-700 md:text-[11px]">
           {tile.taskType === 'total-words'
             ? '100w 字'
-            : `${tile.target.toLocaleString('zh-CN')} ${tile.unit}`}
+            : formatTileTarget(tile)}
         </p>
         {litReason && (
           <p className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-900">

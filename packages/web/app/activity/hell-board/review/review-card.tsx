@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AlertTriangle, ExternalLink } from 'lucide-react'
-import { formatReadingMinutes, formatWords } from '../lib/rules'
+import { formatReadingMinutes, formatTileTarget, formatWords } from '../lib/rules'
 import type { ReviewQueueItem } from '../lib/types'
 import { ReviewBadge } from '../components/review-badge'
 
@@ -50,7 +50,7 @@ export function ReviewCard({
       </div>
 
       <p className="mt-2 rounded-lg bg-stone-50 px-2.5 py-1.5 text-[11px] text-stone-500">
-        格子任务：{tile.title}（目标 {tile.target.toLocaleString('zh-CN')} {tile.unit}）
+        格子任务：{tile.title}（目标 {formatTileTarget(tile)}）
       </p>
 
       {book.genre && <p className="mt-1.5 text-[11px] text-stone-500">题材：{book.genre}</p>}

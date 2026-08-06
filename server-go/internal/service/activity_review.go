@@ -15,11 +15,13 @@ import (
 // pendingReviewStatuses 待人工处理的状态集合。
 // 三条 AI 结论都进入人工队列（PRD 9.1）；pending-ai 也纳入，
 // 覆盖 AI 回写失败或未启用时提交仍能被审的情况。
+// in-voting（队长投票池）也纳入，供管理员兜底终审。
 var pendingReviewStatuses = []string{
 	model.ReviewStatusPendingAI,
 	model.ReviewStatusAIPassed,
 	model.ReviewStatusAIUnsure,
 	model.ReviewStatusAIRejected,
+	model.ReviewStatusInVoting,
 }
 
 // ListReviewQueue 人工终审队列，支持按小组、格子、状态筛选（PRD 9.3）

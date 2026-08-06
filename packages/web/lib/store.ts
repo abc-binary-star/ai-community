@@ -39,6 +39,19 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         user: state.user,
       }),
+      // 兜底净化：早期 fetchMe 未解包时会把 { user: {...} } 包装对象写进持久化 user，
+      // 导致 role 丢失、管理入口不出现。恢复时校验真实 User 形态，损坏则丢弃 user
+      // 保留 token，由页面重新拉取或引导重新登录，不再信任历史脏数据。
+      merge: (persisted, current) => {
+        const p = persisted as Partial<AuthState> | undefined
+        if (!p) return current
+        const u = p.user
+        const user: User | null =
+          u && typeof u === 'object' && typeof (u as User).id === 'string' && typeof (u as User).username === 'string'
+            ? (u as User)
+            : null
+        return { ...current, ...p, user }
+      },
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true)
       },

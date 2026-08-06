@@ -4,14 +4,17 @@ import type {
   BookLibraryItem,
   CheckInDraftBook,
   EnrollmentItem,
+  MemberProfile,
   RankingMetric,
   RankingRow,
   RankingSubject,
   ReviewQueueItem,
   RollResult,
+  ServerBook,
   ServerCheckIn,
   ServerJudgement,
   TileDetail,
+  VotePoolItem,
 } from './types'
 
 // 活动接口挂在独立路由分组下，与社区业务解耦（PRD 第 12 节）
@@ -73,6 +76,51 @@ export async function submitCheckIn(payload: {
 /** 撤回未进入终审的打卡（PRD 8.4） */
 export function deleteCheckIn(checkInId: string): Promise<void> {
   return apiFetch<void>(`${BASE}/checkins/${checkInId}`, { method: 'DELETE' })
+}
+
+// --- 我的打卡（三栏：未审核 / 已通过 / 已驳回） ---
+
+/** 我的打卡书目列表，按状态分组 */
+export async function fetchMyBooks(
+  status: 'pending' | 'approved' | 'rejected',
+): Promise<ServerBook[]> {
+  const res = await apiFetch<{ items: ServerBook[] }>(
+    `${BASE}/my-books?status=${status}`,
+  )
+  return res.items ?? []
+}
+
+// --- 队长投票池（全员可见，仅队长可投） ---
+
+/** 投票池列表 */
+export async function fetchVotePool(): Promise<VotePoolItem[]> {
+  const res = await apiFetch<{ items: VotePoolItem[] }>(`${BASE}/vote-pool`)
+  return res.items ?? []
+}
+
+/** 队长投票。赞成过半时服务端直接结算打卡通过。 */
+export function castVote(bookId: string, vote: 'approve' | 'reject'): Promise<VotePoolItem> {
+  return apiFetch<VotePoolItem>(`${BASE}/vote-pool/${bookId}/vote`, {
+    method: 'POST',
+    body: JSON.stringify({ vote }),
+  })
+}
+
+// --- 成员阅读档案与打卡点赞（「全部队伍」标签页） ---
+
+/** 成员已通过的打卡档案（总本数 / 总字数 / 总时长 + 各次打卡与点赞数） */
+export function fetchMemberCheckIns(memberId: string): Promise<MemberProfile> {
+  return apiFetch<MemberProfile>(`${BASE}/members/${memberId}/checkins`)
+}
+
+/** 点赞某次打卡（幂等） */
+export function likeCheckIn(checkInId: string): Promise<void> {
+  return apiFetch<void>(`${BASE}/checkins/${checkInId}/like`, { method: 'POST' })
+}
+
+/** 取消点赞 */
+export function unlikeCheckIn(checkInId: string): Promise<void> {
+  return apiFetch<void>(`${BASE}/checkins/${checkInId}/like`, { method: 'DELETE' })
 }
 
 /** 队长掷骰前进。点数由服务端生成（PRD 10.3 防篡改） */

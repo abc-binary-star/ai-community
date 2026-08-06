@@ -5,17 +5,31 @@ import { useEffect, useState } from 'react'
 import { BookOpen, Eye, EyeOff, Gavel, Loader2, LogOut, Sparkles, Users } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { AllTeamsPanel } from './components/all-teams-panel'
 import { BoardGrid } from './components/board-grid'
 import { BoardTextView } from './components/board-text-view'
 import { CheckInFormDialog } from './components/checkin-form-dialog'
 import { CurrentTaskPanel } from './components/current-task-panel'
 import { EnrollWizard } from './components/enroll-wizard'
+import { MyCheckInsPanel } from './components/my-checkins-panel'
 import { RankingPanel } from './components/ranking-panel'
 import { TeamPanel } from './components/team-panel'
 import { TileDetailDialog } from './components/tile-detail-dialog'
+import { VotePoolPanel } from './components/vote-pool-panel'
 import { useActivityStore, useCurrentTeam, useIsCaptain } from './lib/store'
 
 const POLL_INTERVAL_MS = 10_000
+
+/** 侧边栏五个标签页 */
+const SIDE_TABS = [
+  ['team', '队伍'],
+  ['ranking', '榜单'],
+  ['mine', '我的打卡'],
+  ['pool', '审核池'],
+  ['teams', '全部队伍'],
+] as const
+
+type SideTab = (typeof SIDE_TABS)[number][0]
 
 export function HellBoardView() {
   const teams = useActivityStore((s) => s.teams)
@@ -36,7 +50,7 @@ export function HellBoardView() {
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const [showTextView, setShowTextView] = useState(false)
   const [showCheckInForm, setShowCheckInForm] = useState(false)
-  const [sideTab, setSideTab] = useState<'team' | 'ranking'>('team')
+  const [sideTab, setSideTab] = useState<SideTab>('team')
 
   useEffect(() => {
     void loadAll()
@@ -176,12 +190,9 @@ export function HellBoardView() {
             <div
               role="tablist"
               aria-label="侧边栏切换"
-              className="grid shrink-0 grid-cols-2 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
+              className="grid shrink-0 grid-cols-5 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
             >
-              {([
-                ['team', '队伍'],
-                ['ranking', '榜单'],
-              ] as const).map(([key, label]) => (
+              {SIDE_TABS.map(([key, label]) => (
                 <button
                   key={key}
                   id={`side-tab-${key}`}
@@ -191,7 +202,7 @@ export function HellBoardView() {
                   aria-controls={`side-panel-${key}`}
                   onClick={() => setSideTab(key)}
                   className={cn(
-                    'rounded px-2 py-2 text-xs font-bold transition-colors',
+                    'rounded px-1 py-2 text-xs font-bold transition-colors',
                     sideTab === key
                       ? 'bg-[#ffd166] text-stone-900'
                       : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
@@ -228,6 +239,33 @@ export function HellBoardView() {
                 className="xl:h-full"
               >
                 <RankingPanel />
+              </div>
+              <div
+                id="side-panel-mine"
+                role="tabpanel"
+                aria-labelledby="side-tab-mine"
+                hidden={sideTab !== 'mine'}
+                className="xl:h-full"
+              >
+                <MyCheckInsPanel />
+              </div>
+              <div
+                id="side-panel-pool"
+                role="tabpanel"
+                aria-labelledby="side-tab-pool"
+                hidden={sideTab !== 'pool'}
+                className="xl:h-full"
+              >
+                <VotePoolPanel />
+              </div>
+              <div
+                id="side-panel-teams"
+                role="tabpanel"
+                aria-labelledby="side-tab-teams"
+                hidden={sideTab !== 'teams'}
+                className="xl:h-full"
+              >
+                <AllTeamsPanel />
               </div>
             </div>
           </aside>

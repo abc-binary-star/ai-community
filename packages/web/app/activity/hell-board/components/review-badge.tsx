@@ -3,12 +3,13 @@
 import { cn } from '@/lib/utils'
 import type { ReviewStatus } from '../lib/types'
 
-/** 审核状态流文案（PRD 9.1）。AI 三条结论都进入人工队列，AI 不具终裁权。 */
+/** 审核状态流文案（PRD 9.1）。in-voting 为队长投票池，全员可见、队长可投。 */
 const LABEL: Record<ReviewStatus, string> = {
   'pending-ai': '待初审',
   'ai-passed': 'AI 通过 · 待人工',
   'ai-unsure': 'AI 存疑 · 待人工',
   'ai-rejected': 'AI 驳回 · 待人工',
+  'in-voting': '队长投票中',
   approved: '已通过',
   rejected: '已驳回',
   revoked: '已撤销',
@@ -19,6 +20,7 @@ const TONE: Record<ReviewStatus, string> = {
   'ai-passed': 'bg-sky-100 text-sky-800',
   'ai-unsure': 'bg-amber-100 text-amber-800',
   'ai-rejected': 'bg-orange-100 text-orange-800',
+  'in-voting': 'bg-violet-100 text-violet-800',
   approved: 'bg-emerald-100 text-emerald-800',
   rejected: 'bg-rose-100 text-rose-800',
   revoked: 'bg-rose-100 text-rose-800',

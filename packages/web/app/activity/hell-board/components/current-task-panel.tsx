@@ -10,6 +10,7 @@ import {
   canSubmitCheckIn,
   formatDuration,
   formatProgressValue,
+  formatTileTarget,
   isFallbackDone,
   isTaskDone,
   timerRemainingMs,
@@ -84,7 +85,7 @@ export function CurrentTaskPanel({
               {tile.title}
             </h2>
             <p className="mt-0.5 text-xs font-medium text-stone-500">
-              {TASK_TYPE_LABEL[tile.taskType]} · 目标 {tile.target.toLocaleString('zh-CN')} {tile.unit}
+              {TASK_TYPE_LABEL[tile.taskType]} · 目标 {formatTileTarget(tile)}
             </p>
           </div>
           {lastRoll !== null && <Dice value={lastRoll} rolling={rolling} />}

@@ -55,9 +55,11 @@ const (
 	ReviewStatusAIPassed   = "ai-passed"
 	ReviewStatusAIUnsure   = "ai-unsure"
 	ReviewStatusAIRejected = "ai-rejected"
-	ReviewStatusApproved   = "approved"
-	ReviewStatusRejected   = "rejected"
-	ReviewStatusRevoked    = "revoked"
+	// ReviewStatusInVoting 已进入队长投票池，等待过半赞成（情况一/二 AI 未过、情况三封面直接进入）
+	ReviewStatusInVoting = "in-voting"
+	ReviewStatusApproved = "approved"
+	ReviewStatusRejected = "rejected"
+	ReviewStatusRevoked  = "revoked"
 )
 
 // 时间线事件类型（PRD 10.3）
@@ -301,6 +303,51 @@ func (ActivityReview) TableName() string { return "activity_reviews" }
 func (r *ActivityReview) BeforeCreate(tx *gorm.DB) error {
 	if r.ID == "" {
 		r.ID = uuid.New().String()
+	}
+	return nil
+}
+
+// ActivityBookVote 投票池票数。同一队长对同一本书只保留一票（唯一索引兜底），
+// 赞成票过半（队长数的一半以上）即打卡通过。
+type ActivityBookVote struct {
+	ID string `gorm:"primaryKey" json:"id"`
+	// BookID 被投票的书目
+	BookID string `gorm:"uniqueIndex:idx_book_vote_member;not null" json:"bookId"`
+	// VoterMemberID 投票队长（ActivityMember.ID）
+	VoterMemberID string `gorm:"uniqueIndex:idx_book_vote_member;not null" json:"voterMemberId"`
+	// TeamID 投票队长所属队伍，冗余便于展示与审计
+	TeamID string `gorm:"index;not null" json:"teamId"`
+	// Vote: approve / reject
+	Vote      string    `gorm:"size:8;not null" json:"vote"`
+	CreatedAt time.Time `gorm:"index" json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (ActivityBookVote) TableName() string { return "activity_book_votes" }
+
+func (v *ActivityBookVote) BeforeCreate(tx *gorm.DB) error {
+	if v.ID == "" {
+		v.ID = uuid.New().String()
+	}
+	return nil
+}
+
+// ActivityCheckInLike 打卡点赞。同一用户对同一次打卡只保留一赞（唯一索引），再点取消。
+// 点赞对象是「一次打卡提交」，不限点赞者身份；点赞数在成员档案中展示。
+type ActivityCheckInLike struct {
+	ID string `gorm:"primaryKey" json:"id"`
+	// CheckInID 被点赞的打卡
+	CheckInID string `gorm:"uniqueIndex:idx_checkin_like_user;not null" json:"checkInId"`
+	// UserID 点赞的社区用户（不限是否入组）
+	UserID    string    `gorm:"uniqueIndex:idx_checkin_like_user;not null" json:"userId"`
+	CreatedAt time.Time `gorm:"index" json:"createdAt"`
+}
+
+func (ActivityCheckInLike) TableName() string { return "activity_checkin_likes" }
+
+func (l *ActivityCheckInLike) BeforeCreate(tx *gorm.DB) error {
+	if l.ID == "" {
+		l.ID = uuid.New().String()
 	}
 	return nil
 }

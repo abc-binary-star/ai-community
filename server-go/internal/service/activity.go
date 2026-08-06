@@ -29,6 +29,7 @@ var (
 	ErrActivityNotMember       = &ActivityError{Msg: "你不在本次活动的任何小组中", Code: 403}
 	ErrActivityNotCaptain      = &ActivityError{Msg: "仅队长可执行该操作", Code: 403}
 	ErrActivityTeamNotFound    = &ActivityError{Msg: "小组不存在", Code: 404}
+	ErrActivityMemberNotFound  = &ActivityError{Msg: "成员不存在", Code: 404}
 	ErrActivityTileNotFound    = &ActivityError{Msg: "格子不存在", Code: 404}
 	ErrActivityBookNotFound    = &ActivityError{Msg: "书目记录不存在", Code: 404}
 	ErrActivityInvalidInput    = &ActivityError{Msg: "输入不合法", Code: 400}

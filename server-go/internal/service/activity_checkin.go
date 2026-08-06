@@ -67,6 +67,7 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 
 	// 必填三要素校验 + 组内自查重
 	seen := make(map[string]bool, len(req.Books))
+	keys := make([]string, 0, len(req.Books))
 	for i := range req.Books {
 		b := &req.Books[i]
 		b.Title = strings.TrimSpace(b.Title)
@@ -79,13 +80,22 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 			return nil, &DuplicateBookError{Titles: []string{b.Title}}
 		}
 		seen[key] = true
+		keys = append(keys, key)
 	}
 
-	// 提交时查重：按「成员 + 书名 + 作者」比对全期已提交书目（P1-8）
+	// 提交时查重：按「成员 + 书名 + 作者」比对全期已提交书目（P1-8）。
+	// 已驳回 / 已撤销的书目不占名额，允许修正后重新提交。
 	if dup, err := s.findDuplicates(ctx, me.ID, req.Books); err != nil {
 		return nil, err
 	} else if dup != nil {
 		return nil, dup
+	}
+
+	// 审核路由（三档，按格子规则分派）：
+	// 情况三封面类无法自动判定 → 直接进队长投票池；其余先走 AI 初审。
+	initialStatus := model.ReviewStatusPendingAI
+	if tile.TaskType == model.TaskTypeCoverColor {
+		initialStatus = model.ReviewStatusInVoting
 	}
 
 	checkIn := model.ActivityCheckIn{
@@ -110,12 +120,20 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 			CoverURL:        strings.TrimSpace(b.CoverURL),
 			Genre:           strings.TrimSpace(b.Genre),
 			Note:            strings.TrimSpace(b.Note),
-			ReviewStatus:    model.ReviewStatusPendingAI,
+			ReviewStatus:    initialStatus,
 			CountsForTask:   true,
 		})
 	}
 
 	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 驳回重提修复：已驳回/已撤销的同名书仍占着 DedupKey 唯一索引，
+		// 查重虽已放行，落库仍会撞唯一约束。在事务内先清掉旧占位行。
+		if err := tx.Where("member_id = ? AND dedup_key IN ? AND review_status IN ?",
+			me.ID, keys,
+			[]string{model.ReviewStatusRejected, model.ReviewStatusRevoked}).
+			Delete(&model.ActivityCheckInBook{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Create(&checkIn).Error; err != nil {
 			return err
 		}
@@ -136,8 +154,10 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 		return nil, err
 	}
 
-	// AI 初审异步触发，失败不阻断提交（PRD 9.4）
-	go runAIPreReview(books)
+	// AI 初审异步触发，失败不阻断提交（PRD 9.4）。封面类已直进投票池，不再跑 AI。
+	if initialStatus == model.ReviewStatusPendingAI {
+		go runAIPreReview(books)
+	}
 
 	checkIn.Books = books
 	dto := s.checkInToDTO(ctx, &checkIn, me)
@@ -276,6 +296,53 @@ func (s *ActivityService) ListMyTeamCheckIns(ctx context.Context, userID string)
 			EvidenceURL: c.EvidenceURL,
 			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
 		})
+	}
+	return out, nil
+}
+
+// ListMyBooks 我的打卡，按状态分组（「我的打卡」标签页三栏）：
+// pending = 未审核（AI 待审 / 队长投票中）；approved = 已通过；rejected = 已驳回 / 已撤销。
+func (s *ActivityService) ListMyBooks(ctx context.Context, userID, status string) ([]types.ActivityBookDTO, error) {
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	q := dal.DB.WithContext(ctx).Model(&model.ActivityCheckInBook{}).Where("member_id = ?", me.ID)
+	switch status {
+	case "approved":
+		q = q.Where("review_status = ?", model.ReviewStatusApproved)
+	case "rejected":
+		q = q.Where("review_status IN ?", []string{model.ReviewStatusRejected, model.ReviewStatusRevoked})
+	default:
+		q = q.Where("review_status IN ?", []string{
+			model.ReviewStatusPendingAI,
+			model.ReviewStatusAIPassed,
+			model.ReviewStatusAIUnsure,
+			model.ReviewStatusAIRejected,
+			model.ReviewStatusInVoting,
+		})
+	}
+	var books []model.ActivityCheckInBook
+	if err := q.Order("created_at desc").Limit(200).Find(&books).Error; err != nil {
+		return nil, err
+	}
+	if len(books) == 0 {
+		return []types.ActivityBookDTO{}, nil
+	}
+
+	names, err := s.memberNames(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	teamNames, err := s.teamNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]types.ActivityBookDTO, 0, len(books))
+	for i := range books {
+		b := &books[i]
+		out = append(out, bookToDTO(b, names[b.MemberID], teamNames[b.TeamID]))
 	}
 	return out, nil
 }

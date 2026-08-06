@@ -11,14 +11,15 @@ import (
 )
 
 // taskDelta 该书目对任务进度的贡献量。
-// 字数类按字数累加，时长类按小时累加，其余按本数计 1（PRD 第 6 节任务类型）。
+// 字数类按字数累加，时长类按分钟累加，其余按本数计 1（PRD 第 6 节任务类型）。
 func taskDelta(book *model.ActivityCheckInBook, tile *model.ActivityTile) int64 {
 	switch tile.TaskType {
 	case model.TaskTypeTotalWords:
 		return book.WordCount
 	case model.TaskTypeTotalDuration:
-		// 目标以小时计，提交以分钟计
-		return int64(book.DurationMinutes / 60)
+		// 按分钟原样累加：早期实现做 分钟/60 整除，导致零散分钟被丢弃
+		// （每次提交 50 分钟则进度恒为 0）。目标值同步以分钟存储。
+		return int64(book.DurationMinutes)
 	default:
 		return 1
 	}

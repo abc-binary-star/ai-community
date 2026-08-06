@@ -65,7 +65,8 @@ export const TILES: Tile[] = [
     specialRule: RULES['all-above-3'],
   },
   { index: 18, title: '看五本封面主色调有两种颜色的书', taskType: 'cover-color', target: 5, unit: '本' },
-  { index: 19, title: '持续看书累计 20 小时', taskType: 'total-duration', target: 20, unit: '小时' },
+  // 目标以分钟存储（20 小时 = 1200 分钟），展示层由 formatProgressValue 换算回小时
+  { index: 19, title: '持续看书累计 20 小时', taskType: 'total-duration', target: 1200, unit: '分钟' },
   { index: 20, title: '看十二本群友本月打卡过的书', taskType: 'group-cross', target: 12, unit: '本' },
 ]
 

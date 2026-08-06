@@ -217,6 +217,82 @@ func ReviewActivityBook(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, dto)
 }
 
+// ListActivityMyBooks 我的打卡，按状态分组
+// GET /api/activity/hell-board/my-books?status=pending|approved|rejected
+func ListActivityMyBooks(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	status := c.Query("status")
+	items, err := activityService.ListMyBooks(ctx, userID, status)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]any{"items": items})
+}
+
+// ListActivityVotePool 投票池：全员可见
+// GET /api/activity/hell-board/vote-pool
+func ListActivityVotePool(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	items, err := activityService.ListVotePool(ctx, userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]any{"items": items})
+}
+
+// GetActivityMemberCheckIns 成员阅读档案（已通过打卡 + 汇总 + 点赞数）
+// GET /api/activity/hell-board/members/:memberId/checkins
+func GetActivityMemberCheckIns(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	profile, err := activityService.GetMemberCheckIns(ctx, userID, c.Param("memberId"))
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, profile)
+}
+
+// LikeActivityCheckIn 点赞某次打卡
+// POST /api/activity/hell-board/checkins/:id/like
+func LikeActivityCheckIn(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	if err := activityService.LikeCheckIn(ctx, userID, c.Param("id")); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c)
+}
+
+// UnlikeActivityCheckIn 取消点赞
+// DELETE /api/activity/hell-board/checkins/:id/like
+func UnlikeActivityCheckIn(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	if err := activityService.UnlikeCheckIn(ctx, userID, c.Param("id")); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c)
+}
+
+// CastActivityVote 队长投票
+// POST /api/activity/hell-board/vote-pool/:bookId/vote
+func CastActivityVote(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityVoteReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	item, err := activityService.CastVote(ctx, userID, c.Param("bookId"), req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, item)
+}
+
 // BatchApproveActivityBooks 批量确认 AI 通过项
 // POST /api/activity/hell-board/admin/reviews/batch-approve
 func BatchApproveActivityBooks(ctx context.Context, c *app.RequestContext) {

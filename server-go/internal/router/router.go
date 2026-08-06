@@ -187,6 +187,15 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.GET("/checkins", handler.ListActivityCheckIns)
 	activity.POST("/checkins", handler.CreateActivityCheckIn)
 	activity.DELETE("/checkins/:id", handler.DeleteActivityCheckIn)
+	// 我的打卡（三栏：未审核 / 已通过 / 已驳回）
+	activity.GET("/my-books", handler.ListActivityMyBooks)
+	// 审核池：全员可见（只读），队长通过 /vote-pool/:bookId/vote 投票
+	activity.GET("/vote-pool", handler.ListActivityVotePool)
+	activity.POST("/vote-pool/:bookId/vote", handler.CastActivityVote)
+	// 成员阅读档案与打卡点赞（「全部队伍」标签页）
+	activity.GET("/members/:memberId/checkins", handler.GetActivityMemberCheckIns)
+	activity.POST("/checkins/:id/like", handler.LikeActivityCheckIn)
+	activity.DELETE("/checkins/:id/like", handler.UnlikeActivityCheckIn)
 	activity.POST("/roll", handler.RollActivityDice)
 	activity.GET("/judgement", handler.GetActivityJudgement)
 	activity.POST("/judgement/roll", handler.RollActivityJudgement)

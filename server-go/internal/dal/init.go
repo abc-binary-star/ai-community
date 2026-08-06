@@ -102,6 +102,9 @@ func Init(cfg *conf.Config) {
 	// 初始化活动棋盘 20 格定义
 	seedActivityTiles()
 
+	// 时长格单位迁移：第 19 格由小时改为分钟存储（幂等）
+	migrateDurationTileToMinutes()
+
 	// 队伍表为空时创建默认队伍（生产初始化，幂等）
 	seedActivityTeams()
 

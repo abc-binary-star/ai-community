@@ -1,6 +1,7 @@
 'use client'
 
 import { TASK_TYPE_LABEL } from '../lib/board'
+import { formatTileTarget } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
 import type { Team } from '../lib/types'
 
@@ -53,7 +54,7 @@ export function BoardTextView({
                 <td className="px-3 py-2">{tile.title}</td>
                 <td className="px-3 py-2 text-stone-500">{TASK_TYPE_LABEL[tile.taskType]}</td>
                 <td className="px-3 py-2 text-stone-500">
-                  {tile.target.toLocaleString('zh-CN')} {tile.unit}
+                  {formatTileTarget(tile)}
                 </td>
                 <td className="px-3 py-2 text-stone-500">{tile.specialRule?.label ?? '无'}</td>
                 <td className="px-3 py-2">

@@ -211,6 +211,48 @@ type ActivityReviewQueueDTO struct {
 	Tile            ActivityTileDTO `json:"tile"`
 }
 
+// ActivityVotePoolItemDTO 投票池条目。审核池对全员可见（只读），仅队长可投票。
+type ActivityVotePoolItemDTO struct {
+	Book ActivityBookDTO `json:"book"`
+	Tile ActivityTileDTO `json:"tile"`
+	// YesCount / NoCount 当前赞成 / 反对票数
+	YesCount int `json:"yesCount"`
+	NoCount  int `json:"noCount"`
+	// TotalCaptains 当前活动内队长总数（含无队伍时仍在册的队长），过半即通过
+	TotalCaptains int `json:"totalCaptains"`
+	// MyVote 当前用户已投的票：approve / reject，未投为空
+	MyVote string `json:"myVote,omitempty"`
+	// Resolved 本次操作是否使该条目出池（通过），前端可据此提示并刷新
+	Resolved bool `json:"resolved,omitempty"`
+}
+
+// ActivityMemberCheckInDTO 成员单次打卡（仅含已通过审核的书目），用于成员档案
+type ActivityMemberCheckInDTO struct {
+	CheckInID string             `json:"checkInId"`
+	TileIndex int                `json:"tileIndex"`
+	Lap       int                `json:"lap"`
+	CreatedAt string             `json:"createdAt"`
+	Books     []ActivityBookDTO  `json:"books"`
+	// LikeCount 该次打卡的点赞数
+	LikeCount int `json:"likeCount"`
+	// LikedByMe 当前用户是否已点赞
+	LikedByMe bool `json:"likedByMe"`
+}
+
+// ActivityMemberProfileDTO 成员阅读档案（点击「全部队伍」中的成员查看）：
+// 仅统计已通过审核的打卡；总时长按分钟下发，展示层换算小时。
+type ActivityMemberProfileDTO struct {
+	MemberID   string `json:"memberId"`
+	MemberName string `json:"memberName"`
+	TeamID     string `json:"teamId"`
+	TeamName   string `json:"teamName,omitempty"`
+	// 已通过审核的累计数据
+	BookCount       int    `json:"bookCount"`
+	WordCount       int64  `json:"wordCount"`
+	DurationMinutes int    `json:"durationMinutes"`
+	CheckIns        []ActivityMemberCheckInDTO `json:"checkIns"`
+}
+
 // --- 请求 DTO ---
 
 // ActivityBookReq 提交打卡中的单条书目。
@@ -247,6 +289,12 @@ type ActivityReviewReq struct {
 // ActivityBatchReviewReq 批量确认 AI 通过项（PRD 9.3）
 type ActivityBatchReviewReq struct {
 	BookIDs []string `json:"bookIds"`
+}
+
+// ActivityVoteReq 队长投票请求
+type ActivityVoteReq struct {
+	// Vote: approve / reject
+	Vote string `json:"vote" vd:"in($,'approve','reject')"`
 }
 
 // ActivityTeamUpsertReq 运营维护小组名单（PRD 第 13 节）

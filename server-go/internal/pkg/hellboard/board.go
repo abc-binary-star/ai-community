@@ -55,7 +55,8 @@ var Tiles = []TileDef{
 	{16, "看十四本标题为五个字的书", model.TaskTypeTitleLength, 14, "本", ""},
 	{17, "看七本书", model.TaskTypePlainCount, 7, "本", model.RuleAllAbove3},
 	{18, "看五本封面主色调有两种颜色的书", model.TaskTypeCoverColor, 5, "本", ""},
-	{19, "持续看书累计 20 小时", model.TaskTypeTotalDuration, 20, "小时", ""},
+	// 目标以分钟存储（20 小时 = 1200 分钟），避免零散分钟在累加时被丢弃；展示层换算回小时
+	{19, "持续看书累计 20 小时", model.TaskTypeTotalDuration, 1200, "分钟", ""},
 	{20, "看十二本群友本月打卡过的书", model.TaskTypeGroupCross, 12, "本", ""},
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/hellboard"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -40,6 +41,39 @@ func seedActivityTiles() {
 		return
 	}
 	log.Printf("活动棋盘格子初始化完成，共 %d 格", len(tiles))
+}
+
+// migrateDurationTileToMinutes 时长格单位迁移（幂等）：
+// 第 19 格「持续看书累计 20 小时」改为内部以分钟存储（1200 分钟），避免零散
+// 分钟在累加时被截断（旧 taskDelta 按 分钟/60 整数除法，50 分钟会被记为 0 小时）。
+// 仅当目标仍为旧的「20 小时」形态时才执行；运营已改过文案/目标则整体跳过。
+// 迁移成功后，将当前停留在第 19 格队伍的已累计进度按小时×60 换算为分钟。
+func migrateDurationTileToMinutes() {
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 1) 仅旧形态（unit=小时、target≤20）才迁移，避免覆盖运营调整
+		res := tx.Model(&model.ActivityTile{}).
+			Where("tile_index = ? AND task_type = ? AND unit = ? AND target <= ?",
+				19, model.TaskTypeTotalDuration, "小时", int64(20)).
+			Updates(map[string]any{
+				"target": int64(1200),
+				"unit":   "分钟",
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // 已是分钟形态或运营改过，跳过进度换算
+		}
+		// 2) 停留在第 19 格的队伍，历史进度按小时累计，换算为分钟
+		return tx.Model(&model.ActivityTeam{}).
+			Where("position = ?", 19).
+			UpdateColumn("tile_progress", gorm.Expr("tile_progress * 60")).Error
+	})
+	if err != nil {
+		log.Printf("Warning: 时长格分钟迁移失败: %v", err)
+		return
+	}
+	log.Printf("时长格第 19 格已迁移为分钟单位（1200 分钟）")
 }
 
 // defaultActivityTeams 默认队伍。仅在队伍表为空时创建（服务首次启动/生产初始化），

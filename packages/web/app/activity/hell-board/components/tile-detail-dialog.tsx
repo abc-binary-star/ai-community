@@ -5,7 +5,7 @@ import { Dices, Hourglass, Loader2, Lock, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RULES, TASK_TYPE_LABEL } from '../lib/board'
 import { fetchTileDetail } from '../lib/api'
-import { formatWords } from '../lib/rules'
+import { formatTileTarget, formatWords } from '../lib/rules'
 import { useActivityStore, useTile } from '../lib/store'
 import type { LitReason, TileDetail, TileRecord } from '../lib/types'
 import { ReviewBadge } from './review-badge'
@@ -109,7 +109,7 @@ export function TileDetailDialog({
               {tile.title}
             </h2>
             <p className="mt-1 text-xs font-medium text-stone-500">
-              目标 {tile.target.toLocaleString('zh-CN')} {tile.unit}
+              目标 {formatTileTarget(tile)}
             </p>
           </div>
           <button
