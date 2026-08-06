@@ -102,6 +102,9 @@ func Init(cfg *conf.Config) {
 	// 队伍表为空时创建默认队伍（生产初始化，幂等）
 	seedActivityTeams()
 
+	// 幂等地确保超级管理员账号存在且角色为 admin（读书地狱审核需要管理员身份）
+	seedSuperAdmin()
+
 	log.Println("数据库连接和迁移成功")
 
 	// 搜索增强：pg_trgm 扩展 + GIN 三元组索引，加速 ILIKE 模糊搜索与相关度排序
@@ -137,6 +140,34 @@ var defaultChannels = []model.Channel{
 	{Name: "design", Label: "设计美学", Icon: "palette", SortOrder: 3},
 	{Name: "gaming", Label: "游戏天地", Icon: "gamepad-2", SortOrder: 4},
 	{Name: "life", Label: "生活方式", Icon: "leaf", SortOrder: 5},
+}
+
+// seedSuperAdmin 幂等地确保超级管理员账号角色为 admin。
+// 按用户名或显示名匹配：账号可能直接以中文名注册，也可能仅把中文名设为显示名。
+// 账号未注册时仅记录提示（避免在代码里伪造密码建号），注册后重启服务即自动提升；
+// 已为 admin 或账号不存在时无任何副作用，可安全重复执行。
+func seedSuperAdmin() {
+	const superAdminName = "栗悟饭与龟波功"
+
+	var users []model.User
+	if err := DB.Where("username = ? OR display_name = ?", superAdminName, superAdminName).Find(&users).Error; err != nil {
+		log.Printf("Warning: 检查超级管理员账号失败: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		log.Printf("超级管理员账号「%s」尚未注册，注册后重启服务将自动提升为管理员", superAdminName)
+		return
+	}
+	for i := range users {
+		if users[i].Role == "admin" {
+			continue
+		}
+		if err := DB.Model(&model.User{}).Where("id = ?", users[i].ID).Update("role", "admin").Error; err != nil {
+			log.Printf("Warning: 提升「%s」为管理员失败: %v", users[i].Username, err)
+			continue
+		}
+		log.Printf("已将「%s」(id=%s) 设为超级管理员", users[i].Username, users[i].ID)
+	}
 }
 
 // seedDefaultChannels 频道表为空时插入默认分组和频道

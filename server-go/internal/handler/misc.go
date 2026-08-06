@@ -67,6 +67,19 @@ func SearchUsers(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]interface{}{"items": items})
 }
 
+// SearchUsersAdmin 角色管理用搜索（仅管理员）
+// GET /api/users/admin/role-management/search?q=xxx
+func SearchUsersAdmin(ctx context.Context, c *app.RequestContext) {
+	q := c.Query("q")
+	items, err := userService.SearchUsersAdmin(ctx, q)
+	if err != nil {
+		log.Printf("[SearchUsersAdmin] 搜索用户失败: %v", err)
+		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.JSON(c, map[string]interface{}{"items": items})
+}
+
 // GetUser 查看用户主页（公开）
 // GET /api/users/:username
 func GetUser(ctx context.Context, c *app.RequestContext) {

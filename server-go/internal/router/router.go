@@ -129,6 +129,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// --- 用户路由 ---
 	users := h.Group("/api/users")
 	users.GET("/search", middleware.Auth(), handler.SearchUsers)
+	// 角色管理专用搜索，须在 :username 参数路由之前注册（静态段优先匹配）
+	users.GET("/admin/role-management/search", middleware.Auth(), middleware.RequireRole("admin"), handler.SearchUsersAdmin)
 	users.GET("/:username", middleware.OptionalAuth(), handler.GetUser)
 	users.GET("/:username/posts", middleware.OptionalAuth(), handler.GetUserPosts)
 	users.PUT("/me", middleware.Auth(), handler.UpdateUser)

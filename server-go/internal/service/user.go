@@ -4,7 +4,9 @@ import (
 	"context"
 	"log"
 	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -23,6 +25,17 @@ type SearchUserItem struct {
 	ID       string  `json:"id"`
 	Username string  `json:"username"`
 	Avatar   *string `json:"avatar"`
+}
+
+// AdminUserSearchItem 角色管理用搜索项（仅管理员可见，含邮箱便于区分同名用户）
+type AdminUserSearchItem struct {
+	ID          string     `json:"id"`
+	Username    string     `json:"username"`
+	Avatar      *string    `json:"avatar"`
+	DisplayName *string    `json:"displayName"`
+	Email       string     `json:"email"`
+	Role        string     `json:"role"`
+	CreatedAt   time.Time  `json:"createdAt"`
 }
 
 // ServiceError 业务错误，携带 HTTP 状态码
@@ -96,6 +109,37 @@ func (s *UserService) SearchUsers(ctx context.Context, q string) ([]SearchUserIt
 			ID:       u.ID,
 			Username: u.Username,
 			Avatar:   u.Avatar,
+		})
+	}
+	return items, nil
+}
+
+// SearchUsersAdmin 角色管理用搜索：按用户名或显示名模糊匹配，
+// 返回含角色与邮箱的完整信息（仅管理员调用）。
+func (s *UserService) SearchUsersAdmin(ctx context.Context, q string) ([]AdminUserSearchItem, error) {
+	q = strings.TrimSpace(q)
+	if len(q) < 1 {
+		return []AdminUserSearchItem{}, nil
+	}
+	like := "%" + q + "%"
+	var users []model.User
+	if err := dal.DB.WithContext(ctx).
+		Where("username ILIKE ? OR display_name ILIKE ?", like, like).
+		Order("created_at ASC").
+		Limit(20).
+		Find(&users).Error; err != nil {
+		return nil, err
+	}
+	items := make([]AdminUserSearchItem, 0, len(users))
+	for _, u := range users {
+		items = append(items, AdminUserSearchItem{
+			ID:          u.ID,
+			Username:    u.Username,
+			Avatar:      u.Avatar,
+			DisplayName: u.DisplayName,
+			Email:       u.Email,
+			Role:        u.Role,
+			CreatedAt:   u.CreatedAt,
 		})
 	}
 	return items, nil
