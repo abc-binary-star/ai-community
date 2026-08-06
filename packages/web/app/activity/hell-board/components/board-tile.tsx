@@ -34,7 +34,7 @@ export function BoardTile({ tile, litReason, isCurrent, onSelect }: BoardTilePro
       }`}
       aria-current={isCurrent ? 'true' : undefined}
       className={cn(
-        'group relative flex h-full min-h-[112px] w-full flex-col gap-1 rounded-md border-2 p-2 text-left shadow-[2px_2px_0_rgba(41,37,36,0.8)] transition-all hover:-translate-y-0.5 hover:shadow-[3px_3px_0_rgba(41,37,36,0.8)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
+        'group relative flex h-full min-h-[92px] w-full flex-col gap-0.5 rounded-md border-2 p-1.5 text-left shadow-[2px_2px_0_rgba(41,37,36,0.8)] transition-all hover:-translate-y-0.5 hover:shadow-[3px_3px_0_rgba(41,37,36,0.8)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none md:min-h-[112px] md:gap-1 md:p-2',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2',
         lit
           ? 'border-stone-800 bg-[#fff0b8]'
@@ -46,25 +46,30 @@ export function BoardTile({ tile, litReason, isCurrent, onSelect }: BoardTilePro
       <div className="flex items-center justify-between">
         <span
           className={cn(
-            'inline-flex size-7 items-center justify-center rounded border border-stone-800 text-[13px] font-black',
+            'inline-flex size-6 items-center justify-center rounded border border-stone-800 text-[11px] font-black md:size-7 md:text-[13px]',
             lit ? 'bg-[#ffd166] text-stone-900' : 'bg-stone-800 text-white',
           )}
         >
           {tile.index}
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-0.5 md:gap-1">
           {/* 点亮状态不只依赖颜色，同时用图标区分（PRD 10.2 无障碍） */}
-          {lit && <Star aria-hidden className="size-3.5 fill-amber-400 text-stone-800" />}
-          {tile.specialRule && <Dices aria-hidden className="size-3.5 text-violet-700" />}
-          {isPenalty && <Hourglass aria-hidden className="size-3.5 text-amber-700" />}
+          {lit && <Star aria-hidden className="size-3 fill-amber-400 text-stone-800 md:size-3.5" />}
+          {tile.specialRule && <Dices aria-hidden className="size-3 text-violet-700 md:size-3.5" />}
+          {isPenalty && <Hourglass aria-hidden className="size-3 text-amber-700 md:size-3.5" />}
         </span>
       </div>
 
-      <p className="line-clamp-2 text-[13px] font-black leading-snug text-stone-900">{tile.title}</p>
+      <p className="line-clamp-2 text-[11px] font-black leading-snug text-stone-900 md:text-[13px]">
+        {tile.title}
+      </p>
 
       <div className="mt-auto space-y-0.5">
-        <p className="text-[11px] font-medium text-stone-500">{TASK_TYPE_LABEL[tile.taskType]}</p>
-        <p className="text-[11px] font-bold text-stone-700">
+        {/* 手机端 78px 格宽放不下类型标签，点开详情弹窗仍可见 */}
+        <p className="hidden text-[11px] font-medium text-stone-500 md:block">
+          {TASK_TYPE_LABEL[tile.taskType]}
+        </p>
+        <p className="text-[10px] font-bold text-stone-700 md:text-[11px]">
           {tile.taskType === 'total-words'
             ? '100w 字'
             : `${tile.target.toLocaleString('zh-CN')} ${tile.unit}`}

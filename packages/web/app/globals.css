@@ -70,6 +70,43 @@
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  /* ------------------------------------------------------------
+     读书地狱棋盘：手机竖屏 4×8 环 / md 及以上 7×5 环。
+     grid-column 无法用 Tailwind 断点表达（值来自 JS 计算的内联变量），
+     故由组件内联两套坐标变量，这里按断点切换消费哪一套，
+     避免 useMediaQuery 带来的 SSR 水合闪烁。
+     ------------------------------------------------------------ */
+  .board-ring {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(var(--ring-cols-sm), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--ring-rows-sm), minmax(92px, auto));
+  }
+  .board-ring-cell {
+    grid-column: var(--cell-col-sm);
+    grid-row: var(--cell-row-sm);
+  }
+  .board-ring-center {
+    grid-column: 2 / var(--ring-cols-sm);
+    grid-row: 2 / var(--ring-rows-sm);
+  }
+
+  @media (min-width: 768px) {
+    .board-ring {
+      gap: 8px;
+      grid-template-columns: repeat(var(--ring-cols), minmax(88px, 1fr));
+      grid-template-rows: repeat(var(--ring-rows), minmax(112px, auto));
+    }
+    .board-ring-cell {
+      grid-column: var(--cell-col);
+      grid-row: var(--cell-row);
+    }
+    .board-ring-center {
+      grid-column: 2 / var(--ring-cols);
+      grid-row: 2 / var(--ring-rows);
+    }
+  }
 }
 
 /* ============================================================

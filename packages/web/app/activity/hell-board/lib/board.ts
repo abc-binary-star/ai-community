@@ -90,11 +90,19 @@ export const TASK_TYPE_LABEL: Record<Tile['taskType'], string> = {
 }
 
 /**
- * 矩形环布局：7 列 × 5 行网格的外圈恰好 20 格，
- * 顺时针按上 6 / 右 4 / 下 6 / 左 4 分布（PRD 10.2）。
+ * 矩形环布局：cols × rows 网格的外圈格数为 2(cols-1) + 2(rows-1)，
+ * 因此 7×5（桌面，上 6 / 右 4 / 下 6 / 左 4）与 4×8（手机竖屏，上 3 / 右 7 / 下 3 / 左 7）
+ * 的外圈都恰好 20 格（PRD 10.2）。
+ *
+ * 桌面用宽扁形状；手机竖屏若沿用 7 列，单格会被压到 44px 导致文字不可读，
+ * 故改用 4 列高瘦形状，单格约 78px 保持可读，同时保留环形语义。
  */
 export const BOARD_COLS = 7
 export const BOARD_ROWS = 5
+
+/** 手机竖屏形状：4 列 × 8 行，外圈同为 20 格 */
+export const BOARD_COLS_SM = 4
+export const BOARD_ROWS_SM = 8
 
 export interface TileCell {
   /** CSS grid 列，1-based */
@@ -103,17 +111,33 @@ export interface TileCell {
   row: number
 }
 
-/** 格子编号 → 网格坐标。1 号格在左上角，顺时针推进。 */
-export function tileCell(index: number): TileCell {
+/**
+ * 通用矩形环坐标：1 号格在左上角，顺时针推进。
+ * 四条边分别贡献 cols-1 / rows-1 / cols-1 / rows-1 格，各边不含终点角以免重复。
+ */
+function ringCell(index: number, cols: number, rows: number): TileCell {
   const i = index - 1
-  // 上边：col 1→6，row 1
-  if (i < 6) return { col: i + 1, row: 1 }
-  // 右边：col 7，row 1→5
-  if (i < 10) return { col: BOARD_COLS, row: i - 6 + 1 }
-  // 下边：col 7→2，row 5
-  if (i < 16) return { col: BOARD_COLS - (i - 10), row: BOARD_ROWS }
-  // 左边：col 1，row 5→2
-  return { col: 1, row: BOARD_ROWS - (i - 16) }
+  const top = cols - 1
+  const right = top + (rows - 1)
+  const bottom = right + (cols - 1)
+  // 上边：col 1→cols-1，row 1
+  if (i < top) return { col: i + 1, row: 1 }
+  // 右边：col cols，row 1→rows-1
+  if (i < right) return { col: cols, row: i - top + 1 }
+  // 下边：col cols→2，row rows
+  if (i < bottom) return { col: cols - (i - right), row: rows }
+  // 左边：col 1，row rows→2
+  return { col: 1, row: rows - (i - bottom) }
+}
+
+/** 格子编号 → 桌面 7×5 网格坐标 */
+export function tileCell(index: number): TileCell {
+  return ringCell(index, BOARD_COLS, BOARD_ROWS)
+}
+
+/** 格子编号 → 手机竖屏 4×8 网格坐标 */
+export function tileCellSm(index: number): TileCell {
+  return ringCell(index, BOARD_COLS_SM, BOARD_ROWS_SM)
 }
 
 /** 环形前进：从 from 走 steps 步后的落点（1-based，跨过 20 回到 1） */

@@ -142,10 +142,9 @@ export function HellBoardView() {
             {showTextView ? (
               <BoardTextView teams={teams} currentTeam={currentTeam} />
             ) : (
-              <div className="overflow-x-auto pb-2 scrollbar-thin">
-                <div className="min-w-[760px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2.5 shadow-[5px_5px_0_#292524] sm:p-3">
-                  <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
-                </div>
+              /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+              <div className="mx-auto max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3">
+                <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
               </div>
             )}
 
