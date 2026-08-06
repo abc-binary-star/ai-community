@@ -137,7 +137,8 @@ export function HellBoardView() {
           </div>
         </header>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
+        {/* xl 下两列等高（items-stretch），右栏下沿随棋盘下沿对齐 */}
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:items-stretch xl:gap-5">
           <div className="min-w-0">
             {showTextView ? (
               <BoardTextView teams={teams} currentTeam={currentTeam} />
@@ -150,7 +151,7 @@ export function HellBoardView() {
 
           {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单收进切换栏，
               使电脑端与棋盘同屏，打卡无需滚动 */}
-          <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:max-h-[calc(100vh-2rem)] xl:flex-col">
+          <aside className="space-y-3 xl:flex xl:h-full xl:flex-col">
             <div className="xl:shrink-0">
               {currentTeam ? (
                 <CurrentTaskPanel
@@ -201,19 +202,20 @@ export function HellBoardView() {
               ))}
             </div>
 
-            {/* 榜单可达 10 行，超出时只让面板区内部滚动，
-                避免顶部打卡入口被挤出视口 */}
-            <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1 xl:scrollbar-thin">
+            {/* 面板区吃掉剩余高度，使卡片下沿与棋盘下沿齐平。
+                不设 overflow：否则会裁掉卡片 4px 硬阴影，且 overflow-x 会被迫变成 auto */}
+            <div className="xl:min-h-0 xl:flex-1">
               <div
                 id="side-panel-team"
                 role="tabpanel"
                 aria-labelledby="side-tab-team"
                 hidden={sideTab !== 'team'}
+                className="xl:h-full"
               >
                 {currentTeam ? (
                   <TeamPanel team={currentTeam} currentMemberId={myMemberId ?? ''} />
                 ) : (
-                  <p className="rounded-lg border-2 border-stone-800 bg-white p-4 text-xs text-stone-600 shadow-[3px_3px_0_#292524]">
+                  <p className="rounded-lg border-2 border-stone-800 bg-white p-4 text-xs text-stone-600 shadow-[3px_3px_0_#292524] xl:h-full">
                     你不在本次活动的小组中，可查看棋盘与榜单
                   </p>
                 )}
@@ -223,6 +225,7 @@ export function HellBoardView() {
                 role="tabpanel"
                 aria-labelledby="side-tab-ranking"
                 hidden={sideTab !== 'ranking'}
+                className="xl:h-full"
               >
                 <RankingPanel />
               </div>

@@ -10,6 +10,9 @@ import { TeamEmblem } from './team-emblem'
 
 type TabKey = 'ranking' | 'lit'
 
+/** 榜单只展示前四名，保证卡片高度与队伍面板一致 */
+const RANK_LIMIT = 4
+
 function RankRow({ row, metric, emblem }: { row: RankingRow; metric: RankingMetric | 'lit'; emblem?: string }) {
   const top3 = row.rank <= 3
   return (
@@ -138,7 +141,7 @@ export function RankingPanel() {
   return (
     <section
       aria-labelledby="ranking-heading"
-      className="rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fffdf4] to-[#f4edda] p-4 shadow-[4px_4px_0_#292524]"
+      className="flex h-full flex-col rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fffdf4] to-[#f4edda] p-4 shadow-[4px_4px_0_#292524]"
     >
       <PanelHeading id="ranking-heading">榜单</PanelHeading>
 
@@ -177,20 +180,16 @@ export function RankingPanel() {
             />
           </div>
 
-          <ul className="mt-3 space-y-1.5">
-            {rows.map((row) => (
+          <ul className="mt-3 flex-1 space-y-1.5">
+            {rows.slice(0, RANK_LIMIT).map((row) => (
               <RankRow key={row.id} row={row} metric={metric} emblem={emblemOf(row)} />
             ))}
           </ul>
-          <p className="mt-2 flex items-start gap-1.5 border-t border-dashed border-[#dccfa8] pt-2 text-[11px] leading-relaxed text-stone-500">
-            <span aria-hidden className="mt-1 size-1 shrink-0 rounded-full bg-[#d9a441]" />
-            仅统计人工终审通过的打卡，展示前 10 名。撤销审核时同步扣减。
-          </p>
         </>
       ) : (
         <>
-          <ul className="mt-3 space-y-1.5">
-            {litRows.map((row) => (
+          <ul className="mt-3 flex-1 space-y-1.5">
+            {litRows.slice(0, RANK_LIMIT).map((row) => (
               <RankRow key={row.id} row={row} metric="lit" emblem={emblemOf(row)} />
             ))}
           </ul>

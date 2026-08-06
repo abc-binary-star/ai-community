@@ -83,7 +83,7 @@ export function BoardGrid({
         )
       })}
 
-      {/* 棋盘中心：活动标题 + 点亮进度战况 */}
+      {/* 棋盘中心：活动标题 + 本队点亮进度 */}
       <div className="board-ring-center relative flex flex-col items-center justify-center overflow-hidden p-2.5 text-center md:p-5">
         {/* 羊皮纸底卡 */}
         <div className="absolute inset-0 rounded-xl border-2 border-[#8b6b2c]/40 bg-gradient-to-b from-[#fffdf4] via-[#fbf3dc] to-[#f0e4c4] shadow-[inset_0_2px_6px_rgba(139,107,44,0.15)]" />
@@ -93,7 +93,7 @@ export function BoardGrid({
         <span aria-hidden className="absolute bottom-2 left-2 size-2.5 rounded-full border border-[#c9a84c] bg-[#fff3d6]" />
         <span aria-hidden className="absolute bottom-2 right-2 size-2.5 rounded-full border border-[#c9a84c] bg-[#fff3d6]" />
 
-        <BoardCenter teams={teams} currentTeam={currentTeam} />
+        <BoardCenter currentTeam={currentTeam} />
       </div>
     </div>
   )

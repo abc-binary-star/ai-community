@@ -57,7 +57,7 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
   return (
     <section
       aria-labelledby="team-heading"
-      className="rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fffdf4] to-[#f4edda] p-4 shadow-[4px_4px_0_#292524]"
+      className="flex h-full flex-col rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fffdf4] to-[#f4edda] p-4 shadow-[4px_4px_0_#292524]"
     >
       <div className="flex items-start justify-between gap-2">
         <h2 id="team-heading" className="flex min-w-0 items-center gap-2.5 text-sm font-black text-stone-900">
@@ -84,7 +84,7 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
         <LitOverview team={team} />
       </div>
 
-      <div className="mt-4 border-t border-dashed border-[#dccfa8] pt-3.5">
+      <div className="mt-4 flex-1 border-t border-dashed border-[#dccfa8] pt-3.5">
         <h3 className="flex items-center gap-1.5 text-xs font-black tracking-wide text-[#6b4e15]">
           <span aria-hidden className="size-1.5 rotate-45 bg-[#d9a441]" />
           队伍成员
@@ -92,39 +92,40 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
             {team.members.length} / {TEAM_SIZE}
           </span>
         </h3>
-        <ul className="mt-2 space-y-1.5">
+        {/* 一行两人：压缩纵向占用，使卡片高度与榜单一致 */}
+        <ul className="mt-2 grid grid-cols-2 gap-1.5">
           {slots.map((member, i) =>
             member ? (
               <li
                 key={member.id}
                 className={cn(
-                  'flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-xs shadow-[1.5px_1.5px_0_#e0d6ba]',
+                  'min-w-0 rounded-md border px-2 py-1.5 text-xs shadow-[1.5px_1.5px_0_#e0d6ba]',
                   member.id === currentMemberId
                     ? 'border-[#d9a441] bg-[#fff3d6] ring-1 ring-[#d9a441]/40'
                     : 'border-[#dccfa8] bg-white/80 hover:bg-[#fdf9ec]',
                 )}
               >
-                <span className="flex min-w-0 items-center gap-1.5 text-stone-800">
+                <span className="flex min-w-0 items-center gap-1 text-stone-800">
                   <span className="truncate">{member.name}</span>
                   {member.isCaptain && <Crown aria-label="队长" className="size-3 shrink-0 text-amber-600" />}
                   {member.id === currentMemberId && <span className="shrink-0 text-[10px] text-emerald-700">你</span>}
                 </span>
-                <span className="shrink-0 tabular-nums text-stone-500">
+                <span className="mt-0.5 flex items-center gap-1.5 text-[11px] tabular-nums text-stone-500">
                   <span className="inline-flex items-center gap-0.5 text-[#7a5c1e]">
                     <Star aria-hidden className="size-3" />
                     {member.bookCount} 本
                   </span>
-                  <span className="ml-2">{formatWords(member.wordCount)}</span>
+                  <span className="truncate">{formatWords(member.wordCount)}</span>
                 </span>
               </li>
             ) : (
               <li
                 key={`empty-${i}`}
                 aria-hidden
-                className="flex items-center gap-2 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-2.5 py-2 text-xs text-stone-400"
+                className="flex min-w-0 items-center gap-1.5 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-2 py-1.5 text-xs text-stone-400"
               >
-                <UserRoundPlus className="size-3.5" />
-                空位 · 等待队长拉人
+                <UserRoundPlus className="size-3.5 shrink-0" />
+                <span className="truncate">空位</span>
               </li>
             ),
           )}
