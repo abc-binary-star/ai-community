@@ -50,7 +50,7 @@ func teamToDTO(t *model.ActivityTeam, members []model.ActivityMember, litTiles m
 		dto.Members = append(dto.Members, types.ActivityMemberDTO{
 			ID:        m.ID,
 			UserID:    m.UserID,
-			Name:      displayNameOf(&m.User),
+			Name:      memberNameOf(m),
 			AvatarURL: avatarOf(&m.User),
 			IsCaptain: m.IsCaptain,
 			BookCount: m.BookCount,

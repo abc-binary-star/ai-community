@@ -133,7 +133,9 @@ interface ActivityState {
   submitCheckIn: (tileIndex: number, books: CheckInDraftBook[], evidenceUrl?: string) => Promise<void>
   deleteCheckIn: (checkInId: string) => Promise<void>
   /** 报名活动（幂等）；成功后刷新快照，enrolled 随之更新 */
-  enroll: () => Promise<void>
+  enroll: (nickname?: string) => Promise<void>
+  /** 自助选组入队（可选成为队长）；成功后刷新快照进入队伍视图 */
+  joinTeam: (teamId: string, isCaptain: boolean) => Promise<void>
   /** 表单内即时提示用的本地查重，返回重复书名 */
   findDuplicates: (memberId: string, books: Array<{ title: string; author: string }>) => string[]
 }
@@ -271,16 +273,31 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     }
   },
 
-  enroll: async () => {
+  enroll: async (nickname) => {
     if (get().enrolling) return
     set({ enrolling: true, error: null })
     try {
-      await api.enroll()
+      await api.enroll(nickname)
       set({ enrolled: true })
       // 报名后仍未入组，刷新即可看到报名状态；已入组场景由服务端幂等返回
       await get().refresh()
     } catch (err) {
       set({ error: errMessage(err, '报名失败') })
+    } finally {
+      set({ enrolling: false })
+    }
+  },
+
+  joinTeam: async (teamId, isCaptain) => {
+    if (get().enrolling) return
+    set({ enrolling: true, error: null })
+    try {
+      await api.joinTeam(teamId, isCaptain)
+      // 入队成功后刷新快照，myTeamId 就位后进入队伍视图
+      await get().refresh()
+    } catch (err) {
+      set({ error: errMessage(err, '加入队伍失败') })
+      throw err
     } finally {
       set({ enrolling: false })
     }

@@ -200,6 +200,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	captain.PUT("", handler.UpdateTeamByCaptain)
 	captain.GET("/enrollments", handler.ListActivityEnrollments)
 	captain.POST("/members", handler.AddTeamMemberByCaptain)
+	// 自助选组入队（可选成为队长）
+	captain.POST("/join", handler.JoinActivityTeam)
 
 	// 人工终审台与运营后台（PRD 9.3 / 第 13 节）
 	activityAdmin := h.Group("/api/activity/hell-board/admin",

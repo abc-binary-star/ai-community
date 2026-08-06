@@ -10,6 +10,9 @@ import "github.com/abc-binary-star/ai-community/server-go/internal/model"
 // TileCount 环形棋盘固定 20 格
 const TileCount = 20
 
+// MaxTeamSize 队伍容量上限：满员后自助入队/队长拉人均拒绝
+const MaxTeamSize = 5
+
 // FallbackThreshold 格子内保底阈值：本格累计通过审核 40 本即保底点亮（P1-5）
 const FallbackThreshold = 40
 

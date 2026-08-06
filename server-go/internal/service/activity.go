@@ -46,6 +46,8 @@ var (
 	ErrActivityNotEditable     = &ActivityError{Msg: "该打卡已进入终审，不可自行删除", Code: 409}
 	ErrActivityAlreadyInTeam   = &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
 	ErrActivityNotEnrolled     = &ActivityError{Msg: "该用户尚未报名活动", Code: 409}
+	ErrActivityTeamFull        = &ActivityError{Msg: "该队伍已满员", Code: 409}
+	ErrActivityCaptainTaken    = &ActivityError{Msg: "该队伍已有队长，队长位不可重复选择", Code: 409}
 	ErrActivityEmblemLocked    = &ActivityError{Msg: "队伍形象已确定，一次性选择后不可更换", Code: 409}
 )
 
@@ -136,6 +138,15 @@ func displayNameOf(u *model.User) string {
 		return *u.DisplayName
 	}
 	return u.Username
+}
+
+// memberNameOf 成员在活动内的展示名：优先报名昵称（入队时带入），
+// 为空时回退到账号昵称
+func memberNameOf(m *model.ActivityMember) string {
+	if m.Nickname != "" {
+		return m.Nickname
+	}
+	return displayNameOf(&m.User)
 }
 
 // avatarOf 头像 URL，空值返回空串

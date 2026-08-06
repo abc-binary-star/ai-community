@@ -128,6 +128,9 @@ type ActivityMember struct {
 	UserID    string `gorm:"index;not null" json:"userId"`
 	User      User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
 	IsCaptain bool   `gorm:"default:false" json:"isCaptain"`
+	// Nickname 活动内昵称：入队时从报名记录带入，榜单/成员列表展示用，
+	// 为空时回退到社区账号昵称
+	Nickname string `gorm:"size:50" json:"nickname,omitempty"`
 	// BookCount / WordCount 为终审通过的累计值，榜单直接取用
 	BookCount int       `gorm:"default:0;not null" json:"bookCount"`
 	WordCount int64     `gorm:"default:0;not null" json:"wordCount"`
@@ -150,7 +153,9 @@ type ActivityEnrollment struct {
 	ID     string `gorm:"primaryKey" json:"id"`
 	UserID string `gorm:"uniqueIndex;not null" json:"userId"`
 	User   User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
-	// CreatedAt 报名时间，队长按报名先后拉人
+	// Nickname 报名时填写的活动内昵称，仅活动内展示（榜单/成员列表），
+	// 为空时回退到社区账号昵称
+	Nickname  string `gorm:"size:50" json:"nickname,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

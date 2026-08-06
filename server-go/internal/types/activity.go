@@ -69,10 +69,25 @@ type EnrollmentDTO struct {
 	UserID    string `json:"userId"`
 	Name      string `json:"name"`
 	AvatarURL string `json:"avatarUrl,omitempty"`
+	// Nickname 报名时填写的活动内昵称，为空时回退到账号昵称
+	Nickname string `json:"nickname,omitempty"`
 	// 已入队时的队伍信息；空表示待入队
 	TeamID   string `json:"teamId,omitempty"`
 	TeamName string `json:"teamName,omitempty"`
 	Joined   bool   `json:"joined"`
+}
+
+// ActivityEnrollReq 报名活动请求
+type ActivityEnrollReq struct {
+	// Nickname 活动内昵称，用于榜单/成员列表展示，为空时使用账号昵称
+	Nickname string `json:"nickname" vd:"len($)<=50"`
+}
+
+// ActivityJoinTeamReq 自助选组入队请求
+type ActivityJoinTeamReq struct {
+	TeamID string `json:"teamId" vd:"len($)>=1"`
+	// IsCaptain 是否成为队长；仅当该队队长位空缺时可选
+	IsCaptain bool `json:"isCaptain"`
 }
 
 // ActivityTeamAddMemberReq 队长从报名名单拉人入队

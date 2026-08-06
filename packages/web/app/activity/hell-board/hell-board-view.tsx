@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { BookOpen, Eye, EyeOff, Gavel, Loader2, LogOut, Sparkles, UserPlus, Users } from 'lucide-react'
+import { BookOpen, Eye, EyeOff, Gavel, Loader2, LogOut, Sparkles, Users } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { BoardGrid } from './components/board-grid'
 import { BoardTextView } from './components/board-text-view'
 import { CheckInFormDialog } from './components/checkin-form-dialog'
 import { CurrentTaskPanel } from './components/current-task-panel'
+import { EnrollWizard } from './components/enroll-wizard'
 import { RankingPanel } from './components/ranking-panel'
 import { TeamPanel } from './components/team-panel'
 import { TileDetailDialog } from './components/tile-detail-dialog'
@@ -25,10 +26,8 @@ export function HellBoardView() {
   const archived = useActivityStore((s) => s.archived)
   const myMemberId = useActivityStore((s) => s.myMemberId)
   const enrolled = useActivityStore((s) => s.enrolled)
-  const enrolling = useActivityStore((s) => s.enrolling)
   const loadAll = useActivityStore((s) => s.loadAll)
   const refresh = useActivityStore((s) => s.refresh)
-  const enroll = useActivityStore((s) => s.enroll)
 
   const currentTeam = useCurrentTeam()
   const isCaptain = useIsCaptain()
@@ -162,20 +161,10 @@ export function HellBoardView() {
                 <p className="flex items-center gap-2 text-sm font-black"><Users className="size-4 text-emerald-700" />观战模式</p>
                 <p className="mt-1.5 text-xs leading-relaxed text-stone-600">
                   {enrolled
-                    ? '你已报名本次活动，等待队长从报名名单把你拉入队伍后，即可打卡与掷骰。'
-                    : '你已登录，但不在本次活动的任何小组中，因此没有打卡与掷骰入口。报名后队长可从报名名单把你拉进队伍。'}
+                    ? '你已报名，等待选择小组加入后即可打卡与掷骰。'
+                    : '你已登录，但不在本次活动的任何小组中。报名并选择小组后即可参与。'}
                 </p>
-                {!enrolled && !archived && (
-                  <button
-                    type="button"
-                    onClick={() => void enroll()}
-                    disabled={enrolling}
-                    className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#ffd166] px-3 text-xs font-black text-stone-900 shadow-[3px_3px_0_#292524] transition-all hover:bg-[#f5c34f] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none"
-                  >
-                    {enrolling ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
-                    {enrolling ? '报名中…' : '立即报名'}
-                  </button>
-                )}
+                {!archived && <EnrollWizard />}
               </div>
             )}
           </div>

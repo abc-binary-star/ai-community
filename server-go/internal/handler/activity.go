@@ -358,11 +358,31 @@ func ExportActivityResults(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
-// EnrollActivity 报名活动（入队的前提）
+// EnrollActivity 报名活动（入队的前提），可携带活动内昵称
 // POST /api/activity/hell-board/enroll
 func EnrollActivity(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.Enroll(ctx, userID)
+	var req types.ActivityEnrollReq
+	// 兼容空 body 报名：绑定失败视为空昵称
+	_ = c.Bind(&req)
+	dto, err := activityService.Enroll(ctx, userID, req.Nickname)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, dto)
+}
+
+// JoinActivityTeam 自助选组入队，可同步选择成为队长
+// POST /api/activity/hell-board/team/join
+func JoinActivityTeam(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityJoinTeamReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.JoinTeam(ctx, userID, req.TeamID, req.IsCaptain)
 	if err != nil {
 		handleServiceError(c, err)
 		return

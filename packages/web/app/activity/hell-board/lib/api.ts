@@ -181,9 +181,20 @@ export function updateTeam(
 
 // --- 报名与队长管理 ---
 
-/** 报名活动（入队的前提）。重复报名幂等返回当前状态 */
-export function enroll(): Promise<EnrollmentItem> {
-  return apiFetch<EnrollmentItem>(`${BASE}/enroll`, { method: 'POST' })
+/** 报名活动（入队的前提），可携带活动内昵称。重复报名幂等返回当前状态 */
+export function enroll(nickname?: string): Promise<EnrollmentItem> {
+  return apiFetch<EnrollmentItem>(`${BASE}/enroll`, {
+    method: 'POST',
+    body: JSON.stringify({ nickname: nickname ?? '' }),
+  })
+}
+
+/** 自助选组入队：报名用户直接加入队伍，可同步选择成为队长 */
+export function joinTeam(teamId: string, isCaptain: boolean): Promise<unknown> {
+  return apiFetch(`${BASE}/team/join`, {
+    method: 'POST',
+    body: JSON.stringify({ teamId, isCaptain }),
+  })
 }
 
 /** 报名名单（仅队长可见）：已报名人员及入队状态 */
