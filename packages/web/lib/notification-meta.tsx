@@ -17,3 +17,16 @@ export const TYPE_LABEL: Record<Notification['type'], string> = {
   reply: '回复了你的评论',
   mention: '在帖子中提及了你',
 }
+
+// 想法（批注）通知文案：与评论通知区分，需要知道是否带 annotationId
+const ANNOTATION_LABEL: Partial<Record<Notification['type'], string>> = {
+  comment: '评论了你的想法',
+  like: '点赞了你的想法',
+  reply: '回复了你的想法',
+  mention: '在想法中提及了你',
+}
+
+export function notificationLabel(n: Notification): string {
+  const label = n.annotationId ? ANNOTATION_LABEL[n.type] : undefined
+  return label ?? TYPE_LABEL[n.type]
+}

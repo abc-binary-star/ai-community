@@ -19,7 +19,7 @@ import { useAuthStore } from '@/lib/store'
 const REPORT_REASONS = ['垃圾广告', '侮辱谩骂', '色情低俗', '违法违规', '内容不实']
 
 // 举报按钮：下拉选择原因即提交（菜单选择后自动收起）
-export function ReportButton({ targetType, targetId }: { targetType: 'post' | 'comment'; targetId: string }) {
+export function ReportButton({ targetType, targetId }: { targetType: 'post' | 'comment' | 'annotation' | 'annotation_reply'; targetId: string }) {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
 

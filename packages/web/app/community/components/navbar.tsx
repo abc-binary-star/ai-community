@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, FileText, LogOut, MessageCircle, Menu, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
+import { Bookmark, ChevronDown, FileText, LogOut, Megaphone, Menu, MessageCircle, PenLine, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -200,6 +200,14 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                       <Link href="/community/moderation">
                         <ShieldCheck />
                         内容审核
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {user.role === 'admin' && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/community/announcements/admin">
+                        <Megaphone />
+                        公告管理
                       </Link>
                     </DropdownMenuItem>
                   )}

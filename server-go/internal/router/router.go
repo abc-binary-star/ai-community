@@ -68,6 +68,30 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.DELETE("/api/posts/:id/highlights/:highlightId", middleware.Auth(), handler.DeleteHighlight)
 	h.PUT("/api/posts/:id/highlights/:highlightId", middleware.Auth(), handler.UpdateHighlight)
 
+	// --- 段落想法（批注）路由 ---
+	h.GET("/api/posts/:id/annotations", middleware.OptionalAuth(), handler.ListAnnotations)
+	h.POST("/api/posts/:id/annotations", middleware.Auth(), handler.CreateAnnotation)
+	h.PATCH("/api/posts/:id/annotations/:annotationId", middleware.Auth(), handler.UpdateAnnotation)
+	h.DELETE("/api/posts/:id/annotations/:annotationId", middleware.Auth(), handler.DeleteAnnotation)
+	h.GET("/api/posts/:id/annotations/:annotationId/replies", middleware.OptionalAuth(), handler.ListAnnotationReplies)
+	h.POST("/api/posts/:id/annotations/:annotationId/replies", middleware.Auth(), handler.CreateAnnotationReply)
+	h.POST("/api/posts/:id/annotations/:annotationId/like", middleware.Auth(), handler.LikeAnnotation)
+	h.DELETE("/api/posts/:id/annotations/:annotationId/like", middleware.Auth(), handler.UnlikeAnnotation)
+	h.PATCH("/api/annotation-replies/:id", middleware.Auth(), handler.UpdateAnnotationReply)
+	h.DELETE("/api/annotation-replies/:id", middleware.Auth(), handler.DeleteAnnotationReply)
+
+	// --- 官方公告路由 ---
+	h.GET("/api/announcements", middleware.OptionalAuth(), handler.ListAnnouncements)
+	h.POST("/api/announcements", middleware.Auth(), middleware.RequireRole("admin"), handler.CreateAnnouncement)
+	h.GET("/api/announcements/banner", middleware.OptionalAuth(), handler.GetAnnouncementBanner)
+	h.GET("/api/announcements/unread-count", middleware.Auth(), handler.GetAnnouncementUnreadCount)
+	h.POST("/api/announcements/read-all", middleware.Auth(), handler.MarkAllAnnouncementsRead)
+	h.POST("/api/announcements/:id/read", middleware.Auth(), handler.MarkAnnouncementRead)
+	h.GET("/api/announcements/:id", middleware.OptionalAuth(), handler.GetAnnouncement)
+	h.PUT("/api/announcements/:id", middleware.Auth(), middleware.RequireRole("admin"), handler.UpdateAnnouncement)
+	h.PUT("/api/announcements/:id/status", middleware.Auth(), middleware.RequireRole("admin"), handler.UpdateAnnouncementStatus)
+	h.DELETE("/api/announcements/:id", middleware.Auth(), middleware.RequireRole("admin"), handler.DeleteAnnouncement)
+
 	// --- AI 辅助创作路由 ---
 	ai := h.Group("/api/ai", middleware.Auth())
 	ai.POST("/enrich", middleware.AILimit(ailimit.FeatureEnrich), handler.Enrich)

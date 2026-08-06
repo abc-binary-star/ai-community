@@ -99,6 +99,7 @@ export interface Notification {
   actorName: string | null
   postId: string | null
   commentId: string | null
+  annotationId: string | null
   content: string | null
   read: boolean
   createdAt: string
@@ -244,4 +245,96 @@ export interface Highlight {
   selectedText: string
   color: string
   createdAt: string
+}
+
+// 段落想法（批注）
+export interface Annotation {
+  id: string
+  postId: string
+  authorId: string
+  author: PublicUser
+  scope: 'selection' | 'paragraph'
+  anchor: string
+  startOffset: number
+  endOffset: number
+  selectedText: string
+  prefix: string
+  suffix: string
+  paragraphSnapshot: string
+  body: string
+  visibility: 'public' | 'private'
+  anchorStatus: 'attached' | 'orphaned'
+  status: 'active' | 'deleted' | 'moderated'
+  edited: boolean
+  replyCount: number
+  likeCount: number
+  liked: boolean
+  folded: boolean
+  replies: AnnotationReply[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AnnotationReply {
+  id: string
+  annotationId: string
+  authorId: string
+  author: PublicUser
+  replyToUserId?: string
+  body: string
+  status: 'active' | 'deleted' | 'moderated'
+  edited: boolean
+  folded: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AnnotationAnchorCount {
+  anchor: string
+  count: number
+}
+
+export interface AnnotationList {
+  items: Annotation[]
+  anchorCounts: AnnotationAnchorCount[]
+  total: number
+}
+
+// --- 官方公告 ---
+
+export type AnnouncementCategory = 'moderation' | 'rule' | 'feature' | 'maintenance' | 'activity'
+export type AnnouncementLevel = 'urgent' | 'important' | 'normal'
+export type AnnouncementStatus = 'draft' | 'published' | 'offline'
+
+export interface PenaltyItem {
+  username: string
+  reason: string
+  action: string
+  date?: string
+}
+
+export interface AnnouncementSummary {
+  id: string
+  title: string
+  category: AnnouncementCategory
+  level: AnnouncementLevel
+  status: AnnouncementStatus
+  isPinned: boolean
+  publishAt: string
+  expireAt: string | null
+  edited: boolean
+  isRead: boolean
+  authorId: string
+  author: PublicUser
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Announcement extends AnnouncementSummary {
+  content: string
+  penaltyList: PenaltyItem[]
+}
+
+export interface AnnouncementBanner {
+  item: AnnouncementSummary | null
 }

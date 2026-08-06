@@ -28,19 +28,19 @@ func PublicUserToDTO(u *model.User, postCount, followerCount, followingCount, li
 		channels = []string{}
 	}
 	return types.PublicUser{
-		ID:            u.ID,
-		Username:      u.Username,
-		Avatar:        u.Avatar,
-		Bio:           u.Bio,
-		DisplayName:   u.DisplayName,
-		Role:          u.Role,
-		PostCount:     postCount,
-		FollowerCount: followerCount,
+		ID:             u.ID,
+		Username:       u.Username,
+		Avatar:         u.Avatar,
+		Bio:            u.Bio,
+		DisplayName:    u.DisplayName,
+		Role:           u.Role,
+		PostCount:      postCount,
+		FollowerCount:  followerCount,
 		FollowingCount: followingCount,
-		LikeCount:     likeCount,
-		Channels:      channels,
-		IsFollowing:   isFollowing,
-		CreatedAt:     u.CreatedAt.Format(time.RFC3339),
+		LikeCount:      likeCount,
+		Channels:       channels,
+		IsFollowing:    isFollowing,
+		CreatedAt:      u.CreatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -114,15 +114,16 @@ func CommentToDTO(c *model.Comment, liked bool, replies []types.Comment, replyCo
 // NotificationToDTO 将 Notification model 转为 Notification DTO
 func NotificationToDTO(n *model.Notification, actorName *string) types.Notification {
 	return types.Notification{
-		ID:        n.ID,
-		Type:      n.Type,
-		ActorID:   n.ActorID,
-		ActorName: actorName,
-		PostID:    n.PostID,
-		CommentID: n.CommentID,
-		Content:   n.Content,
-		Read:      n.Read,
-		CreatedAt: n.CreatedAt.Format(time.RFC3339),
+		ID:           n.ID,
+		Type:         n.Type,
+		ActorID:      n.ActorID,
+		ActorName:    actorName,
+		PostID:       n.PostID,
+		CommentID:    n.CommentID,
+		AnnotationID: n.AnnotationID,
+		Content:      n.Content,
+		Read:         n.Read,
+		CreatedAt:    n.CreatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -133,4 +134,65 @@ func ExtractTagNames(tags []model.Tag) []string {
 		names = append(names, t.Name)
 	}
 	return names
+}
+
+// AnnotationToDTO 将 Annotation model 转为 Annotation DTO。
+// liked/folded/replies 由调用方设置。删除/审核状态下隐藏正文（不泄露原内容）。
+func AnnotationToDTO(a *model.Annotation, liked, folded bool, replies []types.AnnotationReply) types.Annotation {
+	if replies == nil {
+		replies = []types.AnnotationReply{}
+	}
+	body := a.Body
+	// deleted 根占位与 moderated 下架：正文不下发
+	if a.Status != model.AnnotationStatusActive {
+		body = ""
+	}
+	return types.Annotation{
+		ID:                a.ID,
+		PostID:            a.PostID,
+		AuthorID:          a.UserID,
+		Author:            AuthorToDTO(&a.User),
+		Scope:             a.Scope,
+		Anchor:            a.Anchor,
+		StartOffset:       a.StartOffset,
+		EndOffset:         a.EndOffset,
+		SelectedText:      a.SelectedText,
+		Prefix:            a.Prefix,
+		Suffix:            a.Suffix,
+		ParagraphSnapshot: a.ParagraphSnapshot,
+		Body:              body,
+		Visibility:        a.Visibility,
+		AnchorStatus:      a.AnchorStatus,
+		Status:            a.Status,
+		Edited:            a.Edited,
+		ReplyCount:        a.ReplyCount,
+		LikeCount:         a.LikeCount,
+		Liked:             liked,
+		Folded:            folded,
+		Replies:           replies,
+		CreatedAt:         a.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         a.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+// AnnotationReplyToDTO 将 AnnotationReply model 转为 DTO。
+// folded 由调用方设置；删除/审核状态下隐藏正文。
+func AnnotationReplyToDTO(r *model.AnnotationReply, folded bool) types.AnnotationReply {
+	body := r.Body
+	if r.Status != model.AnnotationStatusActive {
+		body = ""
+	}
+	return types.AnnotationReply{
+		ID:            r.ID,
+		AnnotationID:  r.AnnotationID,
+		AuthorID:      r.UserID,
+		Author:        AuthorToDTO(&r.User),
+		ReplyToUserID: r.ReplyToUserID,
+		Body:          body,
+		Status:        r.Status,
+		Edited:        r.Edited,
+		Folded:        folded,
+		CreatedAt:     r.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     r.UpdatedAt.Format(time.RFC3339),
+	}
 }

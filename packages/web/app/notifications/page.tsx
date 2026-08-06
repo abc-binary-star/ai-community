@@ -11,7 +11,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { CommunityShell } from '@/app/community/components/community-shell'
 import { cn, formatRelativeTime } from '@/lib/utils'
-import { TYPE_ICON, TYPE_LABEL } from '@/lib/notification-meta'
+import { TYPE_ICON, notificationLabel } from '@/lib/notification-meta'
 import { toast } from 'sonner'
 import type { Notification, Paginated } from 'shared'
 
@@ -132,7 +132,7 @@ function NotificationsContent() {
                   <div className="flex items-center gap-2">
                     <span className={cn('text-sm', !n.read && 'font-semibold')}>
                       <span className="text-primary">{n.actorName || '匿名'}</span>{' '}
-                      {TYPE_LABEL[n.type]}
+                      {notificationLabel(n)}
                     </span>
                     {!n.read && (
                       <span className="size-2 rounded-full bg-destructive" />

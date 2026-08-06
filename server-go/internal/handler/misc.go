@@ -26,9 +26,13 @@ func handleServiceError(c *app.RequestContext, err error) {
 		response.Error(c, e.Code, e.Msg)
 	case *service.PostError:
 		response.Error(c, e.Code, e.Msg)
+	case *service.AnnotationError:
+		response.Error(c, e.Code, e.Msg)
 	case *service.NotificationError:
 		response.Error(c, e.Code, e.Msg)
 	case *service.MessageError:
+		response.Error(c, e.Code, e.Msg)
+	case *service.AnnouncementError:
 		response.Error(c, e.Code, e.Msg)
 	case *service.PostSummaryError:
 		response.Error(c, e.Code, e.Msg)

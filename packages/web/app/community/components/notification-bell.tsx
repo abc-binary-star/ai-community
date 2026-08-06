@@ -18,7 +18,7 @@ import { cn, formatRelativeTime } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
-import { TYPE_ICON, TYPE_LABEL } from '@/lib/notification-meta'
+import { TYPE_ICON, notificationLabel } from '@/lib/notification-meta'
 import { toast } from 'sonner'
 import type { Notification, Paginated } from 'shared'
 
@@ -141,7 +141,7 @@ export function NotificationBell() {
                     {TYPE_ICON[n.type]}
                   </span>
                   <span className={cn('flex-1 truncate', !n.read && 'font-medium')}>
-                    {n.actorName || '匿名'} {TYPE_LABEL[n.type]}
+                    {n.actorName || '匿名'} {notificationLabel(n)}
                   </span>
                   {!n.read && <span className="size-2 shrink-0 rounded-full bg-destructive" />}
                 </div>

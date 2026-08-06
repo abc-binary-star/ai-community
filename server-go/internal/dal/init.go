@@ -49,11 +49,11 @@ func Init(cfg *conf.Config) {
 		&model.Bookmark{},
 		&model.Follow{},
 		&model.Notification{},
-&model.Report{},
-	&model.Channel{},
-&model.ChannelCategory{},
-&model.Block{},
-	&model.NotificationPreference{},
+		&model.Report{},
+		&model.Channel{},
+		&model.ChannelCategory{},
+		&model.Block{},
+		&model.NotificationPreference{},
 		&model.Conversation{},
 		&model.Message{},
 		&model.PostSummary{},
@@ -67,6 +67,11 @@ func Init(cfg *conf.Config) {
 		&model.AIContentDigest{},
 		&model.Image{},
 		&model.Highlight{},
+		&model.Annotation{},
+		&model.AnnotationReply{},
+		&model.AnnotationLike{},
+		&model.Announcement{},
+		&model.AnnouncementRead{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

@@ -12,6 +12,7 @@ import {
   Gamepad2,
   Hash,
   Leaf,
+  Megaphone,
   type LucideIcon,
   MessageCircle,
   Palette,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useChannelTree } from '@/lib/use-channel-tree'
 import { useCollapsedState } from '@/lib/use-collapsed-state'
+import { useAnnouncementUnread } from '@/lib/use-announcements'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { cn } from '@/lib/utils'
 
@@ -36,6 +38,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'sparkles': Sparkles,
   'file-text': FileText,
   'bookmark': Bookmark,
+  'megaphone': Megaphone,
   'hash': Hash,
 }
 
@@ -130,6 +133,7 @@ function ChannelItem({
   iconFallback,
   href,
   active,
+  badge,
   onNavigate,
 }: {
   label: string
@@ -137,6 +141,7 @@ function ChannelItem({
   iconFallback?: string
   href: string
   active: boolean
+  badge?: number
   onNavigate?: () => void
 }) {
   const Icon = getIcon(icon, iconFallback)
@@ -154,6 +159,11 @@ function ChannelItem({
     >
       <Icon className="size-4 shrink-0" />
       <span className="truncate">{label}</span>
+      {typeof badge === 'number' && badge > 0 && (
+        <span className="ml-auto flex size-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -174,6 +184,7 @@ function SidebarContent({
   onClose?: () => void
 }) {
   const { data: tree } = useChannelTree()
+  const { data: announcementUnread } = useAnnouncementUnread()
   const [searchQuery, setSearchQuery] = useState('')
 
   // 构建频道树，API 不可用时使用 fallback
@@ -317,6 +328,14 @@ function SidebarContent({
           icon="bookmark"
           href="/bookmarks"
           active={false}
+          onNavigate={onNavigate}
+        />
+        <ChannelItem
+          label="公告中心"
+          icon="megaphone"
+          href="/community/announcements"
+          active={false}
+          badge={announcementUnread?.count ?? 0}
           onNavigate={onNavigate}
         />
       </div>

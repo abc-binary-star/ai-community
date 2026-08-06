@@ -196,3 +196,36 @@ function offsetInBlock(block: HTMLElement, node: Node, offset: number): number {
   }
   return pos
 }
+
+// 批注（段落想法）用的选区上下文：在划线选区基础上补充 TextQuoteSelector 的
+// prefix/suffix 与段落快照，供作者编辑后服务端重定位（对齐锚点失效分析 L1-L4）。
+const ANNOTATION_CONTEXT_LEN = 40
+
+export interface SelectionContext extends SelectionInfo {
+  prefix: string
+  suffix: string
+  paragraphSnapshot: string
+}
+
+// getBlockText 暴露块内可见纯文本（跳过 code/pre），供整段批注取段落快照。
+export function getBlockText(block: HTMLElement): string {
+  return blockText(block)
+}
+
+// getSelectionContext 返回当前选区的完整批注上下文；仅当选区落在单个可批注块内时返回。
+export function getSelectionContext(container: HTMLElement): SelectionContext | null {
+  const info = getSelectionInBlock(container)
+  if (!info) return null
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  const startEl = nodeToElement(range.startContainer)
+  const block = startEl?.closest('[data-block-anchor]') as HTMLElement | null
+  if (!block) return null
+  const full = blockText(block)
+  const start = Math.max(0, Math.min(info.startOffset, full.length))
+  const end = Math.max(start, Math.min(info.endOffset, full.length))
+  const prefix = full.substring(Math.max(0, start - ANNOTATION_CONTEXT_LEN), start).trim()
+  const suffix = full.substring(end, Math.min(full.length, end + ANNOTATION_CONTEXT_LEN)).trim()
+  return { ...info, prefix, suffix, paragraphSnapshot: full.trim() }
+}

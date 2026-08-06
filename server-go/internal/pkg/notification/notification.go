@@ -18,12 +18,13 @@ var mentionRegex = regexp.MustCompile(`@([a-zA-Z0-9_\x{4e00}-\x{9fff}]{2,20})`)
 
 // CreateInput 创建通知的参数
 type CreateInput struct {
-	UserID    string
-	Type      string // comment | like | follow | reply | mention
-	ActorID   string
-	PostID    string
-	CommentID string
-	Content   string
+	UserID       string
+	Type         string // comment | like | follow | reply | mention
+	ActorID      string
+	PostID       string
+	CommentID    string
+	AnnotationID string
+	Content      string
 }
 
 // Create 创建一条通知。
@@ -40,13 +41,16 @@ func Create(ctx context.Context, input CreateInput) {
 	}
 
 	actorID := &input.ActorID
-	var postID, commentID *string
+	var postID, commentID, annotationID *string
 	var content *string
 	if input.PostID != "" {
 		postID = &input.PostID
 	}
 	if input.CommentID != "" {
 		commentID = &input.CommentID
+	}
+	if input.AnnotationID != "" {
+		annotationID = &input.AnnotationID
 	}
 	if input.Content != "" {
 		content = &input.Content
@@ -62,6 +66,9 @@ func Create(ctx context.Context, input CreateInput) {
 		if input.PostID != "" {
 			query = query.Where("post_id = ?", input.PostID)
 		}
+		if input.AnnotationID != "" {
+			query = query.Where("annotation_id = ?", input.AnnotationID)
+		}
 		if err := query.First(&existing).Error; err == nil {
 			return // 已存在，跳过
 		} else if err != gorm.ErrRecordNotFound {
@@ -71,12 +78,13 @@ func Create(ctx context.Context, input CreateInput) {
 	}
 
 	notif := &model.Notification{
-		UserID:    input.UserID,
-		Type:      input.Type,
-		ActorID:   actorID,
-		PostID:    postID,
-		CommentID: commentID,
-		Content:   content,
+		UserID:       input.UserID,
+		Type:         input.Type,
+		ActorID:      actorID,
+		PostID:       postID,
+		CommentID:    commentID,
+		AnnotationID: annotationID,
+		Content:      content,
 	}
 	if err := dal.DB.WithContext(ctx).Create(notif).Error; err != nil {
 		log.Printf("创建通知失败: %v", err)
@@ -99,6 +107,19 @@ func ParseMentions(content string) []string {
 
 // CreateMentionNotifications 解析内容中的 @提及并为每个被提及的用户创建通知
 func CreateMentionNotifications(ctx context.Context, content, actorID, postID string, commentID ...string) {
+	cid := ""
+	if len(commentID) > 0 {
+		cid = commentID[0]
+	}
+	createMentionNotifications(ctx, content, actorID, postID, cid, "")
+}
+
+// CreateAnnotationMentionNotifications 想法正文/回复中的 @提及通知
+func CreateAnnotationMentionNotifications(ctx context.Context, content, actorID, postID, annotationID string) {
+	createMentionNotifications(ctx, content, actorID, postID, "", annotationID)
+}
+
+func createMentionNotifications(ctx context.Context, content, actorID, postID, commentID, annotationID string) {
 	usernames := ParseMentions(content)
 	if len(usernames) == 0 {
 		return
@@ -110,11 +131,6 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 		return
 	}
 
-	cid := ""
-	if len(commentID) > 0 {
-		cid = commentID[0]
-	}
-
 	// 截断过长内容（按 rune 计，避免截断中文产生乱码）
 	notifContent := content
 	runes := []rune(content)
@@ -124,12 +140,13 @@ func CreateMentionNotifications(ctx context.Context, content, actorID, postID st
 
 	for _, u := range users {
 		Create(ctx, CreateInput{
-			UserID:    u.ID,
-			Type:      "mention",
-			ActorID:   actorID,
-			PostID:    postID,
-			CommentID: cid,
-			Content:   notifContent,
+			UserID:       u.ID,
+			Type:         "mention",
+			ActorID:      actorID,
+			PostID:       postID,
+			CommentID:    commentID,
+			AnnotationID: annotationID,
+			Content:      notifContent,
 		})
 	}
 }

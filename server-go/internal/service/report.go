@@ -25,9 +25,9 @@ type ReportError struct {
 func (e *ReportError) Error() string { return e.Msg }
 
 var (
-	ErrReportNotFound         = &ReportError{Msg: "举报不存在", Code: 404}
-	ErrAlreadyReported        = &ReportError{Msg: "你已经举报过该内容", Code: 400}
-	ErrReportAlreadyHandled   = &ReportError{Msg: "该举报已被处理", Code: 400}
+	ErrReportNotFound       = &ReportError{Msg: "举报不存在", Code: 404}
+	ErrAlreadyReported      = &ReportError{Msg: "你已经举报过该内容", Code: 400}
+	ErrReportAlreadyHandled = &ReportError{Msg: "该举报已被处理", Code: 400}
 )
 
 // reportBodyLimit 目标内容快照截断长度
@@ -49,6 +49,18 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterID string, req
 		if cnt == 0 {
 			return nil, ErrCommentNotFound
 		}
+	case "annotation":
+		var cnt int64
+		dal.DB.WithContext(ctx).Model(&model.Annotation{}).Where("id = ?", req.TargetID).Count(&cnt)
+		if cnt == 0 {
+			return nil, &ReportError{Msg: "想法不存在", Code: 404}
+		}
+	case "annotation_reply":
+		var cnt int64
+		dal.DB.WithContext(ctx).Model(&model.AnnotationReply{}).Where("id = ?", req.TargetID).Count(&cnt)
+		if cnt == 0 {
+			return nil, &ReportError{Msg: "回复不存在", Code: 404}
+		}
 	default:
 		return nil, ErrInvalidInput
 	}
@@ -62,6 +74,16 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterID string, req
 	} else if req.TargetType == "comment" {
 		var comment model.Comment
 		if err := dal.DB.WithContext(ctx).Select("author_id").First(&comment, "id = ?", req.TargetID).Error; err == nil && comment.AuthorID == reporterID {
+			return nil, &ReportError{Msg: "不能举报自己的内容", Code: 400}
+		}
+	} else if req.TargetType == "annotation" {
+		var ann model.Annotation
+		if err := dal.DB.WithContext(ctx).Select("user_id").First(&ann, "id = ?", req.TargetID).Error; err == nil && ann.UserID == reporterID {
+			return nil, &ReportError{Msg: "不能举报自己的内容", Code: 400}
+		}
+	} else if req.TargetType == "annotation_reply" {
+		var rep model.AnnotationReply
+		if err := dal.DB.WithContext(ctx).Select("user_id").First(&rep, "id = ?", req.TargetID).Error; err == nil && rep.UserID == reporterID {
 			return nil, &ReportError{Msg: "不能举报自己的内容", Code: 400}
 		}
 	}
@@ -165,6 +187,10 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 				tx.Delete(&model.Post{}, "id = ?", report.TargetID)
 			case "comment":
 				tx.Delete(&model.Comment{}, "id = ?", report.TargetID)
+			case "annotation":
+				tx.Model(&model.Annotation{}).Where("id = ?", report.TargetID).Update("status", model.AnnotationStatusModerated)
+			case "annotation_reply":
+				tx.Model(&model.AnnotationReply{}).Where("id = ?", report.TargetID).Update("status", model.AnnotationStatusModerated)
 			}
 			// 同步处理同目标的其他待处理举报
 			tx.Model(&model.Report{}).
@@ -193,11 +219,14 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 func (s *ReportService) fillTargetSnapshots(ctx context.Context, reports []model.Report) {
 	postIDs := make([]string, 0)
 	commentIDs := make([]string, 0)
+	annotationIDs := make([]string, 0)
 	for _, r := range reports {
 		if r.TargetType == "post" {
 			postIDs = append(postIDs, r.TargetID)
 		} else if r.TargetType == "comment" {
 			commentIDs = append(commentIDs, r.TargetID)
+		} else if r.TargetType == "annotation" || r.TargetType == "annotation_reply" {
+			annotationIDs = append(annotationIDs, r.TargetID)
 		}
 	}
 
@@ -219,6 +248,20 @@ func (s *ReportService) fillTargetSnapshots(ctx context.Context, reports []model
 		}
 	}
 
+	annotationBodies := make(map[string]string, len(annotationIDs))
+	if len(annotationIDs) > 0 {
+		var anns []model.Annotation
+		dal.DB.WithContext(ctx).Select("id", "body").Where("id IN ?", annotationIDs).Find(&anns)
+		for _, a := range anns {
+			annotationBodies[a.ID] = a.Body
+		}
+		var reps []model.AnnotationReply
+		dal.DB.WithContext(ctx).Select("id", "body").Where("id IN ?", annotationIDs).Find(&reps)
+		for _, r := range reps {
+			annotationBodies[r.ID] = r.Body
+		}
+	}
+
 	for i := range reports {
 		if reports[i].TargetType == "post" {
 			m := postMeta[reports[i].TargetID]
@@ -226,6 +269,8 @@ func (s *ReportService) fillTargetSnapshots(ctx context.Context, reports []model
 			reports[i].TargetBody = truncateContentBy(m.Content, reportBodyLimit)
 		} else if reports[i].TargetType == "comment" {
 			reports[i].TargetBody = truncateContentBy(commentBodies[reports[i].TargetID], reportBodyLimit)
+		} else if reports[i].TargetType == "annotation" || reports[i].TargetType == "annotation_reply" {
+			reports[i].TargetBody = truncateContentBy(annotationBodies[reports[i].TargetID], reportBodyLimit)
 		}
 	}
 }

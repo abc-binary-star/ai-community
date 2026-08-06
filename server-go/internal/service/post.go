@@ -341,14 +341,15 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			status = "published"
 		}
 		post := &model.Post{
-			Title:     req.Title,
-			Content:   req.Content,
-			Channel:   channel,
-			AuthorID:  userID,
-			Status:    status,
-			AiSummary: req.AiSummary,
-			Font:      req.Font,
-			CoverURL:  req.CoverURL,
+			Title:         req.Title,
+			Content:       req.Content,
+			Channel:       channel,
+			AuthorID:      userID,
+			Status:        status,
+			AiSummary:     req.AiSummary,
+			Font:          req.Font,
+			CoverURL:      req.CoverURL,
+			ContentDigest: digest.NormHash("post-content", req.Content),
 		}
 		if err := tx.Create(post).Error; err != nil {
 			log.Printf("[CreatePost] 创建帖子失败, userID=%s, title=%s, err=%v", userID, req.Title, err)
@@ -457,6 +458,11 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
 		log.Printf("[UpdatePost] 更新帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
+	}
+
+	// 内容变更后重算段落想法锚点（无法可靠定位的降级为 orphaned，不静默挂错段落）
+	if req.Content != nil {
+		(&AnnotationService{}).ReconcileAnchors(ctx, postID, *req.Content)
 	}
 
 	// 标签更新：全量替换
