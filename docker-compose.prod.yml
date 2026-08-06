@@ -3,11 +3,17 @@
 # 前提：镜像已通过 GitHub Actions 推送到阿里云容器镜像服务
 # 必填环境变量：REGISTRY_URL、REGISTRY_NAMESPACE（在 .env 中定义）
 # 安全变量：JWT_SECRET、CORS_ORIGIN、DEEPSEEK_API_KEY
+#
+# 内存规划（适配 2G ECS，共约 1.6G 容器占用，剩余留给系统/swap）：
+#   nginx 64M + web 512M + server 256M + postgres 768M
+# 若 ECS 未开启 swap，建议在宿主机执行：
+#   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 
 services:
   nginx:
     image: nginx:alpine
     container_name: ai-community-nginx
+    mem_limit: 64m
     ports:
       - "${NGINX_PORT:-80}:80"
     volumes:
@@ -22,10 +28,13 @@ services:
   web:
     image: ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/web:latest
     container_name: ai-community-web
+    mem_limit: 512m
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=/api
       - NEXT_TELEMETRY_DISABLED=1
+      # 限制 Node 堆内存，防止占用超限触发 OOM
+      - NODE_OPTIONS=--max-old-space-size=384
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('net').connect(3000).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\""]
       interval: 10s
@@ -40,6 +49,7 @@ services:
   server:
     image: ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/server:latest
     container_name: ai-community-server
+    mem_limit: 256m
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -81,10 +91,29 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: ai-community-postgres
+    mem_limit: 768m
     environment:
       - POSTGRES_USER=aicom
       - POSTGRES_PASSWORD=aicom_password
       - POSTGRES_DB=aicom
+    # 收缩配置以适配 2G ECS：共享缓冲、连接数、排序/维护内存均收敛，
+    # 避免慢查询 + 并发时吃掉整机内存被内核 OOM-kill
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_wal_size=1GB
+      - -c
+      - checkpoint_timeout=10min
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
