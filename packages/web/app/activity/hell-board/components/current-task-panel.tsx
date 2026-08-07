@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Copy, Dices, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
+import { Dices, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TASK_TYPE_LABEL } from '../lib/board'
 import {
@@ -144,14 +144,27 @@ export function CurrentTaskPanel({
     <section aria-labelledby="current-task-heading" className="space-y-3">
       <div className="rounded-lg border-2 border-stone-800 bg-white p-3 shadow-[4px_4px_0_#292524] sm:p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-emerald-700">当前格 · 第 {team.position} 格 · 第 {team.lap} 轮</p>
-            <h2 id="current-task-heading" className="mt-0.5 text-base font-black text-stone-900">
-              {tile.title}
-            </h2>
-            <p className="mt-0.5 text-xs font-medium text-stone-500">
-              {TASK_TYPE_LABEL[tile.taskType]} · 目标 {formatTileTarget(tile)}
-            </p>
+          <div className="flex min-w-0 items-start gap-2">
+            <button
+              type="button"
+              onClick={() => void handleCopy()}
+              title="复制当前任务打卡内容到剪贴板"
+              className={cn(
+                'shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold transition-colors',
+                copied ? 'text-emerald-700' : 'text-stone-400 hover:bg-stone-100 hover:text-stone-700',
+              )}
+            >
+              {copied ? '已导出' : '导出'}
+            </button>
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase text-emerald-700">当前格 · 第 {team.position} 格 · 第 {team.lap} 轮</p>
+              <h2 id="current-task-heading" className="mt-0.5 text-base font-black text-stone-900">
+                {tile.title}
+              </h2>
+              <p className="mt-0.5 text-xs font-medium text-stone-500">
+                {TASK_TYPE_LABEL[tile.taskType]} · 目标 {formatTileTarget(tile)}
+              </p>
+            </div>
           </div>
           {lastRoll !== null && <Dice value={lastRoll} rolling={rolling} />}
         </div>
@@ -191,27 +204,6 @@ export function CurrentTaskPanel({
             保底已达成，队长可点下方按钮消耗 40 本向下一格进发
           </p>
         )}
-
-        <button
-          type="button"
-          onClick={() => void handleCopy()}
-          className={cn(
-            'mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
-            copied ? 'bg-[#78c6a3] text-stone-900' : 'bg-white text-stone-700 hover:bg-stone-50',
-          )}
-        >
-          {copied ? (
-            <>
-              <Check aria-hidden className="size-3.5" />
-              已复制打卡内容
-            </>
-          ) : (
-            <>
-              <Copy aria-hidden className="size-3.5" />
-              复制打卡内容
-            </>
-          )}
-        </button>
       </div>
 
       {isPenalty && team.status === 'timer-running' && <PenaltyTimer team={team} />}
