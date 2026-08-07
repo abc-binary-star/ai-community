@@ -1,13 +1,23 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardList, Dices, Hourglass, Loader2, Lock, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ClipboardList,
+  Dices,
+  Hourglass,
+  Library,
+  Loader2,
+  Lock,
+  Search,
+  X,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RULES, TASK_TYPE_LABEL } from '../lib/board'
-import { fetchTileDetail } from '../lib/api'
+import { fetchBookLibrary, fetchTileDetail } from '../lib/api'
 import { formatTileTarget, formatWords } from '../lib/rules'
 import { useActivityStore, useTile } from '../lib/store'
-import type { LitReason, TileDetail, TileRecord } from '../lib/types'
+import type { BookLibraryItem, LitReason, TileDetail, TileRecord } from '../lib/types'
 import { CheckInFormDialog } from './checkin-form-dialog'
 import { ReviewBadge } from './review-badge'
 import { TeamEmblem } from './team-emblem'
@@ -18,6 +28,117 @@ const LIT_LABEL: Record<LitReason, string> = {
   timer: '计时到期',
   manual: '人工修正',
   initial: '初始化补录',
+}
+
+/** 书库浏览上限：服务端按书名+作者去重后，一次取足够多，避免翻页 */
+const LIBRARY_LIMIT = 200
+
+/**
+ * 第 20 格「看十二本群友本月打卡过的书」的候选书库浏览器。
+ *
+ * 书库 = 活动内本月已通过审核的全部打卡书目（服务端按书名+作者去重）。
+ * 展开后默认列出全量，也可按书名/作者搜索；这里只做查看，选书仍在打卡表单里完成。
+ */
+function GroupCrossLibrary({ canView }: { canView: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const [items, setItems] = useState<BookLibraryItem[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 展开时拉全量，之后按关键词防抖搜索（关键词为空即回到全量）
+  useEffect(() => {
+    if (!open || !canView) return
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        setItems(await fetchBookLibrary(keyword.trim(), LIBRARY_LIMIT))
+        setError(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '书库加载失败')
+      } finally {
+        setLoading(false)
+      }
+    }, keyword.trim() ? 250 : 0)
+    return () => clearTimeout(timer)
+  }, [open, canView, keyword])
+
+  return (
+    <section className="mt-3 rounded-md border border-stone-300 bg-stone-50">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold text-stone-700 transition-colors hover:bg-stone-100"
+      >
+        <Library aria-hidden className="size-3.5 shrink-0 text-emerald-700" />
+        本格候选书库
+        <span className="font-medium text-stone-500">群友本月已通过审核的打卡书目</span>
+        <ChevronDown
+          aria-hidden
+          className={cn('ml-auto size-4 shrink-0 transition-transform', open && 'rotate-180')}
+        />
+      </button>
+
+      {open && (
+        <div className="border-t border-stone-200 px-3 py-2.5">
+          {!canView ? (
+            <p className="text-xs font-medium text-stone-500">
+              书库仅对已入组成员开放，报名并加入小组后即可查看。
+            </p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 rounded-md border border-stone-300 bg-white px-2.5 py-1.5">
+                <Search aria-hidden className="size-3.5 shrink-0 text-stone-400" />
+                <input
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="搜索书名或作者，留空看全部"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-stone-800 outline-none placeholder:text-stone-400"
+                />
+                {loading && <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin text-stone-400" />}
+              </label>
+
+              {error ? (
+                <p role="alert" className="mt-2 text-xs font-bold text-rose-700">
+                  {error}
+                </p>
+              ) : items === null ? (
+                <p className="mt-2 text-xs text-stone-400">正在载入书库…</p>
+              ) : items.length === 0 ? (
+                <p className="mt-2 text-xs font-medium text-stone-500">
+                  {keyword.trim() ? '没有匹配的书目。' : '书库还是空的，等群友的打卡通过审核后就会出现。'}
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2 text-[11px] font-bold text-stone-500">
+                    共 {items.length} 本可选
+                    {items.length >= LIBRARY_LIMIT && '（仅显示最新 200 本，可用搜索缩小范围）'}
+                  </p>
+                  <ul className="mt-1.5 max-h-64 space-y-1 overflow-y-auto">
+                    {items.map((book) => (
+                      <li
+                        key={book.id}
+                        className="rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-xs"
+                      >
+                        <span className="font-bold text-stone-900">{book.title}</span>
+                        {book.author && <span className="ml-1.5 text-stone-400">{book.author}</span>}
+                        <span className="mt-0.5 block text-[11px] text-stone-400">
+                          {book.teamName ? `${book.teamName} · ` : ''}
+                          {book.memberName}
+                          {book.wordCount > 0 ? ` · ${formatWords(book.wordCount)}` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  )
 }
 
 /**
@@ -38,6 +159,8 @@ export function TileDetailDialog({
   // 队伍形象：按 teamId 从棋盘快照里取，未配置时组件内部回退
   const teams = useActivityStore((s) => s.teams)
   const archived = useActivityStore((s) => s.archived)
+  // 书库接口要求入组成员身份，观战用户只提示不请求
+  const myMemberId = useActivityStore((s) => s.myMemberId)
   const [detail, setDetail] = useState<TileDetail | null>(null)
   const [loading, setLoading] = useState(true)
   // 本组已点亮格的补卡表单；reloadKey 用于补卡提交后刷新本格记录
@@ -142,11 +265,7 @@ export function TileDetailDialog({
           </p>
         )}
 
-        {tile.taskType === 'group-cross' && (
-          <p className="mt-3 rounded-md border border-stone-200 bg-stone-100 px-3 py-2 text-xs font-medium text-stone-600">
-            本格书库来源为活动页内本月已通过审核的全部打卡书目，可在提交表单中搜索选书。
-          </p>
-        )}
+        {tile.taskType === 'group-cross' && <GroupCrossLibrary canView={Boolean(myMemberId)} />}
 
         <section aria-labelledby="tile-teams-heading" className="mt-5">
           <h3 id="tile-teams-heading" className="text-sm font-medium text-stone-800">

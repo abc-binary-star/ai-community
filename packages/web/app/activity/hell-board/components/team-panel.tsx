@@ -1,27 +1,20 @@
 'use client'
 
-import { useState } from 'react'
-import { ClipboardList, Crown, History, Settings2, Star, UserRoundPlus } from 'lucide-react'
+import { Crown, Star, UserRoundPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatWords } from '../lib/rules'
-import { useActivityStore } from '../lib/store'
 import type { Team } from '../lib/types'
 import { TeamEmblem } from './team-emblem'
-import { TeamInitDialog } from './team-init-dialog'
-import { TeamManageDialog } from './team-manage-dialog'
-import { TimelineDialog } from './timeline-dialog'
 
 /** 队伍成员满编 5 人，不足时用空槽占位，保证布局稳定 */
 const TEAM_SIZE = 5
 
+/**
+ * 队伍卡：只呈现队伍身份与成员名单。
+ * 时间线 / 补录 / 队伍管理等操作入口统一收在页头右上角工具条，
+ * 避免按钮堆叠把卡片撑出右栏可视高度。
+ */
 export function TeamPanel({ team, currentMemberId }: { team: Team; currentMemberId: string }) {
-  // 队伍管理仅对队长开放：改队名 / 一次性选形象 / 从报名名单拉人
-  const isCaptain = useActivityStore((s) => s.isCaptain)
-  const archived = useActivityStore((s) => s.archived)
-  const [showTeamManage, setShowTeamManage] = useState(false)
-  const [showTeamInit, setShowTeamInit] = useState(false)
-  const [showTimeline, setShowTimeline] = useState(false)
-
   // 成员不足 5 人时用空槽补齐，保持卡片高度稳定
   const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
 
@@ -38,52 +31,18 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
             <span className="truncate">{team.name}</span>
           </span>
         </h2>
-        {isCaptain && (
-          <button
-            type="button"
-            onClick={() => setShowTeamManage(true)}
-            aria-label="队伍管理"
-            title="队伍管理"
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 py-1 text-[11px] font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:text-amber-800 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-          >
-            <Settings2 className="size-3.5" />
-            队伍管理
-          </button>
-        )}
       </div>
 
-      {/* 本队时间线：打卡 / 掷骰 / 点亮 / 判定 / 保底 / 计时 / 人工，全员可查看 */}
-      <button
-        type="button"
-        onClick={() => setShowTimeline(true)}
-        className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 bg-white/70 px-2 text-[11px] font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:text-stone-900 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-      >
-        <History className="size-3.5" />
-        本队时间线
-      </button>
-
-      {/* 活动已开始后的进度补录：队长按线下真实情况录入起始格/已点亮格/当前格 */}
-      {isCaptain && (
-        <button
-          type="button"
-          onClick={() => setShowTeamInit(true)}
-          disabled={archived}
-          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-[#8b6b2c] bg-[#fff8e5] px-2 text-[11px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <ClipboardList className="size-3.5" />
-          进度初始化 / 补录
-        </button>
-      )}
-
-      <div className="mt-4 flex-1 border-t border-dashed border-[#dccfa8] pt-3.5">
-        <h3 className="flex items-center gap-1.5 text-xs font-black tracking-wide text-[#6b4e15]">
+      {/* 名单区有界：卡片高度由右栏决定，成员多时名单自身滚动而非撑高卡片 */}
+      <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-dashed border-[#dccfa8] pt-3.5">
+        <h3 className="flex shrink-0 items-center gap-1.5 text-xs font-black tracking-wide text-[#6b4e15]">
           <span aria-hidden className="size-1.5 rotate-45 bg-[#d9a441]" />
           队伍成员
           <span className="ml-auto text-[11px] font-medium text-stone-400">
             {team.members.length} / {TEAM_SIZE}
           </span>
         </h3>
-        <ul className="mt-2 space-y-1.5">
+        <ul className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
           {slots.map((member, i) =>
             member ? (
               <li
@@ -122,15 +81,6 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
         </ul>
       </div>
 
-      {showTeamManage && (
-        <TeamManageDialog team={team} onClose={() => setShowTeamManage(false)} />
-      )}
-
-      {showTeamInit && (
-        <TeamInitDialog team={team} onClose={() => setShowTeamInit(false)} />
-      )}
-
-      {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
     </section>
   )
 }

@@ -2,20 +2,22 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { BookOpen, Eye, EyeOff, Gavel, Loader2, LogOut, Sparkles, Users } from 'lucide-react'
+import { BookOpen, ClipboardList, Gavel, History, Loader2, LogOut, Settings2, Sparkles, Users } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ActivityFeedPanel } from './components/activity-feed-panel'
 import { AllTeamsPanel } from './components/all-teams-panel'
 import { BoardGrid } from './components/board-grid'
-import { BoardTextView } from './components/board-text-view'
 import { CheckInFormDialog } from './components/checkin-form-dialog'
 import { CurrentTaskPanel } from './components/current-task-panel'
 import { EnrollWizard } from './components/enroll-wizard'
 import { MyCheckInsPanel } from './components/my-checkins-panel'
 import { RankingPanel } from './components/ranking-panel'
+import { TeamInitDialog } from './components/team-init-dialog'
+import { TeamManageDialog } from './components/team-manage-dialog'
 import { TeamPanel } from './components/team-panel'
 import { TileDetailDialog } from './components/tile-detail-dialog'
+import { TimelineDialog } from './components/timeline-dialog'
 import { VotePoolPanel } from './components/vote-pool-panel'
 import { useActivityStore, useCurrentTeam, useIsCaptain } from './lib/store'
 
@@ -57,10 +59,13 @@ export function HellBoardView() {
   const role = useAuthStore((s) => s.user?.role)
   const canReview = role === 'admin' || role === 'moderator'
   const clearAuth = useAuthStore((s) => s.clearAuth)
-  const [showTextView, setShowTextView] = useState(false)
   const [showCheckInForm, setShowCheckInForm] = useState(false)
   const [sideTab, setSideTab] = useState<SideTab>('team')
   const [topView, setTopView] = useState<TopView>('board')
+  // 队伍工具（时间线 / 补录 / 管理）从队伍卡上提到页头右上角，避免卡片被按钮撑高
+  const [showTimeline, setShowTimeline] = useState(false)
+  const [showTeamInit, setShowTeamInit] = useState(false)
+  const [showTeamManage, setShowTeamManage] = useState(false)
 
   useEffect(() => {
     void loadAll()
@@ -135,19 +140,42 @@ export function HellBoardView() {
                   终审台
                 </Link>
               )}
-              {topView === 'board' && (
-                <button
-                  type="button"
-                  onClick={() => setShowTextView((v) => !v)}
-                  className={cn(
-                    'flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
-                    showTextView ? 'bg-[#78c6a3]' : 'bg-white hover:bg-[#fff4cf]',
+              {/* 队伍工具：入队后才有意义，收在右上角与终审台/退出同排 */}
+              {currentTeam && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowTimeline(true)}
+                    title="本队时间线"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                  >
+                    <History className="size-3.5" />
+                    <span className="hidden sm:inline">时间线</span>
+                  </button>
+                  {isCaptain && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowTeamInit(true)}
+                        disabled={archived}
+                        title="进度初始化 / 补录"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#fff8e5] px-3 text-xs font-bold text-[#7a5c1e] shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff3d6] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ClipboardList className="size-3.5" />
+                        <span className="hidden sm:inline">补录</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowTeamManage(true)}
+                        title="队伍管理"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                      >
+                        <Settings2 className="size-3.5" />
+                        <span className="hidden sm:inline">队伍管理</span>
+                      </button>
+                    </>
                   )}
-                  aria-pressed={showTextView}
-                >
-                  {showTextView ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  <span className="hidden sm:inline">文本视图</span>
-                </button>
+                </>
               )}
               <button
                 type="button"
@@ -191,13 +219,9 @@ export function HellBoardView() {
           // 面板区因此始终有界，内容多时不撑高整页导致溢出
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
           <div className="min-w-0">
-            {showTextView ? (
-              <BoardTextView teams={teams} currentTeam={currentTeam} />
-            ) : (
-              <div className="mx-auto max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3">
-                <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
-              </div>
-            )}
+            <div className="mx-auto max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3">
+              <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
+            </div>
           </div>
 
           {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单/我的打卡收进切换栏，
@@ -310,6 +334,16 @@ export function HellBoardView() {
           tileIndex={currentTeam.position}
           onClose={() => setShowCheckInForm(false)}
         />
+      )}
+
+      {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
+
+      {showTeamInit && currentTeam && (
+        <TeamInitDialog team={currentTeam} onClose={() => setShowTeamInit(false)} />
+      )}
+
+      {showTeamManage && currentTeam && (
+        <TeamManageDialog team={currentTeam} onClose={() => setShowTeamManage(false)} />
       )}
 
       {error && teams.length > 0 && (

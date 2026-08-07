@@ -163,10 +163,16 @@ export async function fetchLitRanking(): Promise<RankingRow[]> {
 }
 
 
-/** 第 20 格候选书库，支持关键词搜索选书 */
-export async function fetchBookLibrary(keyword: string): Promise<BookLibraryItem[]> {
-  const q = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
-  const res = await apiFetch<{ items: BookLibraryItem[] }>(`${BASE}/library${q}`)
+/**
+ * 第 20 格候选书库：关键词为空时返回全量（服务端按书名+作者去重、只含已通过审核的书目），
+ * 因此既可用于搜索选书，也可用于整本书库浏览。
+ */
+export async function fetchBookLibrary(keyword: string, limit?: number): Promise<BookLibraryItem[]> {
+  const params = new URLSearchParams()
+  if (keyword) params.set('keyword', keyword)
+  if (limit) params.set('limit', String(limit))
+  const q = params.toString()
+  const res = await apiFetch<{ items: BookLibraryItem[] }>(`${BASE}/library${q ? `?${q}` : ''}`)
   return res.items ?? []
 }
 
