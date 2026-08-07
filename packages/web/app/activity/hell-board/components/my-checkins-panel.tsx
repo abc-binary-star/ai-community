@@ -1,12 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BookX, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
+import { BookX, Loader2, Pencil, RefreshCcw, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { fetchMyBooks } from '../lib/api'
+import { fetchCheckIns, fetchMyBooks } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam } from '../lib/store'
-import type { ServerBook } from '../lib/types'
+import type { CheckIn, CheckInDraftBook, ServerBook } from '../lib/types'
 import { CheckInFormDialog } from './checkin-form-dialog'
 import { ReviewBadge } from './review-badge'
 
@@ -30,6 +30,8 @@ export function MyCheckInsPanel() {
   const [error, setError] = useState<string | null>(null)
   const [resubmitBook, setResubmitBook] = useState<ServerBook | null>(null)
   const [withdrawing, setWithdrawing] = useState<string | null>(null)
+  // 编辑历史打卡：一次打卡含多本书，预填整次打卡书目
+  const [editCheckIn, setEditCheckIn] = useState<CheckIn | null>(null)
 
   const team = useCurrentTeam()
   const archived = useActivityStore((s) => s.archived)
@@ -69,6 +71,22 @@ export function MyCheckInsPanel() {
       setError(err instanceof Error ? err.message : '撤回失败')
     } finally {
       setWithdrawing(null)
+    }
+  }
+
+  // 编辑历史打卡：从本队打卡列表取整次打卡（含全部书目与心得），预填表单
+  const handleEdit = async (book: ServerBook) => {
+    if (!book.checkInId) return
+    try {
+      const checkIns = await fetchCheckIns()
+      const target = checkIns.find((c) => c.id === book.checkInId)
+      if (!target) {
+        setError('未找到该打卡记录')
+        return
+      }
+      setEditCheckIn(target)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载打卡记录失败')
     }
   }
 
@@ -155,6 +173,17 @@ export function MyCheckInsPanel() {
                     {withdrawing === b.checkInId ? '撤回中…' : '撤回'}
                   </button>
                 )}
+                {(tab === 'pending' || tab === 'approved') && (
+                  <button
+                    type="button"
+                    onClick={() => void handleEdit(b)}
+                    disabled={archived}
+                    className="mt-2 ml-1.5 inline-flex h-7 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 text-[11px] font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                  >
+                    <Pencil className="size-3" />
+                    修改
+                  </button>
+                )}
                 {tab === 'rejected' && (
                   <button
                     type="button"
@@ -195,6 +224,27 @@ export function MyCheckInsPanel() {
               coverUrl: resubmitBook.coverUrl,
             },
           ]}
+        />
+      )}
+
+      {editCheckIn && (
+        <CheckInFormDialog
+          tileIndex={editCheckIn.tileIndex}
+          editCheckInId={editCheckIn.id}
+          onClose={() => {
+            setEditCheckIn(null)
+            // 修改成功或关闭后刷新列表与棋盘（进度重算后需同步）
+            void load()
+            void useActivityStore.getState().refresh()
+          }}
+          initialBooks={editCheckIn.books.map<CheckInDraftBook>((b) => ({
+            title: b.title,
+            author: b.author,
+            wordCount: b.wordCount,
+            durationMinutes: b.durationMinutes,
+            coverUrl: b.coverUrl,
+            note: b.note,
+          }))}
         />
       )}
     </div>

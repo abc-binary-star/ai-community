@@ -186,6 +186,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.GET("/board", handler.GetActivityBoard)
 	activity.GET("/checkins", handler.ListActivityCheckIns)
 	activity.POST("/checkins", handler.CreateActivityCheckIn)
+	activity.PUT("/checkins/:id", handler.UpdateActivityCheckIn)
 	activity.DELETE("/checkins/:id", handler.DeleteActivityCheckIn)
 	// 我的打卡（三栏：未审核 / 已通过 / 已驳回）
 	activity.GET("/my-books", handler.ListActivityMyBooks)

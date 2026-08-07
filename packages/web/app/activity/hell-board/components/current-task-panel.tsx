@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Dices, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Copy, Dices, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TASK_TYPE_LABEL } from '../lib/board'
 import {
@@ -20,6 +20,12 @@ import type { Team } from '../lib/types'
 import { Dice } from './dice'
 import { JudgementPanel } from './judgement-panel'
 import { ProgressBar } from './progress-bar'
+
+/** 格子编号转中文数字（1-20），与模板「第七格」一致 */
+function posText(n: number): string {
+  const cn = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十']
+  return cn[n] ?? String(n)
+}
 
 /** 计时惩罚格倒计时。到期后由服务端自动点亮并解锁（P1-6） */
 function PenaltyTimer({ team }: { team: Team }) {
@@ -71,9 +77,49 @@ export function CurrentTaskPanel({
   const rolling = useActivityStore((s) => s.rolling)
   const rollDice = useActivityStore((s) => s.rollDice)
   const fallbackThreshold = useActivityStore((s) => s.fallbackThreshold)
+  const checkIns = useActivityStore((s) => s.checkIns)
+  const [copied, setCopied] = useState(false)
 
   // 格子定义随棋盘快照下发，加载完成前不渲染任务区
   if (!tile) return null
+
+  // 导出当前任务打卡内容（群打卡模板）：队伍名 + 当前格 + 已点亮格子 + 书目与心得
+  const exportText = useMemo(() => {
+    const lit = Object.keys(team.litTiles)
+      .map(Number)
+      .sort((a, b) => a - b)
+    // 当前已读书目 = 全队整个活动累计通过审核的书目数（fallbackCount），跨格不清零
+    const lines: string[] = [
+      team.name,
+      `当前格：第${posText(team.position)}格：${tile.title}，当前已读书目：${team.fallbackCount}本`,
+      `已点亮格子${lit.join(' -> ')}`,
+      '',
+    ]
+    // 当前格本队已通过审核的打卡书目（含心得）
+    const books = checkIns
+      .filter((c) => c.tileIndex === team.position)
+      .flatMap((c) =>
+        (c.books ?? [])
+          .filter((b) => b.reviewStatus === 'approved')
+          .map((b) => ({ memberName: c.memberName, title: b.title, author: b.author, note: b.note })),
+      )
+    books.forEach((b, i) => {
+      lines.push(`${i + 1}. ${b.memberName}《${b.title}》${b.author}`)
+      if (b.note) lines.push(b.note)
+    })
+    return lines.join('\n')
+  }, [team, tile, checkIns])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(exportText)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // 剪贴板不可用时降级为选中文本提示，不影响页面
+      setCopied(false)
+    }
+  }
 
   const taskDone = isTaskDone(team, tile)
   const fallbackDone = isFallbackDone(team, tile, fallbackThreshold)
@@ -141,6 +187,27 @@ export function CurrentTaskPanel({
             保底已达成，队长可点下方按钮消耗 40 本向下一格进发
           </p>
         )}
+
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          className={cn(
+            'mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
+            copied ? 'bg-[#78c6a3] text-stone-900' : 'bg-white text-stone-700 hover:bg-stone-50',
+          )}
+        >
+          {copied ? (
+            <>
+              <Check aria-hidden className="size-3.5" />
+              已复制打卡内容
+            </>
+          ) : (
+            <>
+              <Copy aria-hidden className="size-3.5" />
+              复制打卡内容
+            </>
+          )}
+        </button>
       </div>
 
       {isPenalty && team.status === 'timer-running' && <PenaltyTimer team={team} />}

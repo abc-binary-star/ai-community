@@ -434,6 +434,248 @@ func (s *ActivityService) memberNames(ctx context.Context, teamID string) (map[s
 	return out, nil
 }
 
+// UpdateCheckIn 成员修改自己历史打卡的内容（心得/字数/时长/书名/作者）。
+//
+// 修改按书目 dedup_key（成员+书名+作者归一化）匹配：
+//   - 同名书：更新字段；若该书已通过审核（approved）且字数/时长变化，
+//     先回滚旧贡献再按新值重新累加（进度 / 榜单 / 保底随之重算）；
+//   - 新增书：走与首次提交一致的审核路由（查重 + 待初审），
+//     封面类直进投票池，其余触发异步 AI 初审；
+//   - 移除书：已通过的回滚贡献后删除，未审核的直接删除。
+//
+// 打卡格子（tileIndex / lap）不允许修改：改动内容不改变归属格。
+func (s *ActivityService) UpdateCheckIn(ctx context.Context, userID, checkInID string, req types.ActivityCheckInReq) (*types.ActivityCheckInDTO, error) {
+	now := time.Now()
+	if err := s.requireWritable(now); err != nil {
+		return nil, err
+	}
+	if len(req.Books) == 0 {
+		return nil, ErrActivityInvalidInput
+	}
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var out *types.ActivityCheckInDTO
+	// 新增书目收集在事务外，事务提交后异步触发 AI 初审
+	var aiBooks []model.ActivityCheckInBook
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 锁行并预加载书目，避免与审核并发读到旧内容
+		var checkIn model.ActivityCheckIn
+		if err := tx.Clauses(lockForUpdate()).Preload("Books").First(&checkIn, "id = ?", checkInID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return ErrActivityBookNotFound
+			}
+			return err
+		}
+		if checkIn.MemberID != me.ID {
+			return ErrActivityNotMember
+		}
+
+		var team model.ActivityTeam
+		if err := tx.First(&team, "id = ?", checkIn.TeamID).Error; err != nil {
+			return err
+		}
+		if team.Status == model.TeamStatusTimerRunning {
+			return ErrActivityTimerRunning
+		}
+		if team.Status == model.TeamStatusCompleted {
+			return ErrActivityCompleted
+		}
+		tile, err := s.getTileTx(tx, checkIn.TileIndex)
+		if err != nil {
+			return err
+		}
+		if tile.TaskType == model.TaskTypeTimedPenalty {
+			return ErrActivityTimerRunning
+		}
+
+		// 新书目校验（口径与首次提交一致）：书名必填、作者/字数按格子要求、组内查重
+		seen := make(map[string]bool, len(req.Books))
+		keys := make([]string, 0, len(req.Books))
+		for i := range req.Books {
+			b := &req.Books[i]
+			b.Title = strings.TrimSpace(b.Title)
+			b.Author = strings.TrimSpace(b.Author)
+			if b.Title == "" {
+				return ErrActivityInvalidInput
+			}
+			if requiresAuthor(tile.TaskType) && b.Author == "" {
+				return ErrActivityInvalidInput
+			}
+			if b.Author == "" {
+				b.Author = "未知"
+			}
+			if requiresWordCount(tile.TaskType) && b.WordCount <= 0 {
+				return ErrActivityInvalidInput
+			}
+			if tile.TaskType == model.TaskTypeTotalDuration && b.DurationMinutes <= 0 {
+				return ErrActivityInvalidInput
+			}
+			key := hellboard.DedupKey(me.ID, b.Title, b.Author)
+			if seen[key] {
+				return &DuplicateBookError{Titles: []string{b.Title}}
+			}
+			seen[key] = true
+			keys = append(keys, key)
+		}
+
+		// 新书查重（排除自身）：命中其他未驳回记录则拦截。
+		// 自身 checkIn 内同名书在上一步组内查重已拦截，不会走到新增分支。
+		var newBooks []types.ActivityBookReq
+		for i := range req.Books {
+			b := req.Books[i]
+			key := hellboard.DedupKey(me.ID, b.Title, b.Author)
+			isUpdate := false
+			for j := range checkIn.Books {
+				if checkIn.Books[j].DedupKey == key {
+					isUpdate = true
+					break
+				}
+			}
+			if !isUpdate {
+				newBooks = append(newBooks, b)
+			}
+		}
+		if len(newBooks) > 0 {
+			if dup, err := s.findDuplicates(ctx, me.ID, newBooks); err != nil {
+				return err
+			} else if dup != nil {
+				return dup
+			}
+		}
+
+		// 审核路由：封面类直进投票池，其余待初审
+		initialStatus := model.ReviewStatusPendingAI
+		if tile.TaskType == model.TaskTypeCoverColor {
+			initialStatus = model.ReviewStatusInVoting
+		}
+
+		oldByKey := make(map[string]*model.ActivityCheckInBook, len(checkIn.Books))
+		for i := range checkIn.Books {
+			oldByKey[checkIn.Books[i].DedupKey] = &checkIn.Books[i]
+		}
+
+		// 1) 移除的旧书：已通过的回滚贡献，再删除
+		for i := range checkIn.Books {
+			old := &checkIn.Books[i]
+			if seen[old.DedupKey] {
+				continue
+			}
+			if old.ReviewStatus == model.ReviewStatusApproved {
+				if err := s.rollbackApproval(tx, old); err != nil {
+					return err
+				}
+			}
+			if err := tx.Delete(&model.ActivityCheckInBook{}, "id = ?", old.ID).Error; err != nil {
+				return err
+			}
+		}
+
+		// 2) 更新同名书 / 新增书
+		for i := range req.Books {
+			b := req.Books[i]
+			key := hellboard.DedupKey(me.ID, b.Title, b.Author)
+			book := model.ActivityCheckInBook{
+				CheckInID:       checkIn.ID,
+				TeamID:          checkIn.TeamID,
+				MemberID:        checkIn.MemberID,
+				TileIndex:       checkIn.TileIndex,
+				Lap:             checkIn.Lap,
+				Title:           b.Title,
+				Author:          b.Author,
+				WordCount:       b.WordCount,
+				DedupKey:        key,
+				DurationMinutes: b.DurationMinutes,
+				CoverURL:        strings.TrimSpace(b.CoverURL),
+				Genre:           strings.TrimSpace(b.Genre),
+				Note:            strings.TrimSpace(b.Note),
+				ReviewStatus:    initialStatus,
+				CountsForTask:   true,
+			}
+
+			if old, ok := oldByKey[key]; ok {
+				// 已通过的书修改字数/时长：先回滚旧贡献，再按新值重新累加
+				if old.ReviewStatus == model.ReviewStatusApproved &&
+					(old.WordCount != b.WordCount || old.DurationMinutes != b.DurationMinutes) {
+					if err := s.rollbackApproval(tx, old); err != nil {
+						return err
+					}
+				}
+				book.ID = old.ID
+				// 保持原有审核状态；已通过的保持通过（内容修正不重审），
+				// 未通过 / 被驳回的保持原状态，仅更新内容字段
+				book.ReviewStatus = old.ReviewStatus
+				book.AIStatus = old.AIStatus
+				book.AIConfidence = old.AIConfidence
+				book.AIReason = old.AIReason
+				if err := tx.Model(&model.ActivityCheckInBook{}).Where("id = ?", old.ID).Updates(map[string]any{
+					"title":            book.Title,
+					"author":           book.Author,
+					"word_count":       book.WordCount,
+					"dedup_key":        book.DedupKey,
+					"duration_minutes": book.DurationMinutes,
+					"cover_url":        book.CoverURL,
+					"genre":            book.Genre,
+					"note":             book.Note,
+				}).Error; err != nil {
+					return err
+				}
+				// 已通过且内容修正：用新值重新累加进度 / 榜单 / 保底
+				if book.ReviewStatus == model.ReviewStatusApproved {
+					if err := s.applyApproval(tx, &book, true); err != nil {
+						return err
+					}
+				}
+			} else {
+				// 新增书目：落库后待初审 / 投票池
+				if err := tx.Create(&book).Error; err != nil {
+					if isUniqueViolation(err) {
+						return ErrActivityDuplicateBook
+					}
+					return err
+				}
+				// 封面类已直进投票池，不触发 AI 初审
+				if book.ReviewStatus == model.ReviewStatusPendingAI {
+					aiBooks = append(aiBooks, book)
+				}
+			}
+		}
+
+		if err := tx.Model(&model.ActivityCheckIn{}).Where("id = ?", checkIn.ID).
+			Update("evidence_url", strings.TrimSpace(req.EvidenceURL)).Error; err != nil {
+			return err
+		}
+
+		// 时间线事件（PRD 10.3）
+		if err := s.addEvent(tx, checkIn.TeamID, model.EventTypeCheckIn,
+			fmt.Sprintf("%s 修改了第 %d 格的打卡内容（%d 本书目）", s.memberName(ctx, me), checkIn.TileIndex, len(req.Books))); err != nil {
+			return err
+		}
+
+		// 重新加载最新书目，用于构造 DTO
+		var books []model.ActivityCheckInBook
+		if err := tx.Where("check_in_id = ?", checkIn.ID).Find(&books).Error; err != nil {
+			return err
+		}
+		checkIn.Books = books
+		checkIn.EvidenceURL = strings.TrimSpace(req.EvidenceURL)
+		dto := s.checkInToDTO(ctx, &checkIn, me)
+		out = &dto
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 新增书目异步触发 AI 初审，失败不阻断修改
+	if len(aiBooks) > 0 {
+		go runAIPreReview(aiBooks)
+	}
+	return out, nil
+}
+
 // DeleteCheckIn 成员自行删除未进入终审的打卡；队长可撤回本队任意未审打卡（PRD 8.4）
 func (s *ActivityService) DeleteCheckIn(ctx context.Context, userID, checkInID string) error {
 	now := time.Now()

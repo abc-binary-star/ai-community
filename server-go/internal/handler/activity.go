@@ -87,6 +87,23 @@ func DeleteActivityCheckIn(ctx context.Context, c *app.RequestContext) {
 	response.OK(c)
 }
 
+// UpdateActivityCheckIn 成员修改自己历史打卡的内容（心得/字数/时长等）
+// PUT /api/activity/hell-board/checkins/:id
+func UpdateActivityCheckIn(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityCheckInReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.UpdateCheckIn(ctx, userID, c.Param("id"), req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
+
 // RollActivityDice 队长掷骰前进
 // POST /api/activity/hell-board/roll
 func RollActivityDice(ctx context.Context, c *app.RequestContext) {

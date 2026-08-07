@@ -108,6 +108,37 @@ export function deleteCheckIn(checkInId: string): Promise<void> {
   return apiFetch<void>(`${BASE}/checkins/${checkInId}`, { method: 'DELETE' })
 }
 
+/**
+ * 修改自己历史打卡的内容（心得 / 字数 / 时长 / 书名 / 作者）。
+ * 已通过审核的书若改动字数或时长，服务端会同步重算进度与榜单。
+ */
+export async function updateCheckIn(
+  checkInId: string,
+  payload: {
+    tileIndex: number
+    books: CheckInDraftBook[]
+    evidenceUrl?: string
+  },
+): Promise<ServerCheckIn> {
+  try {
+    return await apiFetch<ServerCheckIn>(`${BASE}/checkins/${checkInId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      const detail = err.body as
+        | { titles?: string[]; duplicates?: Record<string, number> }
+        | null
+        | undefined
+      if (detail?.duplicates) {
+        throw new DuplicateBookError(err.message, detail.titles ?? [], detail.duplicates)
+      }
+    }
+    throw err
+  }
+}
+
 // --- 我的打卡（三栏：未审核 / 已通过 / 已驳回） ---
 
 /** 我的打卡书目列表，按状态分组 */
