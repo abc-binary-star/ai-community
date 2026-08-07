@@ -95,6 +95,17 @@ type ActivityTeamAddMemberReq struct {
 	UserID string `json:"userId" vd:"len($)>=1"`
 }
 
+// ActivityTeamInitReq 队长初始化队伍进度（活动已开始后的补录）。
+// 录入线下已完成的起始格、已点亮格列表与当前格；可重复执行（幂等覆盖）。
+type ActivityTeamInitReq struct {
+	// StartTile 队伍起始格子（仅留痕，不参与状态机）
+	StartTile int `json:"startTile" vd:"$>=1 && $<=20"`
+	// LitTiles 已打卡（已点亮）的格子编号
+	LitTiles []int `json:"litTiles"`
+	// CurrentTile 队伍当前所在格子（未完成、正在做任务）
+	CurrentTile int `json:"currentTile" vd:"$>=1 && $<=20"`
+}
+
 // ActivityBookDTO 单条书目
 type ActivityBookDTO struct {
 	ID              string  `json:"id"`
@@ -228,11 +239,11 @@ type ActivityVotePoolItemDTO struct {
 
 // ActivityMemberCheckInDTO 成员单次打卡（仅含已通过审核的书目），用于成员档案
 type ActivityMemberCheckInDTO struct {
-	CheckInID string             `json:"checkInId"`
-	TileIndex int                `json:"tileIndex"`
-	Lap       int                `json:"lap"`
-	CreatedAt string             `json:"createdAt"`
-	Books     []ActivityBookDTO  `json:"books"`
+	CheckInID string            `json:"checkInId"`
+	TileIndex int               `json:"tileIndex"`
+	Lap       int               `json:"lap"`
+	CreatedAt string            `json:"createdAt"`
+	Books     []ActivityBookDTO `json:"books"`
 	// LikeCount 该次打卡的点赞数
 	LikeCount int `json:"likeCount"`
 	// LikedByMe 当前用户是否已点赞
@@ -247,9 +258,9 @@ type ActivityMemberProfileDTO struct {
 	TeamID     string `json:"teamId"`
 	TeamName   string `json:"teamName,omitempty"`
 	// 已通过审核的累计数据
-	BookCount       int    `json:"bookCount"`
-	WordCount       int64  `json:"wordCount"`
-	DurationMinutes int    `json:"durationMinutes"`
+	BookCount       int                        `json:"bookCount"`
+	WordCount       int64                      `json:"wordCount"`
+	DurationMinutes int                        `json:"durationMinutes"`
 	CheckIns        []ActivityMemberCheckInDTO `json:"checkIns"`
 }
 

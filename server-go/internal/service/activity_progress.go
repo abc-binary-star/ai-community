@@ -50,23 +50,11 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 	}
 
 	// 保底计数与任务进度只对「队伍当前所在格 + 当前轮次」的提交生效。
-	// 补提交历史格子的书目仍进榜单，但不影响当前格进度。
+	// 补卡到已点亮历史格的书目：仍进榜单，但只累加该格对应轮次的保底展示计数，
+	// 不影响当前格进度（格子已点亮，不再触发点亮）。
 	isCurrent := book.TileIndex == team.Position && book.Lap == team.Lap
 	if !isCurrent {
-		// 队伍已离开原格：当前格进度与保底计数不受影响，
-		// 但原格该轮次的保底展示计数（book_count）仍应扣减，与实际审核通过量保持一致
-		var row model.ActivityTeamProgress
-		err := tx.Where("team_id = ? AND tile_index = ? AND lap = ?",
-			team.ID, book.TileIndex, book.Lap).First(&row).Error
-		if err == nil && row.BookCount > 0 {
-			if err := tx.Model(&row).
-				Update("book_count", gorm.Expr("GREATEST(book_count - 1, 0)")).Error; err != nil {
-				return err
-			}
-		} else if err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
-		return nil
+		return s.boostTileBookCountTx(tx, book)
 	}
 
 	// 保底计数统计本格内通过审核的全部书目，不论是否符合格子条件（PRD 7.3）
@@ -163,6 +151,19 @@ func (s *ActivityService) rollbackApproval(tx *gorm.DB, book *model.ActivityChec
 
 	isCurrent := book.TileIndex == team.Position && book.Lap == team.Lap
 	if !isCurrent {
+		// 队伍已离开原格：当前格进度与保底计数不受影响，
+		// 但原格该轮次的保底展示计数（book_count）仍应扣减，与实际审核通过量保持一致
+		var row model.ActivityTeamProgress
+		err := tx.Where("team_id = ? AND tile_index = ? AND lap = ?",
+			team.ID, book.TileIndex, book.Lap).First(&row).Error
+		if err == nil && row.BookCount > 0 {
+			if err := tx.Model(&row).
+				Update("book_count", gorm.Expr("GREATEST(book_count - 1, 0)")).Error; err != nil {
+				return err
+			}
+		} else if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
 		return nil
 	}
 
@@ -202,6 +203,21 @@ func (s *ActivityService) rollbackApproval(tx *gorm.DB, book *model.ActivityChec
 }
 
 // --- 审核辅助查询 ---
+
+// boostTileBookCountTx 补卡通过时：把书目累加到已点亮格对应轮次的保底展示计数。
+// 该格（team + tile + lap）已点亮才累加；补卡不影响点亮状态与当前格进度。
+func (s *ActivityService) boostTileBookCountTx(tx *gorm.DB, book *model.ActivityCheckInBook) error {
+	var row model.ActivityTeamProgress
+	err := tx.Where("team_id = ? AND tile_index = ? AND lap = ? AND lit = ?",
+		book.TeamID, book.TileIndex, book.Lap, true).First(&row).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Model(&row).Update("book_count", gorm.Expr("book_count + 1")).Error
+}
 
 // teamNames 队伍 id → 名称
 func (s *ActivityService) teamNames(ctx context.Context) (map[string]string, error) {

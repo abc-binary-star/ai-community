@@ -20,6 +20,7 @@ const LIT_LABEL: Record<LitReason, string> = {
   fallback: '保底完成',
   timer: '计时到期',
   manual: '人工修正',
+  initial: '初始化补录',
 }
 
 export function BoardTile({ tile, litReason, isCurrent, onSelect }: BoardTileProps) {

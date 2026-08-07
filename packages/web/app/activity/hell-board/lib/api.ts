@@ -264,3 +264,15 @@ export function captainAddMember(userId: string): Promise<unknown> {
     body: JSON.stringify({ userId }),
   })
 }
+
+/** 队长初始化队伍进度：补录活动已开始后的起始格 / 已点亮格 / 当前格（幂等覆盖） */
+export function initializeTeam(payload: {
+  startTile: number
+  litTiles: number[]
+  currentTile: number
+}): Promise<unknown> {
+  return apiFetch(`${BASE}/team/initialize`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}

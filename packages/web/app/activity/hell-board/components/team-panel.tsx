@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Crown, Settings2, Star, UserRoundPlus } from 'lucide-react'
+import { ClipboardList, Crown, Settings2, Star, UserRoundPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatWords } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
 import type { Team } from '../lib/types'
 import { TeamEmblem } from './team-emblem'
+import { TeamInitDialog } from './team-init-dialog'
 import { TeamManageDialog } from './team-manage-dialog'
 
 /** 队伍成员满编 5 人，不足时用空槽占位，保证布局稳定 */
@@ -15,7 +16,9 @@ const TEAM_SIZE = 5
 export function TeamPanel({ team, currentMemberId }: { team: Team; currentMemberId: string }) {
   // 队伍管理仅对队长开放：改队名 / 一次性选形象 / 从报名名单拉人
   const isCaptain = useActivityStore((s) => s.isCaptain)
+  const archived = useActivityStore((s) => s.archived)
   const [showTeamManage, setShowTeamManage] = useState(false)
+  const [showTeamInit, setShowTeamInit] = useState(false)
 
   // 成员不足 5 人时用空槽补齐，保持卡片高度稳定
   const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
@@ -46,6 +49,19 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
           </button>
         )}
       </div>
+
+      {/* 活动已开始后的进度补录：队长按线下真实情况录入起始格/已点亮格/当前格 */}
+      {isCaptain && (
+        <button
+          type="button"
+          onClick={() => setShowTeamInit(true)}
+          disabled={archived}
+          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-[#8b6b2c] bg-[#fff8e5] px-2 text-[11px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ClipboardList className="size-3.5" />
+          进度初始化 / 补录
+        </button>
+      )}
 
       <div className="mt-4 flex-1 border-t border-dashed border-[#dccfa8] pt-3.5">
         <h3 className="flex items-center gap-1.5 text-xs font-black tracking-wide text-[#6b4e15]">
@@ -96,6 +112,10 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
 
       {showTeamManage && (
         <TeamManageDialog team={team} onClose={() => setShowTeamManage(false)} />
+      )}
+
+      {showTeamInit && (
+        <TeamInitDialog team={team} onClose={() => setShowTeamInit(false)} />
       )}
     </section>
   )

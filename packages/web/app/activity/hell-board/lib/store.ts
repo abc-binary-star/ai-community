@@ -131,6 +131,8 @@ interface ActivityState {
   rollJudgement: () => Promise<void>
   submitCheckIn: (tileIndex: number, books: CheckInDraftBook[], evidenceUrl?: string) => Promise<void>
   deleteCheckIn: (checkInId: string) => Promise<void>
+  /** 队长初始化队伍进度（补录线下真实状态）；成功后刷新棋盘 */
+  initializeTeam: (payload: { startTile: number; litTiles: number[]; currentTile: number }) => Promise<void>
   /** 报名活动（幂等）；成功后刷新快照，enrolled 随之更新 */
   enroll: (nickname?: string) => Promise<void>
   /** 自助选组入队（可选成为队长）；成功后刷新快照进入队伍视图 */
@@ -291,6 +293,13 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     } catch (err) {
       set({ error: errMessage(err, '撤回失败') })
     }
+  },
+
+  /** 队长初始化队伍进度（补录线下真实状态）；成功后刷新棋盘 */
+  initializeTeam: async (payload) => {
+    set({ error: null })
+    await api.initializeTeam(payload)
+    await get().refresh()
   },
 
   enroll: async (nickname) => {

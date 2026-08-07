@@ -47,6 +47,8 @@ const (
 	LitReasonFallback = "fallback"
 	LitReasonTimer    = "timer"
 	LitReasonManual   = "manual"
+	// LitReasonInitial 队长初始化时补录的已点亮格
+	LitReasonInitial = "initial"
 )
 
 // 审核状态流（PRD 9.1）

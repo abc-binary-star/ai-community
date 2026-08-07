@@ -133,6 +133,21 @@ func (s *ActivityService) addEvent(tx *gorm.DB, teamID, eventType, text string) 
 	}).Error
 }
 
+// litLapOf 队伍在某格最近一次点亮的轮次（补卡时定位该格记账轮次）。
+// 该格从未点亮返回 0。
+func (s *ActivityService) litLapOf(ctx context.Context, teamID string, tileIndex int) (int, error) {
+	var row model.ActivityTeamProgress
+	if err := dal.DB.WithContext(ctx).
+		Where("team_id = ? AND tile_index = ? AND lit = ?", teamID, tileIndex, true).
+		Order("created_at desc").First(&row).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return row.Lap, nil
+}
+
 // displayNameOf 成员展示名：优先昵称，回落用户名。
 // User.DisplayName / Avatar 为 *string，统一在此解引用避免各处判空。
 func displayNameOf(u *model.User) string {

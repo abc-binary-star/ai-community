@@ -45,7 +45,7 @@ export type TeamStatus =
   | 'completed'
 
 /** 点亮方式 */
-export type LitReason = 'task' | 'fallback' | 'timer' | 'manual'
+export type LitReason = 'task' | 'fallback' | 'timer' | 'manual' | 'initial'
 
 export interface TeamMember {
   id: string

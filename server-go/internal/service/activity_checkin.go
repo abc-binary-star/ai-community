@@ -52,9 +52,16 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 	if team.Status == model.TeamStatusCompleted {
 		return nil, ErrActivityCompleted
 	}
-	// 打卡格子必须是队伍当前所在格，避免绕过流程给未到达的格子刷进度
+	// 打卡目标格：队伍当前格（正常打卡）或本队已点亮的历史格（补卡，
+	// 用于活动已开始后补录线下完成的格子）。其余格子不允许刷进度。
+	litTiles, err := s.litTilesOf(ctx, team.ID)
+	if err != nil {
+		return nil, err
+	}
 	if req.TileIndex != team.Position {
-		return nil, ErrActivityInvalidInput
+		if _, lit := litTiles[req.TileIndex]; !lit {
+			return nil, ErrActivityInvalidInput
+		}
 	}
 	tile, err := s.getTile(ctx, req.TileIndex)
 	if err != nil {
@@ -63,6 +70,17 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 	// 计时惩罚格没有阅读任务，不接受打卡
 	if tile.TaskType == model.TaskTypeTimedPenalty {
 		return nil, ErrActivityTimerRunning
+	}
+
+	// 补卡到已点亮的历史格时，记录到该格点亮的那一轮（lap），
+	// 保底计数才能分轮记账；当前格打卡用队伍当前 lap
+	lap := team.Lap
+	if req.TileIndex != team.Position {
+		if l, err := s.litLapOf(ctx, team.ID, req.TileIndex); err != nil {
+			return nil, err
+		} else if l > 0 {
+			lap = l
+		}
 	}
 
 	// 必填三要素校验 + 组内自查重
@@ -107,7 +125,7 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 		TeamID:      team.ID,
 		MemberID:    me.ID,
 		TileIndex:   req.TileIndex,
-		Lap:         team.Lap,
+		Lap:         lap,
 		EvidenceURL: strings.TrimSpace(req.EvidenceURL),
 	}
 	books := make([]model.ActivityCheckInBook, 0, len(req.Books))
@@ -116,7 +134,7 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 			TeamID:          team.ID,
 			MemberID:        me.ID,
 			TileIndex:       req.TileIndex,
-			Lap:             team.Lap,
+			Lap:             lap,
 			Title:           b.Title,
 			Author:          b.Author,
 			WordCount:       b.WordCount,

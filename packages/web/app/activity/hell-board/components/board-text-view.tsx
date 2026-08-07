@@ -3,14 +3,15 @@
 import { TASK_TYPE_LABEL } from '../lib/board'
 import { formatTileTarget } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
-import type { Team } from '../lib/types'
+import type { LitReason, Team } from '../lib/types'
 
-const LIT_LABEL = {
+const LIT_LABEL: Record<LitReason, string> = {
   task: '已点亮（任务达成）',
   fallback: '已点亮（保底完成）',
   timer: '已点亮（计时到期）',
   manual: '已点亮（人工修正）',
-} as const
+  initial: '已点亮（初始化补录）',
+}
 
 /**
  * 棋盘文本视图（PRD 10.2 / 验收标准 13）：

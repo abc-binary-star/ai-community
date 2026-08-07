@@ -211,6 +211,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	captain.PUT("", handler.UpdateTeamByCaptain)
 	captain.GET("/enrollments", handler.ListActivityEnrollments)
 	captain.POST("/members", handler.AddTeamMemberByCaptain)
+	// 队长初始化队伍进度：补录活动已开始后的真实位置/已点亮格（幂等）
+	captain.POST("/initialize", handler.InitializeActivityTeam)
 	// 自助选组入队（可选成为队长）
 	captain.POST("/join", handler.JoinActivityTeam)
 

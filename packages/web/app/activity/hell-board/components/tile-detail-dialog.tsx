@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Dices, Hourglass, Loader2, Lock, X } from 'lucide-react'
+import { ClipboardList, Dices, Hourglass, Loader2, Lock, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RULES, TASK_TYPE_LABEL } from '../lib/board'
 import { fetchTileDetail } from '../lib/api'
 import { formatTileTarget, formatWords } from '../lib/rules'
 import { useActivityStore, useTile } from '../lib/store'
 import type { LitReason, TileDetail, TileRecord } from '../lib/types'
+import { CheckInFormDialog } from './checkin-form-dialog'
 import { ReviewBadge } from './review-badge'
 import { TeamEmblem } from './team-emblem'
 
@@ -16,6 +17,7 @@ const LIT_LABEL: Record<LitReason, string> = {
   fallback: '保底完成',
   timer: '计时到期',
   manual: '人工修正',
+  initial: '初始化补录',
 }
 
 /**
@@ -35,8 +37,12 @@ export function TileDetailDialog({
   const fallbackTile = useTile(tileIndex)
   // 队伍形象：按 teamId 从棋盘快照里取，未配置时组件内部回退
   const teams = useActivityStore((s) => s.teams)
+  const archived = useActivityStore((s) => s.archived)
   const [detail, setDetail] = useState<TileDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  // 本组已点亮格的补卡表单；reloadKey 用于补卡提交后刷新本格记录
+  const [showCheckInForm, setShowCheckInForm] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,7 +68,7 @@ export function TileDetailDialog({
     return () => {
       alive = false
     }
-  }, [tileIndex])
+  }, [tileIndex, reloadKey])
 
   // 服务端下发的判定规则是平铺字段，这里补齐成组件消费的嵌套结构
   const tile = useMemo(() => {
@@ -175,6 +181,17 @@ export function TileDetailDialog({
                     {row.lit && row.litReason && (
                       <span className="ml-2 text-amber-300">已点亮 · {LIT_LABEL[row.litReason]}</span>
                     )}
+                    {/* 本组已点亮格支持补卡：补录线下已完成的打卡 */}
+                    {row.isMyTeam && row.lit && tile.taskType !== 'timed-penalty' && !archived && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCheckInForm(true)}
+                        className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-2 border-[#8b6b2c] bg-[#fff8e5] px-1.5 text-[10px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6]"
+                      >
+                        <ClipboardList className="size-3" />
+                        补卡
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}
@@ -222,6 +239,17 @@ export function TileDetailDialog({
           )}
         </section>
       </div>
+
+      {showCheckInForm && (
+        <CheckInFormDialog
+          tileIndex={tileIndex}
+          onClose={() => {
+            setShowCheckInForm(false)
+            // 补卡提交后刷新本格记录
+            setReloadKey((k) => k + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

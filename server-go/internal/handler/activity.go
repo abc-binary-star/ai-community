@@ -510,3 +510,21 @@ func AddTeamMemberByCaptain(ctx context.Context, c *app.RequestContext) {
 	}
 	response.Created(c, dto)
 }
+
+// InitializeActivityTeam 队长初始化队伍进度（活动已开始后的补录）：
+// 录入线下已完成的起始格、已点亮格与当前格，可重复执行（幂等覆盖）
+// POST /api/activity/hell-board/team/initialize
+func InitializeActivityTeam(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityTeamInitReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.InitializeTeam(ctx, userID, req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
