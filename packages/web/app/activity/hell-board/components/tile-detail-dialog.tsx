@@ -12,11 +12,18 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 import { RULES, TASK_TYPE_LABEL } from '../lib/board'
 import { fetchBookLibrary, fetchTileDetail } from '../lib/api'
 import { formatTileTarget, formatWords } from '../lib/rules'
 import { useActivityStore, useTile } from '../lib/store'
-import type { BookLibraryItem, LitReason, TileDetail, TileRecord } from '../lib/types'
+import type {
+  AdminCheckInTarget,
+  BookLibraryItem,
+  LitReason,
+  TileDetail,
+  TileRecord,
+} from '../lib/types'
 import { CheckInFormDialog } from './checkin-form-dialog'
 import { ReviewBadge } from './review-badge'
 import { TeamEmblem } from './team-emblem'
@@ -157,9 +164,30 @@ export function TileDetailDialog({
   const fallbackTile = useTile(tileIndex)
   // 队伍形象：按 teamId 从棋盘快照里取，未配置时组件内部回退
   const teams = useActivityStore((s) => s.teams)
+  const tiles = useActivityStore((s) => s.tiles)
   const archived = useActivityStore((s) => s.archived)
   // 书库接口要求入组成员身份，观战用户只提示不请求
   const myMemberId = useActivityStore((s) => s.myMemberId)
+  // 管理员补卡：格子详情「补卡」按钮对管理员开放选择打卡人
+  const role = useAuthStore((s) => s.user?.role)
+  const isAdmin = role === 'admin' || role === 'moderator'
+  // 参与人列表：全部已入队成员及其队伍当前格（管理员补卡选择用）
+  const adminTargets = useMemo<AdminCheckInTarget[]>(() => {
+    if (!isAdmin) return []
+    const out: AdminCheckInTarget[] = []
+    for (const team of teams) {
+      for (const m of team.members ?? []) {
+        out.push({
+          memberId: m.id,
+          name: m.name,
+          teamId: team.id,
+          teamName: team.name,
+          position: team.position,
+        })
+      }
+    }
+    return out
+  }, [isAdmin, teams])
   const [detail, setDetail] = useState<TileDetail | null>(null)
   const [loading, setLoading] = useState(true)
   // 本组已点亮格的补卡表单；reloadKey 用于补卡提交后刷新本格记录
@@ -305,17 +333,21 @@ export function TileDetailDialog({
                     {row.lit && row.litReason && (
                       <span className="ml-2 text-amber-300">已点亮 · {LIT_LABEL[row.litReason]}</span>
                     )}
-                    {/* 本组已点亮格支持补卡：补录线下已完成的打卡 */}
-                    {row.isMyTeam && row.lit && tile.taskType !== 'timed-penalty' && !archived && (
-                      <button
-                        type="button"
-                        onClick={() => setShowCheckInForm(true)}
-                        className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-2 border-[#8b6b2c] bg-[#fff8e5] px-1.5 text-[10px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6]"
-                      >
-                        <ClipboardList className="size-3" />
-                        补卡
-                      </button>
-                    )}
+                    {/* 本组已点亮格支持补卡：补录线下已完成的打卡；
+                        管理员对任意队伍已点亮格都可补卡（补卡人可选） */}
+                    {row.lit &&
+                      tile.taskType !== 'timed-penalty' &&
+                      !archived &&
+                      (row.isMyTeam || isAdmin) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowCheckInForm(true)}
+                          className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-2 border-[#8b6b2c] bg-[#fff8e5] px-1.5 text-[10px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6]"
+                        >
+                          <ClipboardList className="size-3" />
+                          补卡
+                        </button>
+                      )}
                   </span>
                 </li>
               ))}
@@ -376,6 +408,10 @@ export function TileDetailDialog({
       {showCheckInForm && (
         <CheckInFormDialog
           tileIndex={tileIndex}
+          adminMode={isAdmin}
+          adminTargets={isAdmin ? adminTargets : undefined}
+          adminTiles={isAdmin ? tiles : undefined}
+          lockTileIndex
           onClose={() => {
             setShowCheckInForm(false)
             // 补卡提交后刷新本格记录

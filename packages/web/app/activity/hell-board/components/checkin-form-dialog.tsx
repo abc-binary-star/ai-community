@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ChevronDown, Copy, Plus, Search, Trash2, X } from 'lucide-react'
-import { adminSubmitCheckIn, DuplicateBookError, fetchBookLibrary } from '../lib/api'
+import { adminSubmitCheckIn, DuplicateBookError, fetchBookLibrary, updateCheckIn } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam, useTile } from '../lib/store'
 import type { AdminCheckInTarget, BookLibraryItem, CheckInDraftBook, Tile } from '../lib/types'
@@ -17,6 +17,8 @@ interface BookFormRow {
   durationHours: string
   durationMins: string
   coverUrl: string
+  /** 读书心得（选填），导出群打卡文本时展示 */
+  note: string
 }
 
 let rowSeq = 1
@@ -30,6 +32,7 @@ function emptyRow(): BookFormRow {
     durationHours: '',
     durationMins: '',
     coverUrl: '',
+    note: '',
   }
 }
 
@@ -54,25 +57,39 @@ export function CheckInFormDialog({
   tileIndex,
   onClose,
   initialBooks,
+  editCheckInId,
   adminMode,
   adminTargets,
   adminTiles,
+  lockTileIndex,
 }: {
   tileIndex: number
   onClose: () => void
   initialBooks?: CheckInDraftBook[]
+  /**
+   * 编辑模式：修改自己历史打卡的内容。
+   * 传入 checkInId 后，提交走 PUT 更新接口，书目预填 initialBooks。
+   */
+  editCheckInId?: string
   adminMode?: boolean
   /** 管理员补卡：活动参与人列表（已入队成员及其队伍当前格） */
   adminTargets?: AdminCheckInTarget[]
   /** 管理员补卡：格子定义（审批台页面不加载活动 store，需传入） */
   adminTiles?: Tile[]
+  /**
+   * 锁定补卡目标格为外部传入的 tileIndex：
+   * 格子详情入口补卡到「当前查看的已点亮格」时置 true；
+   * 审批台入口补卡到补卡人队伍当前格时保持 false。
+   */
+  lockTileIndex?: boolean
 }) {
   const team = useCurrentTeam()
   const storeTile = useTile(tileIndex)
   // 管理员补卡：目标格取所选补卡人所在队伍的当前格，否则用外部传入格
   const [adminTarget, setAdminTarget] = useState<AdminCheckInTarget | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const effTileIndex = adminMode && adminTarget ? adminTarget.position : tileIndex
+  const effTileIndex =
+    adminMode && adminTarget && !lockTileIndex ? adminTarget.position : tileIndex
   const tile = adminMode ? adminTiles?.find((t) => t.index === effTileIndex) : storeTile
   const findDuplicates = useActivityStore((s) => s.findDuplicates)
   const submitCheckIn = useActivityStore((s) => s.submitCheckIn)
@@ -100,9 +117,12 @@ export function CheckInFormDialog({
       durationHours: b.durationMinutes ? String(Math.floor(b.durationMinutes / 60)) : '',
       durationMins: b.durationMinutes ? String(b.durationMinutes % 60 || '') : '',
       coverUrl: b.coverUrl ?? '',
+      note: b.note ?? '',
     }))
   })
-  const isResubmit = Boolean(initialBooks?.length)
+  // 编辑模式：修改历史打卡内容；驳回重提（initialBooks 无 checkInId）仍走重新提交
+  const isEditing = Boolean(editCheckInId)
+  const isResubmit = Boolean(initialBooks?.length) && !isEditing
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [duplicates, setDuplicates] = useState<string[]>([])
   const [groupText, setGroupText] = useState('')
@@ -237,13 +257,21 @@ export function CheckInFormDialog({
         wordCount: wanToWords(r.wanWords),
         durationMinutes: totalMins > 0 ? totalMins : undefined,
         coverUrl: r.coverUrl || undefined,
+        // 读书心得（选填），导出群打卡文本时展示
+        note: r.note.trim() || undefined,
       }
     })
 
     setSubmitting(true)
     setError(null)
     try {
-      if (adminMode) {
+      if (isEditing) {
+        await updateCheckIn(editCheckInId!, {
+          tileIndex: effTileIndex,
+          books,
+          evidenceUrl: evidenceUrl.trim() || undefined,
+        })
+      } else if (adminMode) {
         // 管理员补卡：必须已选择补卡人
         if (!adminTarget) {
           setError('请先选择补卡人')
@@ -350,7 +378,7 @@ export function CheckInFormDialog({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="checkin-title" className="text-lg font-black text-stone-900">
-              {adminMode ? '补卡' : '提交打卡'} · 第 {effTileIndex} 格
+              {isEditing ? '修改打卡' : adminMode ? '补卡' : '提交打卡'} · 第 {effTileIndex} 格
             </h2>
             <p className="mt-0.5 text-xs font-medium text-stone-500">{tile?.title ?? ''}</p>
           </div>
@@ -363,6 +391,12 @@ export function CheckInFormDialog({
             <X className="size-4" />
           </button>
         </div>
+
+        {isEditing && (
+          <p className="mt-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
+            修改历史打卡内容：已通过审核的书若改动字数或时长，服务端会同步重算任务进度与榜单数据。
+          </p>
+        )}
 
         {adminMode && (
           <div className="relative mt-3">
@@ -587,6 +621,15 @@ export function CheckInFormDialog({
                   <span className="shrink-0 text-xs font-bold text-stone-500">分钟</span>
                 </div>
 
+                {/* 读书心得（选填）：导出群打卡文本时展示 */}
+                <textarea
+                  placeholder="读书心得（选填，如「这本书非常好，逻辑缜密…」）"
+                  value={row.note}
+                  onChange={(e) => updateRow(row.id, 'note', e.target.value)}
+                  rows={2}
+                  className="w-full resize-y rounded-md border-2 border-stone-300 bg-white px-3 py-2 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
+                />
+
                 {needCover && (
                   <ImageUploadField
                     value={row.coverUrl}
@@ -633,7 +676,7 @@ export function CheckInFormDialog({
             disabled={submitting}
             className="h-10 flex-1 rounded-lg bg-[#78c6a3] text-sm font-black text-stone-900 transition-colors hover:bg-[#65b891] disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
           >
-            {submitting ? '提交中…' : adminMode ? '提交补卡' : '提交打卡'}
+            {submitting ? '提交中…' : isEditing ? '保存修改' : adminMode ? '提交补卡' : '提交打卡'}
           </button>
         </div>
       </div>
