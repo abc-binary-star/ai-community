@@ -64,6 +64,6 @@ jobs:
             if [ -d .git ]; then
               git pull --ff-only
             else
-              echo "ℹ️  非 git 仓库，跳过 pull；nginx.conf 等配置变更需手动同步到服务器"
+              echo "[skip] not a git repo; sync nginx.conf manually"
             fi
             ./deploy.sh
