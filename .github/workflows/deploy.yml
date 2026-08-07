@@ -55,5 +55,10 @@ jobs:
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
           script: |
+            set -e
             cd ${{ secrets.ECS_DEPLOY_PATH }}
+            # 拉取最新仓库文件：前后端代码走镜像分发，但 nginx.conf /
+            # docker-compose.prod.yml / deploy.sh 是服务器本地文件，
+            # 不 pull 就永远是旧版本（改了 nginx.conf 也不会生效）
+            git pull --ff-only
             ./deploy.sh

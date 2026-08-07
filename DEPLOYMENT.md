@@ -78,13 +78,19 @@ scp -r /Users/xqd_mac/codeing/ai-community root@你的服务器IP:/opt/
 
 ```bash
 cd /opt/ai-community
-cp .env.production .env.production
-nano .env.production
+cp .env.prod.example .env
+nano .env
 ```
 
 必须修改的值：
 
 ```
+# 镜像仓库凭据（GitHub Actions 把镜像推到这里，服务器从这里拉）
+REGISTRY_URL=crpi-xxxxx.cn-beijing.personal.cr.aliyuncs.com
+REGISTRY_NAMESPACE=你的命名空间
+REGISTRY_USERNAME=你的阿里云账号
+REGISTRY_PASSWORD=镜像服务固定密码
+
 # JWT 密钥（必须更换）
 # 生成命令: openssl rand -hex 32
 JWT_SECRET=a1b2c3d4e5f6...
@@ -104,14 +110,18 @@ bash deploy.sh
 ```
 
 脚本会自动完成：
-1. 检查 Docker 环境
-2. 加载环境变量
-3. 构建 Docker 镜像（Go 后端 + 前端）
+1. 校验 `.env` 必填项
+2. 登录阿里云镜像仓库
+3. 拉取最新镜像（前后端镜像由 GitHub Actions 构建并推送，服务器不编译代码）
 4. 启动所有服务
+5. 校验并热重载 Nginx 配置
 
 Go 后端启动时通过 GORM AutoMigrate 自动建表，无需手动运行数据库迁移。默认频道数据也会自动初始化。
 
-首次构建约 3-5 分钟。
+首次拉取镜像约 2-3 分钟。
+
+> 推送 main 分支会触发 GitHub Actions 自动构建镜像并 SSH 到服务器执行 `git pull && ./deploy.sh`，
+> 通常无需手动操作。手动部署仅用于首次初始化或排查问题。
 
 ## 第五步：验证
 
@@ -175,7 +185,7 @@ pnpm dev
 
 ### 端口被占用
 
-修改 `.env.production` 里的 `NGINX_PORT=8080`
+修改 `.env` 里的 `NGINX_PORT=8080`
 
 ### 后端连不上数据库
 
@@ -187,7 +197,24 @@ docker compose -f docker-compose.prod.yml restart server
 
 ### CORS 报错
 
-检查 `.env.production` 里的 `CORS_ORIGIN` 是否包含前端页面的域名。
+检查 `.env` 里的 `CORS_ORIGIN` 是否包含前端页面的域名。
+
+### 上传图片报 413 Request Entity Too Large
+
+`nginx.conf` 是以 bind mount 挂载进容器的，改动它**不会**被 `docker compose up -d` 感知（镜像摘要与服务配置都没变，容器不会重建），运行中的 Nginx 仍用旧配置。
+`deploy.sh` 已包含热重载步骤，若需手动执行：
+
+```bash
+cd /opt/ai-community
+docker compose -f docker-compose.prod.yml exec nginx nginx -t       # 先校验语法
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+```
+
+确认当前生效值（应为 35m，而非默认 1m）：
+
+```bash
+docker compose -f docker-compose.prod.yml exec nginx grep -r client_max_body_size /etc/nginx/
+```
 
 ### 容器构建时内存不够
 

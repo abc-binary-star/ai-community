@@ -46,7 +46,30 @@ docker compose -f docker-compose.prod.yml pull
 echo "==> 启动服务"
 docker compose -f docker-compose.prod.yml up -d
 
-# 6. 显示状态
+# 6. 重载 Nginx 配置
+# nginx.conf 是 bind mount 挂进容器的：改文件不会改变镜像摘要与服务配置，
+# up -d 因此不会重建 nginx 容器，配置变更（如 client_max_body_size）不会生效。
+# 这里显式校验并热重载，让 nginx.conf 的改动随部署自动落地。
+echo "==> 重载 Nginx 配置"
+compose="docker compose -f docker-compose.prod.yml"
+# 等待 nginx 容器就绪：容器首次创建时主进程可能还没起来，直接 reload 会失败
+for _ in $(seq 1 10); do
+  $compose exec -T nginx nginx -t >/dev/null 2>&1 && break
+  sleep 1
+done
+if $compose exec -T nginx nginx -t; then
+  # reload 失败（如容器刚启动）不阻断部署：此时容器加载的已是最新配置
+  if $compose exec -T nginx nginx -s reload; then
+    echo "✅ Nginx 配置已重载"
+  else
+    echo "ℹ️  Nginx 刚启动，已加载最新配置，无需重载"
+  fi
+else
+  echo "❌ Nginx 配置校验失败，已保留当前运行配置，请检查 nginx.conf"
+  exit 1
+fi
+
+# 7. 显示状态
 echo "==> 服务状态"
 docker compose -f docker-compose.prod.yml ps
 
