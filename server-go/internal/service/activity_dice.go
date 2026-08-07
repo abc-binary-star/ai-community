@@ -84,6 +84,81 @@ func (s *ActivityService) AdvanceTeam(ctx context.Context, userID string, steps 
 	return &out, nil
 }
 
+// FallbackAdvance 保底前进：消耗 40 本全局保底计数，点亮当前格并前进。
+//
+// 由队长手动触发（不自动执行）：任务未完成时，用全队累计通过的 40 本书
+// 换当前格点亮与前进。前进方式与掷骰 / 手动前进一致：
+//   - steps 为 0 时摇骰子（服务端随机生成 1–6 点）；
+//   - steps 为 1–6 时按队长自选步数前进（适用于不想摇骰的队伍）。
+//
+// 前进规则（离开格点亮方式、落入第 8 格计时、轮次、完成判定）完全复用 moveTeamTx。
+func (s *ActivityService) FallbackAdvance(ctx context.Context, userID string, steps int) (*types.ActivityRollResultDTO, error) {
+	now := time.Now()
+	if err := s.requireWritable(now); err != nil {
+		return nil, err
+	}
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !me.IsCaptain {
+		return nil, ErrActivityNotCaptain
+	}
+	if steps < 0 || steps > hellboard.DiceFaces {
+		return nil, ErrActivityInvalidInput
+	}
+
+	var out types.ActivityRollResultDTO
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var team model.ActivityTeam
+		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", me.TeamID).Error; err != nil {
+			return err
+		}
+		if team.Status == model.TeamStatusTimerRunning {
+			return ErrActivityTimerRunning
+		}
+		if team.Status == model.TeamStatusCompleted {
+			return ErrActivityCompleted
+		}
+		if team.FallbackCount < hellboard.FallbackThreshold {
+			return ErrActivityFallbackNotReady
+		}
+		// 当前格已点亮（如绕圈回到已点亮格）时直接走普通前进，不消耗保底
+		litTiles, err := s.litTilesTx(tx, team.ID)
+		if err != nil {
+			return err
+		}
+		if _, lit := litTiles[team.Position]; lit {
+			return ErrActivityNotRollable
+		}
+
+		// 自选步数缺省（0）时摇骰子生成随机点数
+		if steps == 0 {
+			steps = hellboard.RollDice()
+		}
+		// 先按保底前进：moveTeamTx 内部此时 FallbackCount 仍 ≥ 40，
+		// LitReasonFor 会把离开格记为「保底完成」点亮；随后再消耗计数。
+		if err := s.moveTeamTx(tx, &team, me, steps, now, &out); err != nil {
+			return err
+		}
+		team.FallbackCount -= hellboard.FallbackThreshold
+		if team.FallbackCount < 0 {
+			team.FallbackCount = 0
+		}
+		if err := tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).
+			Update("fallback_count", team.FallbackCount).Error; err != nil {
+			return err
+		}
+		out.Team.FallbackCount = team.FallbackCount
+		return s.addEvent(tx, team.ID, model.EventTypeFallback,
+			fmt.Sprintf("消耗 %d 本保底计数，向下一格进发（前进 %d 格）", hellboard.FallbackThreshold, steps))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // checkRollableTx 掷骰 / 手动前进的前置校验（需在事务内且队伍行已加锁）：
 // 计时到期先结算，随后校验状态为待前进。
 func (s *ActivityService) checkRollableTx(tx *gorm.DB, team *model.ActivityTeam, now time.Time) error {

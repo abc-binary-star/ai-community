@@ -198,6 +198,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.DELETE("/checkins/:id/like", handler.UnlikeActivityCheckIn)
 	activity.POST("/roll", handler.RollActivityDice)
 	activity.POST("/advance", handler.AdvanceActivityTeam)
+	activity.POST("/advance/fallback", handler.FallbackAdvanceActivityTeam)
 	activity.GET("/judgement", handler.GetActivityJudgement)
 	activity.POST("/judgement/roll", handler.RollActivityJudgement)
 	activity.GET("/tiles/:index", handler.GetActivityTileDetail)

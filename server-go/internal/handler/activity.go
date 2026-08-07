@@ -95,6 +95,24 @@ func AdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
+// FallbackAdvanceActivityTeam 队长消耗 40 本保底计数向下一格进发：
+// steps 为自选步数（1–6），0 表示摇骰子随机前进
+// POST /api/activity/hell-board/advance/fallback
+func FallbackAdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityFallbackAdvanceReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	result, err := activityService.FallbackAdvance(ctx, userID, req.Steps)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // GetActivityJudgement 读取当前判定会话
 // GET /api/activity/hell-board/judgement
 func GetActivityJudgement(ctx context.Context, c *app.RequestContext) {

@@ -89,6 +89,8 @@ func Init(cfg *conf.Config) {
 		&model.ActivityBookVote{},
 		&model.ActivityCheckInLike{},
 		&model.ActivityFeedback{},
+		// 一次性数据迁移标记（幂等锁）
+		&model.ActivityMigrationState{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -113,6 +115,9 @@ func Init(cfg *conf.Config) {
 
 	// 队伍表为空时创建默认队伍（生产初始化，幂等）
 	seedActivityTeams()
+
+	// 一次性回填全局保底计数：上线前已终审通过的书目计入各队保底（迁移标记防重）
+	migrateGlobalFallbackBackfill()
 
 	// 幂等地确保超级管理员账号存在且角色为 admin（读书地狱审核需要管理员身份）
 	seedSuperAdmin()

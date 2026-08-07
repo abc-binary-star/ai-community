@@ -140,6 +140,14 @@ export function advanceTeam(steps: number): Promise<RollResult> {
   })
 }
 
+/** 队长消耗 40 本保底计数向下一格进发：steps 为自选步数（1–6），0 表示摇骰子随机 */
+export function fallbackAdvance(steps: number = 0): Promise<RollResult> {
+  return apiFetch<RollResult>(`${BASE}/advance/fallback`, {
+    method: 'POST',
+    body: JSON.stringify({ steps }),
+  })
+}
+
 // --- 反馈（bug / 需求） ---
 
 /** 提交活动反馈：进入管理员监督台（审批台）的待处理列表 */

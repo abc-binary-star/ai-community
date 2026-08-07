@@ -27,16 +27,22 @@ func TestDeriveStatusSpecialTileNeedsJudgement(t *testing.T) {
 	}
 }
 
-func TestDeriveStatusFallbackBypassesJudgement(t *testing.T) {
-	// 保底达成时视为判定通过，直接待掷骰（PRD 7.3）
+func TestDeriveStatusFallbackDoesNotAutoAdvance(t *testing.T) {
+	// 保底满 40 本不再自动改变状态：任务未完成时保持进行中，
+	// 由队长点「消耗 40 本向下一格进发」按钮手动触发（不绕过判定）。
 	team := &model.ActivityTeam{
 		Position:      4,
 		Status:        model.TeamStatusInProgress,
 		TileProgress:  0,
 		FallbackCount: FallbackThreshold,
 	}
-	if got := DeriveStatus(team, tile(4), 0); got != model.TeamStatusAwaitingRoll {
-		t.Errorf("保底达成应绕过判定进入待掷骰，得到 %s", got)
+	if got := DeriveStatus(team, tile(4), 0); got != model.TeamStatusInProgress {
+		t.Errorf("保底满 40 但任务未完成应保持进行中（等待手动触发），得到 %s", got)
+	}
+	// 任务完成后保底计数不影响状态机：判定格仍需判定
+	team.TileProgress = 6
+	if got := DeriveStatus(team, tile(4), 0); got != model.TeamStatusAwaitingJudgement {
+		t.Errorf("判定格任务达标应进入待判定，得到 %s", got)
 	}
 }
 

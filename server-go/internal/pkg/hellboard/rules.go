@@ -39,8 +39,10 @@ func IsFallbackDone(fallbackCount int, tile *model.ActivityTile) bool {
 
 // DeriveStatus 根据当前进度推导队伍应处状态（PRD 7.2 状态机）。
 //
-// 优先级：已完成 / 计时中最高，其次保底达成直接进入待掷骰
-// （落在判定格时保底同时视为判定通过，无需再掷判定骰，见 PRD 7.3）。
+// 优先级：已完成 / 计时中最高，其次任务达成进入待掷骰
+// （落在判定格时任务达成需掷判定骰）。
+// 注意：全局保底（40 本）不再自动改变状态——由队长点「消耗 40 本向下一格进发」
+// 按钮手动触发，见 activity_dice.go FallbackAdvance。
 func DeriveStatus(team *model.ActivityTeam, tile *model.ActivityTile, litCount int) string {
 	if litCount >= TileCount {
 		return model.TeamStatusCompleted
@@ -51,9 +53,6 @@ func DeriveStatus(team *model.ActivityTeam, tile *model.ActivityTile, litCount i
 	// 计时未到期保持计时中；到期由 SettleTimer 推进，不在此处翻转
 	if team.Status == model.TeamStatusTimerRunning {
 		return model.TeamStatusTimerRunning
-	}
-	if IsFallbackDone(team.FallbackCount, tile) {
-		return model.TeamStatusAwaitingRoll
 	}
 	if !IsTaskDone(team.TileProgress, tile) {
 		return model.TeamStatusInProgress

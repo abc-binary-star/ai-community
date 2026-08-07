@@ -416,3 +416,12 @@ func (f *ActivityFeedback) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// ActivityMigrationState 一次性数据迁移标记（幂等锁）：
+// 记录已执行过的迁移 key，避免回填类操作被重复执行（如保底计数历史回填）。
+type ActivityMigrationState struct {
+	MigrationKey string    `gorm:"primaryKey;size:64" json:"migrationKey"`
+	AppliedAt    time.Time `json:"appliedAt"`
+}
+
+func (ActivityMigrationState) TableName() string { return "activity_migration_state" }

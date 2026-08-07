@@ -25,6 +25,7 @@ import { BoardGrid } from './components/board-grid'
 import { CheckInFormDialog } from './components/checkin-form-dialog'
 import { CurrentTaskPanel } from './components/current-task-panel'
 import { EnrollWizard } from './components/enroll-wizard'
+import { FallbackAdvanceDialog } from './components/fallback-advance-dialog'
 import { MyCheckInsPanel } from './components/my-checkins-panel'
 import { MyProfileDialog } from './components/my-profile-dialog'
 import { RankingPanel } from './components/ranking-panel'
@@ -168,6 +169,8 @@ export function HellBoardView() {
   const [showMyProfile, setShowMyProfile] = useState(false)
   // 向下一格进发：队长手动选择前进格数（替代掷骰随机点数）
   const [showAdvance, setShowAdvance] = useState(false)
+  // 保底前进：消耗 40 本保底计数，可摇骰或自选步数
+  const [showFallbackAdvance, setShowFallbackAdvance] = useState(false)
 
   useEffect(() => {
     void loadAll()
@@ -321,6 +324,7 @@ export function HellBoardView() {
                   readOnly={archived}
                   onOpenCheckIn={() => setShowCheckInForm(true)}
                   onOpenAdvance={() => setShowAdvance(true)}
+                  onOpenFallbackAdvance={() => setShowFallbackAdvance(true)}
                 />
               ) : (
                 <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
@@ -432,6 +436,10 @@ export function HellBoardView() {
 
       {showAdvance && currentTeam && (
         <AdvanceDialog onClose={() => setShowAdvance(false)} />
+      )}
+
+      {showFallbackAdvance && currentTeam && (
+        <FallbackAdvanceDialog onClose={() => setShowFallbackAdvance(false)} />
       )}
 
       {showMyProfile && <MyProfileDialog onClose={() => setShowMyProfile(false)} />}

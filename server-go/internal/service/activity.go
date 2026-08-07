@@ -39,6 +39,7 @@ var (
 	ErrActivityTimerRunning     = &ActivityError{Msg: "惩罚计时中，期间无法打卡与掷骰", Code: 409}
 	ErrActivityCompleted        = &ActivityError{Msg: "本队已完成活动", Code: 409}
 	ErrActivityNotRollable      = &ActivityError{Msg: "当前不可掷骰，请先完成本格任务", Code: 409}
+	ErrActivityFallbackNotReady = &ActivityError{Msg: "全队累计通过审核未满 40 本，暂不能使用保底前进", Code: 409}
 	ErrActivityRollInFlight     = &ActivityError{Msg: "本队有掷骰正在进行中，请稍后再试", Code: 409}
 	ErrActivityNoJudgement      = &ActivityError{Msg: "当前格无特殊判定或状态不符", Code: 409}
 	ErrActivityAlreadyRolled    = &ActivityError{Msg: "你已在本轮判定中掷过骰", Code: 409}

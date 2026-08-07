@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -30,8 +29,6 @@ func taskDelta(book *model.ActivityCheckInBook, tile *model.ActivityTile) int64 
 //
 // 任务进度仅由人工终审通过的打卡累加，AI 结论不直接改变进度（验收标准 2）。
 func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckInBook, countsForTask bool) error {
-	now := time.Now()
-
 	var team model.ActivityTeam
 	if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", book.TeamID).Error; err != nil {
 		return err
@@ -50,8 +47,9 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 		return err
 	}
 
-	// 保底计数为全队全局累计：任何通过审核的书目都计入（不论格子与轮次），
-	// 满阈值即点亮当前格并消耗阈值本数，其余计数顺延到下一格（P1-5 全局保底）。
+	// 保底计数为全队全局累计：任何通过审核的书目都计入（不论格子与轮次）。
+	// 满阈值后由队长点「消耗 40 本向下一格进发」按钮手动触发（不自动点亮），
+	// 见 activity_dice.go FallbackAdvance。
 	// 任务进度只对「队伍当前所在格 + 当前轮次」的提交累加；补卡到已点亮历史格的
 	// 书目仍进榜单，并累加该格对应轮次的保底展示计数，但不影响当前格进度。
 	isCurrent := book.TileIndex == team.Position && book.Lap == team.Lap
@@ -73,7 +71,18 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 			team.TileProgress += taskDelta(book, tile)
 		}
 	}
+
+	// 记录跨越阈值前后的计数，仅在刚达到阈值时写一次提示事件。
+	// 落库用 SQL 原子自增（fallback_count + 1），不依赖行锁串行化：
+	// 两本书并发通过审核时也能各自 +1，杜绝「通过 N 本计数 < N」的丢更新。
+	fallbackJustReady := team.FallbackCount < hellboard.FallbackThreshold
 	team.FallbackCount++
+	if fallbackJustReady && team.FallbackCount >= hellboard.FallbackThreshold {
+		if err := s.addEvent(tx, team.ID, model.EventTypeFallback,
+			fmt.Sprintf("全队累计通过审核达到 %d 本，队长可消耗 %d 本向下一格进发", hellboard.FallbackThreshold, hellboard.FallbackThreshold)); err != nil {
+			return err
+		}
+	}
 
 	// 保底点亮的是队伍当前所在格：取当前格定义做判定（书的格子可能已离开）
 	curTile, err := s.getTileTx(tx, team.Position)
@@ -86,44 +95,13 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 		return err
 	}
 
-	// 全局保底达成时立即点亮当前格（P1-5 / 验收标准 5），并消耗阈值本数。
-	// 当前格已点亮（如绕圈回到已点亮格）时不重复点亮、不消耗计数。
-	fallbackJustHit := false
-	if _, already := litTiles[team.Position]; !already && hellboard.IsFallbackDone(team.FallbackCount, curTile) {
-		fallbackJustHit = true
-		if err := s.markLitTx(tx, &team, team.Position, model.LitReasonFallback, now); err != nil {
-			return err
-		}
-		if err := s.addEvent(tx, team.ID, model.EventTypeFallback,
-			fmt.Sprintf("全队累计通过审核达到 %d 本保底，本格点亮并解锁前进", hellboard.FallbackThreshold)); err != nil {
-			return err
-		}
-		team.FallbackCount -= hellboard.FallbackThreshold
-		if team.FallbackCount < 0 {
-			team.FallbackCount = 0
-		}
-		litTiles, err = s.litTilesTx(tx, team.ID)
-		if err != nil {
-			return err
-		}
-	}
-
 	prevStatus := team.Status
-	if fallbackJustHit {
-		// 保底点亮后直接进入待前进，无需依赖任务进度（判定格同样视为判定通过）
-		if len(litTiles) >= hellboard.TileCount {
-			team.Status = model.TeamStatusCompleted
-		} else {
-			team.Status = model.TeamStatusAwaitingRoll
-		}
-	} else {
-		team.Status = hellboard.DeriveStatus(&team, curTile, len(litTiles))
-	}
+	team.Status = hellboard.DeriveStatus(&team, curTile, len(litTiles))
 
 	if err := tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).
 		Updates(map[string]any{
 			"tile_progress":  team.TileProgress,
-			"fallback_count": team.FallbackCount,
+			"fallback_count": gorm.Expr("fallback_count + 1"),
 			"status":         team.Status,
 			"last_lit_at":    team.LastLitAt,
 		}).Error; err != nil {
@@ -203,11 +181,8 @@ func (s *ActivityService) rollbackApproval(tx *gorm.DB, book *model.ActivityChec
 		}
 	}
 
-	// 全局保底计数：通过审核时累计、撤销时同步回退（点亮状态不可逆，不在此撤销）
-	if team.FallbackCount > 0 {
-		team.FallbackCount--
-	}
-
+	// 全局保底计数：通过审核时落库原子自增、撤销时原子回退
+	// （点亮状态不可逆，不在此撤销）
 	litTiles, err := s.litTilesTx(tx, team.ID)
 	if err != nil {
 		return err
@@ -225,7 +200,7 @@ func (s *ActivityService) rollbackApproval(tx *gorm.DB, book *model.ActivityChec
 	return tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).
 		Updates(map[string]any{
 			"tile_progress":  team.TileProgress,
-			"fallback_count": team.FallbackCount,
+			"fallback_count": gorm.Expr("GREATEST(fallback_count - 1, 0)"),
 			"status":         team.Status,
 		}).Error
 }

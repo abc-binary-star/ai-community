@@ -129,6 +129,7 @@ interface ActivityState {
   selectTile: (index: number | null) => void
   rollDice: () => Promise<void>
   advanceTeam: (steps: number) => Promise<RollResult | undefined>
+  fallbackAdvance: (steps?: number) => Promise<void>
   rollJudgement: () => Promise<void>
   submitCheckIn: (tileIndex: number, books: CheckInDraftBook[], evidenceUrl?: string) => Promise<void>
   deleteCheckIn: (checkInId: string) => Promise<void>
@@ -288,6 +289,21 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     } catch (err) {
       set({ error: errMessage(err, '前进失败') })
       throw err
+    } finally {
+      set({ rolling: false })
+    }
+  },
+
+  /** 队长消耗 40 本保底计数向下一格进发：steps 0=摇骰子，1–6=自选步数。成功后刷新棋盘 */
+  fallbackAdvance: async (steps: number = 0) => {
+    if (get().rolling) return
+    set({ rolling: true, error: null })
+    try {
+      const result = await api.fallbackAdvance(steps)
+      set({ lastRoll: result.value })
+      await get().refresh()
+    } catch (err) {
+      set({ error: errMessage(err, '保底前进失败') })
     } finally {
       set({ rolling: false })
     }

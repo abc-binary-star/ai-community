@@ -318,6 +318,12 @@ type ActivityAdvanceReq struct {
 	Steps int `json:"steps" vd:"$>=1 && $<=6"`
 }
 
+// ActivityFallbackAdvanceReq 保底前进请求：消耗 40 本全局保底计数后前进。
+// Steps 为自选步数（1–6）；0 表示摇骰子，由服务端随机生成点数。
+type ActivityFallbackAdvanceReq struct {
+	Steps int `json:"steps" vd:"$>=0 && $<=6"`
+}
+
 // --- 反馈（bug / 需求） ---
 
 // ActivityFeedbackReq 提交反馈请求

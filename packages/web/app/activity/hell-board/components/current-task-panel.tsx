@@ -53,6 +53,7 @@ export function CurrentTaskPanel({
   readOnly = false,
   onOpenCheckIn,
   onOpenAdvance,
+  onOpenFallbackAdvance,
 }: {
   team: Team
   isCaptain: boolean
@@ -61,6 +62,8 @@ export function CurrentTaskPanel({
   onOpenCheckIn: () => void
   /** 打开「向下一格进发」（手动选择 1–6 格替代掷骰） */
   onOpenAdvance: () => void
+  /** 打开「消耗 40 本 · 向下一格进发」（保底计数前进，可摇骰或自选步数） */
+  onOpenFallbackAdvance: () => void
 }) {
   const tile = useTile(team.position)
   const judgement = useActivityStore((s) => s.judgement)
@@ -77,6 +80,15 @@ export function CurrentTaskPanel({
   const blocked = blockedReason(team, isCaptain)
   const isPenalty = tile.taskType === 'timed-penalty'
   const canCheckIn = canSubmitCheckIn(team) && !readOnly
+  // 保底按钮：任务未完成时，队长可消耗 40 本保底计数向下一格进发（当前格未点亮时）
+  const canFallbackAdvance =
+    isCaptain &&
+    !readOnly &&
+    fallbackDone &&
+    !taskDone &&
+    team.status !== 'timer-running' &&
+    team.status !== 'completed' &&
+    !team.litTiles[team.position]
 
   return (
     <section aria-labelledby="current-task-heading" className="space-y-3">
@@ -116,8 +128,8 @@ export function CurrentTaskPanel({
               tone="amber"
               hint={
                 fallbackDone
-                  ? '已达保底，本格由保底完成，可直接前进'
-                  : '全队读满 40 本即保底点亮，无需依赖判定结果'
+                  ? '已达保底，队长可消耗 40 本向下一格进发'
+                  : '全队读满 40 本后，队长可消耗保底向下一格进发'
               }
             />
           </div>
@@ -126,8 +138,7 @@ export function CurrentTaskPanel({
         {fallbackDone && (
           <p className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-300 bg-[#fff0b8] px-3 py-1.5 text-xs font-bold text-amber-900">
             <Flame aria-hidden className="size-3.5" />
-            保底已达成，该格将标记为「保底完成」点亮
-            {tile.specialRule && '，且视为判定通过，无需再掷判定骰'}
+            保底已达成，队长可点下方按钮消耗 40 本向下一格进发
           </p>
         )}
       </div>
@@ -157,6 +168,23 @@ export function CurrentTaskPanel({
               <PlusCircle aria-hidden className="size-4" />
               提交打卡
             </button>
+
+            {canFallbackAdvance && (
+              <button
+                type="button"
+                onClick={onOpenFallbackAdvance}
+                disabled={rolling}
+                className={cn(
+                  'flex h-10 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-sm font-black shadow-[3px_3px_0_#292524] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none',
+                  rolling
+                    ? 'cursor-not-allowed border-stone-300 bg-stone-200 text-stone-400 shadow-none'
+                    : 'bg-[#ffb703] text-stone-900 hover:bg-[#f5a800]',
+                )}
+              >
+                <Flame aria-hidden className="size-4" />
+                消耗 {fallbackThreshold} 本 · 向下一格进发
+              </button>
+            )}
 
             {canRollDice(team, isCaptain) && (
               <div className="grid grid-cols-2 gap-2">
