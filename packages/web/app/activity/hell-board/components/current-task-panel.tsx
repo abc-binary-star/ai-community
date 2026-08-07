@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Dices, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
+import { Dices, Download, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TASK_TYPE_LABEL } from '../lib/board'
 import {
@@ -18,6 +18,7 @@ import {
 import { useActivityStore, useTile } from '../lib/store'
 import type { Team } from '../lib/types'
 import { Dice } from './dice'
+import { ExportCheckInDialog } from './export-checkin-dialog'
 import { JudgementPanel } from './judgement-panel'
 import { ProgressBar } from './progress-bar'
 
@@ -78,7 +79,7 @@ export function CurrentTaskPanel({
   const rollDice = useActivityStore((s) => s.rollDice)
   const fallbackThreshold = useActivityStore((s) => s.fallbackThreshold)
   const checkIns = useActivityStore((s) => s.checkIns)
-  const [copied, setCopied] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   // 导出当前任务打卡内容（群打卡模板）：队伍名 + 当前格 + 已点亮格子 + 书目与心得。
   // useMemo 必须放在所有条件返回之前（React Hooks 规则），tile 缺失时兜底返回空串。
@@ -111,17 +112,6 @@ export function CurrentTaskPanel({
     return lines.join('\n')
   }, [team, tile, checkIns])
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(exportText)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // 剪贴板不可用时降级为选中文本提示，不影响页面
-      setCopied(false)
-    }
-  }
-
   // 格子定义随棋盘快照下发，加载完成前不渲染任务区
   if (!tile) return null
 
@@ -144,29 +134,27 @@ export function CurrentTaskPanel({
     <section aria-labelledby="current-task-heading" className="space-y-3">
       <div className="rounded-lg border-2 border-stone-800 bg-white p-3 shadow-[4px_4px_0_#292524] sm:p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase text-emerald-700">当前格 · 第 {team.position} 格 · 第 {team.lap} 轮</p>
+            <h2 id="current-task-heading" className="mt-0.5 text-base font-black text-stone-900">
+              {tile.title}
+            </h2>
+            <p className="mt-0.5 text-xs font-medium text-stone-500">
+              {TASK_TYPE_LABEL[tile.taskType]} · 目标 {formatTileTarget(tile)}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {lastRoll !== null && <Dice value={lastRoll} rolling={rolling} />}
             <button
               type="button"
-              onClick={() => void handleCopy()}
-              title="复制当前任务打卡内容到剪贴板"
-              className={cn(
-                'shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold transition-colors',
-                copied ? 'text-emerald-700' : 'text-stone-400 hover:bg-stone-100 hover:text-stone-700',
-              )}
+              onClick={() => setExportOpen(true)}
+              title="导出当前任务打卡内容"
+              className="flex h-7 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 text-xs font-bold text-stone-700 shadow-[2px_2px_0_#292524] transition-all hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
             >
-              {copied ? '已导出' : '导出'}
+              <Download aria-hidden className="size-3.5" />
+              导出
             </button>
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase text-emerald-700">当前格 · 第 {team.position} 格 · 第 {team.lap} 轮</p>
-              <h2 id="current-task-heading" className="mt-0.5 text-base font-black text-stone-900">
-                {tile.title}
-              </h2>
-              <p className="mt-0.5 text-xs font-medium text-stone-500">
-                {TASK_TYPE_LABEL[tile.taskType]} · 目标 {formatTileTarget(tile)}
-              </p>
-            </div>
           </div>
-          {lastRoll !== null && <Dice value={lastRoll} rolling={rolling} />}
         </div>
 
         {tile.specialRule && (
@@ -295,6 +283,8 @@ export function CurrentTaskPanel({
           </p>
         )}
       </div>
+
+      {exportOpen && <ExportCheckInDialog text={exportText} onClose={() => setExportOpen(false)} />}
     </section>
   )
 }
