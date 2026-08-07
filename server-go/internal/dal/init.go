@@ -88,6 +88,8 @@ func Init(cfg *conf.Config) {
 		&model.ActivityEnrollment{},
 		&model.ActivityBookVote{},
 		&model.ActivityCheckInLike{},
+		// 活动初始化 seed 的只执行一次标记（幂等锁）
+		&model.ActivitySeedState{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}

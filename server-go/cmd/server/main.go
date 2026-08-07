@@ -26,6 +26,10 @@ func main() {
 	// 初始化数据库
 	dal.Init(cfg)
 
+	// 活动初始化 seed（只执行一次）：清空旧活动数据并重建 10 支空队伍。
+	// 幂等锁在 activity_seed_state 表：执行过则跳过，重启服务不会反复清数据。
+	dal.RunStartupActivityReset()
+
 	// 初始化 JWT
 	jwt.Init(cfg.JWTSecret)
 

@@ -373,3 +373,15 @@ func (e *ActivityEvent) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// ActivitySeedState 活动重置 seed 的执行标记（只执行一次的幂等锁）。
+// server 启动时若该表不存在对应 seed_key，则清空活动业务数据并重建 10 支空队伍，
+// 随后写入标记；此后每次重启都会跳过，避免反复清空群员已产生的数据。
+type ActivitySeedState struct {
+	// SeedKey 种子唯一标识，如 hell-board-v1
+	SeedKey string `gorm:"primaryKey;size:64" json:"seedKey"`
+	// AppliedAt 本次 seed 实际执行时间
+	AppliedAt time.Time `json:"appliedAt"`
+}
+
+func (ActivitySeedState) TableName() string { return "activity_seed_state" }
