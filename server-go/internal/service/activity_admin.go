@@ -36,15 +36,26 @@ func (s *ActivityService) CreateTeam(ctx context.Context, req types.ActivityTeam
 	return &dto, nil
 }
 
-// UpdateTeam 修改小组名称与配色
+// UpdateTeam 修改小组名称与配色（管理员/版主）。emblem 非空时同样受全局唯一约束
 func (s *ActivityService) UpdateTeam(ctx context.Context, teamID string, req types.ActivityTeamUpsertReq) error {
 	name := strings.TrimSpace(req.Name)
 	color := strings.TrimSpace(req.Color)
 	if name == "" || color == "" {
 		return ErrActivityInvalidInput
 	}
+	emblem := strings.TrimSpace(req.Emblem)
+	if emblem != "" {
+		var used int64
+		if err := dal.DB.WithContext(ctx).Model(&model.ActivityTeam{}).
+			Where("emblem = ? AND id <> ?", emblem, teamID).Count(&used).Error; err != nil {
+			return err
+		}
+		if used > 0 {
+			return ErrActivityEmblemTaken
+		}
+	}
 	res := dal.DB.WithContext(ctx).Model(&model.ActivityTeam{}).Where("id = ?", teamID).
-		Updates(map[string]any{"name": name, "color": color, "emblem": strings.TrimSpace(req.Emblem)})
+		Updates(map[string]any{"name": name, "color": color, "emblem": emblem})
 	if res.Error != nil {
 		return res.Error
 	}

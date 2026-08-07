@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ClipboardList, Crown, Settings2, Star, UserRoundPlus } from 'lucide-react'
+import { ClipboardList, Crown, History, Settings2, Star, UserRoundPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatWords } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
@@ -9,6 +9,7 @@ import type { Team } from '../lib/types'
 import { TeamEmblem } from './team-emblem'
 import { TeamInitDialog } from './team-init-dialog'
 import { TeamManageDialog } from './team-manage-dialog'
+import { TimelineDialog } from './timeline-dialog'
 
 /** 队伍成员满编 5 人，不足时用空槽占位，保证布局稳定 */
 const TEAM_SIZE = 5
@@ -19,6 +20,7 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
   const archived = useActivityStore((s) => s.archived)
   const [showTeamManage, setShowTeamManage] = useState(false)
   const [showTeamInit, setShowTeamInit] = useState(false)
+  const [showTimeline, setShowTimeline] = useState(false)
 
   // 成员不足 5 人时用空槽补齐，保持卡片高度稳定
   const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
@@ -49,6 +51,16 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
           </button>
         )}
       </div>
+
+      {/* 本队时间线：打卡 / 掷骰 / 点亮 / 判定 / 保底 / 计时 / 人工，全员可查看 */}
+      <button
+        type="button"
+        onClick={() => setShowTimeline(true)}
+        className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 bg-white/70 px-2 text-[11px] font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:text-stone-900 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+      >
+        <History className="size-3.5" />
+        本队时间线
+      </button>
 
       {/* 活动已开始后的进度补录：队长按线下真实情况录入起始格/已点亮格/当前格 */}
       {isCaptain && (
@@ -117,6 +129,8 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
       {showTeamInit && (
         <TeamInitDialog team={team} onClose={() => setShowTeamInit(false)} />
       )}
+
+      {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
     </section>
   )
 }

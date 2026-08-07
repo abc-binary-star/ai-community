@@ -170,6 +170,7 @@ export type TimelineEventType =
   | 'judgement'
   | 'fallback'
   | 'timer'
+  | 'manual'
 
 export interface TimelineEvent {
   id: string

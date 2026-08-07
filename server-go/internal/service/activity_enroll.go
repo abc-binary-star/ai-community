@@ -285,6 +285,15 @@ func (s *ActivityService) CaptainUpdateTeam(ctx context.Context, captainUserID s
 		if team.Emblem != "" && team.Emblem != emblem {
 			return ErrActivityEmblemLocked
 		}
+		// 徽章全局唯一：其他队伍已选用则拒绝（素材只有 9 张，先到先得）
+		var used int64
+		if err := dal.DB.WithContext(ctx).Model(&model.ActivityTeam{}).
+			Where("emblem = ? AND id <> ?", emblem, team.ID).Count(&used).Error; err != nil {
+			return err
+		}
+		if used > 0 {
+			return ErrActivityEmblemTaken
+		}
 		updates["emblem"] = emblem
 	}
 	if err := dal.DB.WithContext(ctx).Model(&model.ActivityTeam{}).

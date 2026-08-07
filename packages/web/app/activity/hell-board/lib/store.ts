@@ -3,7 +3,6 @@
 import { create } from 'zustand'
 import * as api from './api'
 import { RULES } from './board'
-import { EMBLEMS } from './emblems'
 import { isTaskDone, litCount } from './rules'
 import type {
   BoardSnapshot,
@@ -144,11 +143,12 @@ interface ActivityState {
 function applySnapshot(snapshot: BoardSnapshot) {
   return {
     tiles: (snapshot.tiles ?? []).map(toTile),
-    // 服务端未配置 emblem 时按队伍顺序兜底分配形象，保证每个队伍都有标志；
-    // emblemSet 保留服务端真实状态，供队长判断「一次性选择」是否已用掉
-    teams: (snapshot.teams ?? []).map((t, i) => ({
+    // emblem 一律以服务端为准：未配置时显示「待选徽章」占位，不再按队伍顺序兜底
+    // 分配（10 支队伍只有 9 张徽章素材，兜底会造成视觉重复）；emblemSet 供队长
+    // 判断「一次性选择」是否已用掉
+    teams: (snapshot.teams ?? []).map((t) => ({
       ...t,
-      emblem: t.emblem || EMBLEMS[i % EMBLEMS.length].key,
+      emblem: t.emblem,
       emblemSet: Boolean(t.emblem),
     })),
     myTeamId: snapshot.myTeamId ?? null,

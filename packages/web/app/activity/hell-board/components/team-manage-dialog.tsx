@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Loader2, Lock, UserPlus, Users, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { captainAddMember, captainUpdateTeam, fetchEnrollments } from '../lib/api'
@@ -23,6 +23,7 @@ export function TeamManageDialog({
   onClose: () => void
 }) {
   const refresh = useActivityStore((s) => s.refresh)
+  const teams = useActivityStore((s) => s.teams)
   const [name, setName] = useState(team.name)
   const emblemLocked = Boolean(team.emblemSet)
   const [emblem, setEmblem] = useState<string | undefined>(emblemLocked ? team.emblem : undefined)
@@ -30,6 +31,16 @@ export function TeamManageDialog({
   const [saving, setSaving] = useState(false)
   const [addingId, setAddingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // 其他队伍已选用的徽章：全局唯一，本队不可再选（9 张素材先到先得）
+  const usedByOthers = useMemo(
+    () =>
+      new Set(
+        teams.filter((t) => t.id !== team.id && t.emblem).map((t) => t.emblem as string),
+      ),
+    [teams, team.id],
+  )
+  const allEmblemsTaken = !emblemLocked && EMBLEMS.every((spec) => usedByOthers.has(spec.key))
 
   const loadEnrollments = useCallback(async () => {
     try {
@@ -154,29 +165,46 @@ export function TeamManageDialog({
               </div>
             ) : (
               <>
-                <p className="mt-1.5 text-[11px] text-stone-500">选择一枚阵营徽章。保存后即完成铸印，无法更换。</p>
+                {allEmblemsTaken ? (
+                  <p className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800">
+                    所有徽章均已被其他队伍选用，本队暂时没有可选徽章。
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-stone-500">
+                    选择一枚阵营徽章，已被其他队伍选用的不可再选。保存后即完成铸印，无法更换。
+                  </p>
+                )}
                 <ul className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
                   {EMBLEMS.map((spec) => {
                     const active = emblem === spec.key
+                    const taken = usedByOthers.has(spec.key)
                     return (
-                      <li key={spec.key}>
+                      <li key={spec.key} className="relative">
                         <button
                           type="button"
                           onClick={() => setEmblem(spec.key)}
+                          disabled={taken}
                           aria-pressed={active}
-                          title={spec.name}
+                          title={taken ? `${spec.name}（已被其他队伍选用）` : spec.name}
                           className={cn(
                             'flex min-h-[102px] w-full flex-col items-center justify-center gap-1.5 rounded-md border-2 bg-[#eee8d8] p-2 transition-[transform,border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8b6b2c] focus-visible:ring-offset-2',
                             active
                               ? 'border-[#8b6b2c] bg-[#fff8e5] shadow-[3px_3px_0_#8b6b2c] -translate-y-0.5'
-                              : 'border-[#c9c0ac] hover:border-[#8b6b2c] hover:bg-[#f8f1df]',
+                              : taken
+                                ? 'cursor-not-allowed border-[#c9c0ac] opacity-60 grayscale'
+                                : 'border-[#c9c0ac] hover:border-[#8b6b2c] hover:bg-[#f8f1df]',
                           )}
                         >
-                          <TeamEmblem emblem={spec.key} size={54} />
+                          <TeamEmblem emblem={spec.key} size={54} className={taken ? 'opacity-60 grayscale' : undefined} />
                           <span className={cn('text-[11px] font-black', active ? 'text-amber-900' : 'text-stone-600')}>
                             {spec.name}
                           </span>
                         </button>
+                        {taken && (
+                          <span className="absolute right-1 top-1 rounded bg-stone-700 px-1.5 py-0.5 text-[9px] font-black leading-none text-white">
+                            已选用
+                          </span>
+                        )}
                       </li>
                     )
                   })}

@@ -14,6 +14,7 @@ import type {
   ServerCheckIn,
   ServerJudgement,
   TileDetail,
+  TimelineEvent,
   VotePoolItem,
 } from './types'
 
@@ -165,6 +166,12 @@ export async function fetchLitRanking(): Promise<RankingRow[]> {
 export async function fetchBookLibrary(keyword: string): Promise<BookLibraryItem[]> {
   const q = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
   const res = await apiFetch<{ items: BookLibraryItem[] }>(`${BASE}/library${q}`)
+  return res.items ?? []
+}
+
+/** 本队时间线（PRD 10.3）：打卡 / 审核 / 掷骰 / 点亮 / 判定 / 保底 / 计时 / 人工事件 */
+export async function fetchTimeline(): Promise<TimelineEvent[]> {
+  const res = await apiFetch<{ items: TimelineEvent[] }>(`${BASE}/timeline`)
   return res.items ?? []
 }
 

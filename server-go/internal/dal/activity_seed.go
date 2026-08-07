@@ -76,14 +76,20 @@ func migrateDurationTileToMinutes() {
 	log.Printf("时长格第 19 格已迁移为分钟单位（1200 分钟）")
 }
 
-// defaultActivityTeams 默认队伍。仅在队伍表为空时创建（服务首次启动/生产初始化），
-// 之后运营可通过后台增删改。emblem 留空：前端按队伍顺序兜底分配徽章形象，
-// 队长可在一次机会内自由改选。
+// defaultActivityTeams 默认 10 支队伍。仅在队伍表为空时创建（服务首次启动/生产初始化），
+// 之后运营可通过后台增删改。emblem 留空：9 张徽章素材先到先得，队长在管理弹窗内抢选，
+// 选满后其余队伍显示「待选徽章」占位。
 var defaultActivityTeams = []model.ActivityTeam{
 	{Name: "推理一队", Color: "#38bdf8"},
 	{Name: "悬疑二队", Color: "#f472b6"},
 	{Name: "科幻三队", Color: "#34d399"},
 	{Name: "幻想四队", Color: "#fbbf24"},
+	{Name: "历史五队", Color: "#a78bfa"},
+	{Name: "言情六队", Color: "#fb7185"},
+	{Name: "武侠七队", Color: "#f97316"},
+	{Name: "都市八队", Color: "#2dd4bf"},
+	{Name: "科普九队", Color: "#818cf8"},
+	{Name: "文学十队", Color: "#facc15"},
 }
 
 // seedActivityTeams 队伍表为空时创建默认队伍，幂等：已有队伍则跳过，
