@@ -57,8 +57,13 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.ECS_DEPLOY_PATH }}
-            # 拉取最新仓库文件：前后端代码走镜像分发，但 nginx.conf /
+            # 同步仓库文件：前后端代码走镜像分发，但 nginx.conf /
             # docker-compose.prod.yml / deploy.sh 是服务器本地文件，
-            # 不 pull 就永远是旧版本（改了 nginx.conf 也不会生效）
-            git pull --ff-only
+            # 不更新就永远是旧版本（改了 nginx.conf 也不会生效）。
+            # 服务器目录若非 git 仓库（scp 部署），跳过并提示手动同步。
+            if [ -d .git ]; then
+              git pull --ff-only
+            else
+              echo "ℹ️  非 git 仓库，跳过 pull；nginx.conf 等配置变更需手动同步到服务器"
+            fi
             ./deploy.sh

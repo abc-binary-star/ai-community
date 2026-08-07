@@ -64,15 +64,43 @@ docker compose version
 
 ## 第二步：上传项目到 VPS
 
+推荐用 Git 方式。虽然前后端代码由镜像分发、服务器不编译代码，但 `nginx.conf`、
+`docker-compose.prod.yml`、`deploy.sh` 是**服务器本地文件**，只有 git 仓库才能随
+CI 自动更新（自动部署会执行 `git pull`）。用 scp 上传则每次改这些文件都要手动重传。
+
 ```bash
 # 方式 A：Git 拉取（推荐）
 cd /opt
 git clone https://github.com/你的用户名/ai-community.git
 cd ai-community
 
-# 方式 B：scp 上传
+# 方式 B：scp 上传（配置文件变更需每次手动重传）
 scp -r /Users/xqd_mac/codeing/ai-community root@你的服务器IP:/opt/
 ```
+
+### 已用 scp 部署，如何转成 Git 仓库
+
+在服务器项目目录下原地初始化即可，不会影响正在运行的容器，也不会动 `.env` 和数据库卷：
+
+```bash
+cd /opt/ai-community
+git init
+git remote add origin https://github.com/你的用户名/ai-community.git
+git fetch origin main
+# 用远端版本覆盖本地被跟踪文件；.env 已在 .gitignore 中，不受影响
+git reset --hard origin/main
+git branch --set-upstream-to=origin/main main 2>/dev/null || git checkout -B main origin/main
+```
+
+`git reset --hard` 会丢弃对**被 git 跟踪文件**的本地修改。若你在服务器上手改过
+`nginx.conf` 或 `docker-compose.prod.yml`，先备份：
+
+```bash
+cp nginx.conf /tmp/nginx.conf.bak
+cp docker-compose.prod.yml /tmp/compose.bak
+```
+
+私有仓库需配置 SSH key 或用带 token 的 HTTPS 地址，否则 CI 里的 `git pull` 会因认证失败中断部署。
 
 ## 第三步：配置环境变量
 
