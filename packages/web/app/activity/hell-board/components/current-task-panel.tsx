@@ -80,18 +80,19 @@ export function CurrentTaskPanel({
   const checkIns = useActivityStore((s) => s.checkIns)
   const [copied, setCopied] = useState(false)
 
-  // 格子定义随棋盘快照下发，加载完成前不渲染任务区
-  if (!tile) return null
-
-  // 导出当前任务打卡内容（群打卡模板）：队伍名 + 当前格 + 已点亮格子 + 书目与心得
+  // 导出当前任务打卡内容（群打卡模板）：队伍名 + 当前格 + 已点亮格子 + 书目与心得。
+  // useMemo 必须放在所有条件返回之前（React Hooks 规则），tile 缺失时兜底返回空串。
   const exportText = useMemo(() => {
+    if (!tile) return ''
     const lit = Object.keys(team.litTiles)
       .map(Number)
       .sort((a, b) => a - b)
-    // 当前已读书目 = 全队整个活动累计通过审核的书目数（fallbackCount），跨格不清零
+    // 当前已读书目 = 全队整个活动累计通过审核的书目数（成员 bookCount 之和）。
+    // 不使用 fallbackCount：队长消耗保底前进时会扣减，不代表累计阅读量。
+    const totalBooks = team.members.reduce((sum, m) => sum + m.bookCount, 0)
     const lines: string[] = [
       team.name,
-      `当前格：第${posText(team.position)}格：${tile.title}，当前已读书目：${team.fallbackCount}本`,
+      `当前格：第${posText(team.position)}格：${tile.title}，当前已读书目：${totalBooks}本`,
       `已点亮格子${lit.join(' -> ')}`,
       '',
     ]
@@ -120,6 +121,9 @@ export function CurrentTaskPanel({
       setCopied(false)
     }
   }
+
+  // 格子定义随棋盘快照下发，加载完成前不渲染任务区
+  if (!tile) return null
 
   const taskDone = isTaskDone(team, tile)
   const fallbackDone = isFallbackDone(team, tile, fallbackThreshold)
