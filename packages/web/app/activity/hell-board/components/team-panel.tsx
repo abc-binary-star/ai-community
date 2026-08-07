@@ -27,10 +27,11 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
     >
       <div className="flex items-start justify-between gap-2">
         <h2 id="team-heading" className="flex min-w-0 items-center gap-2.5 text-sm font-black text-stone-900">
-          <span className="shrink-0 rounded-full border-2 border-[#8b6b2c] bg-gradient-to-b from-[#fffdf4] to-[#efe6cd] p-[3px] shadow-[2px_2px_0_#292524]">
-            <TeamEmblem emblem={team.emblem} size={40} className="block" />
+          <span className="min-w-0 flex items-center gap-2.5">
+            {/* 徽章本身是圆形盘面，不再套外圈圆环（与棋盘棋子修复一致） */}
+            <TeamEmblem emblem={team.emblem} size={40} className="shrink-0 drop-shadow-[2px_2px_0_rgba(41,37,36,0.3)]" />
+            <span className="truncate">{team.name}</span>
           </span>
-          <span className="truncate">{team.name}</span>
         </h2>
         {isCaptain && (
           <button
