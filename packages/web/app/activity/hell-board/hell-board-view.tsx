@@ -151,8 +151,10 @@ export function HellBoardView() {
           </div>
         </header>
 
-        {/* xl 下两列等高（items-stretch），右栏下沿随棋盘下沿对齐 */}
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:items-stretch xl:gap-5">
+        {/* xl 下棋盘在左、右栏独立成列：右栏吸顶且高度限制在视口内，
+            面板区因此始终有界，内容多时（10 队 / 审核池多本书）在面板内部滚动，
+            不会再撑高整页导致溢出 */}
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
           <div className="min-w-0">
             {showTextView ? (
               <BoardTextView teams={teams} currentTeam={currentTeam} />
@@ -164,8 +166,9 @@ export function HellBoardView() {
           </div>
 
           {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单收进切换栏，
-              使电脑端与棋盘同屏，打卡无需滚动 */}
-          <aside className="space-y-3 xl:flex xl:h-full xl:flex-col">
+              使电脑端与棋盘同屏，打卡无需滚动。高度 = 视口减去顶部页头与边距，
+              超出部分由面板自身滚动 */}
+          <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:h-[calc(100dvh-6rem)] xl:flex-col">
             <div className="xl:shrink-0">
               {currentTeam ? (
                 <CurrentTaskPanel
@@ -213,8 +216,9 @@ export function HellBoardView() {
               ))}
             </div>
 
-            {/* 面板区吃掉剩余高度，使卡片下沿与棋盘下沿齐平。
-                不设 overflow：否则会裁掉卡片 4px 硬阴影，且 overflow-x 会被迫变成 auto */}
+            {/* 面板区占满右栏剩余高度（min-h-0 允许收缩到有界高度），
+                内容超长时由各面板内部的 flex-1 + overflow-y-auto 滚动。
+                此处不设 overflow：否则会裁掉卡片 4px 硬阴影，且 overflow-x 会被迫变成 auto */}
             <div className="xl:min-h-0 xl:flex-1">
               <div
                 id="side-panel-team"
