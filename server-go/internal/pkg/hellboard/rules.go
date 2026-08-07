@@ -28,7 +28,7 @@ func IsTaskDone(progress int64, tile *model.ActivityTile) bool {
 	return progress >= tile.Target
 }
 
-// IsFallbackDone 保底是否达成：本格累计通过审核 40 本（P1-5）。
+// IsFallbackDone 保底是否达成：全队累计通过审核达 40 本即触发全局保底（P1-5）。
 // 计时惩罚格不适用保底（P1-6）。
 func IsFallbackDone(fallbackCount int, tile *model.ActivityTile) bool {
 	if tile.TaskType == model.TaskTypeTimedPenalty {

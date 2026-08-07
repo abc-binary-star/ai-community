@@ -248,9 +248,8 @@ func (s *ActivityService) ManualFix(ctx context.Context, adminID, teamID string,
 			if p != team.Position {
 				changes = append(changes, fmt.Sprintf("位置 第 %d 格 → 第 %d 格", team.Position, p))
 				team.Position = p
-				// 换格后当前格进度与保底计数失效，一并清零
+				// 换格后当前格任务进度失效清零；保底计数为全队全局累计，随位置保留
 				team.TileProgress = 0
-				team.FallbackCount = 0
 				team.TimerEndsAt = nil
 				team.Status = model.TeamStatusInProgress
 			}

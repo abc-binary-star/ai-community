@@ -64,6 +64,13 @@ export function CheckInFormDialog({
 
   // 颜色类任务需靠封面图核验，其余格子不展示封面字段
   const needCover = tile?.taskType === 'cover-color'
+  // 作者仅作者相关格必填：作者国籍 / 同一作者 / 群内交叉
+  const needAuthor =
+    tile?.taskType === 'author-nationality' ||
+    tile?.taskType === 'same-author' ||
+    tile?.taskType === 'group-cross'
+  // 字数仅累计字数格必填，其余格子选填
+  const needWords = tile?.taskType === 'total-words'
 
   const [rows, setRows] = useState<BookFormRow[]>(() => {
     if (!initialBooks?.length) return [emptyRow()]
@@ -161,12 +168,23 @@ export function CheckInFormDialog({
     const valid = rows.filter(
       (r) =>
         r.title.trim() &&
-        r.author.trim() &&
-        wanToWords(r.wanWords) > 0 &&
+        (!needAuthor || r.author.trim()) &&
+        (!needWords || wanToWords(r.wanWords) > 0) &&
         (!isDurationTile || rowMinutes(r) > 0),
     )
     if (valid.length === 0) {
-      setError(isDurationTile ? '本格为累计时长任务，请为每本书填写书名、作者、字数与阅读时长' : '请至少填写一本书的书名、作者与字数')
+      const missing = [
+        '书名',
+        !needAuthor ? '' : '作者',
+        !needWords ? '' : '字数',
+      ]
+        .filter(Boolean)
+        .join('、')
+      setError(
+        isDurationTile
+          ? `本格为累计时长任务，请为每本书填写${missing}与阅读时长`
+          : `请至少填写一本书的${missing}${needCover ? '并为每本书上传封面图' : ''}`,
+      )
       return
     }
     if (isDurationTile && valid.length < rows.length) {
@@ -179,10 +197,11 @@ export function CheckInFormDialog({
     }
     setError(null)
 
-    // 本地查重先给即时反馈，权威查重仍在服务端（P1-8）
+    // 本地查重先给即时反馈，权威查重仍在服务端（P1-8）。
+    // 作者未填时与提交口径一致用「未知」占位，保证本地查重键与服务端一致
     const dups = findDuplicates(
       currentMemberId,
-      valid.map((r) => ({ title: r.title.trim(), author: r.author.trim() })),
+      valid.map((r) => ({ title: r.title.trim(), author: r.author.trim() || '未知' })),
     )
     if (dups.length > 0) {
       setDuplicates(dups)
@@ -194,7 +213,9 @@ export function CheckInFormDialog({
         (parseInt(r.durationHours, 10) || 0) * 60 + (parseInt(r.durationMins, 10) || 0)
       return {
         title: r.title.trim(),
-        author: r.author.trim(),
+        // 作者选填的格子未填时以「未知」占位（服务端同口径兜底）
+        author: r.author.trim() || '未知',
+        // 字数选填的格子未填时为 0
         wordCount: wanToWords(r.wanWords),
         durationMinutes: totalMins > 0 ? totalMins : undefined,
         coverUrl: r.coverUrl || undefined,
@@ -310,7 +331,10 @@ export function CheckInFormDialog({
         </div>
 
         <p className="mt-3 rounded-md border border-amber-300 bg-[#fff0b8] px-3 py-2 text-xs font-bold text-amber-900">
-          书名、作者、字数为必填三要素，缺一不可提交。同一本书全期只能打卡一次。
+          书名必填{needAuthor && '，本格为作者相关任务，作者必填'}
+          {needWords && '，本格为累计字数任务，字数必填'}
+          {!needAuthor && !needWords && '，作者与字数可选填'}
+          。同一本书全期只能打卡一次。
         </p>
 
         {isResubmit && (
@@ -429,7 +453,7 @@ export function CheckInFormDialog({
                 />
                 <input
                   type="text"
-                  placeholder="作者 *"
+                  placeholder={needAuthor ? '作者 *' : '作者（选填）'}
                   value={row.author}
                   onChange={(e) => updateRow(row.id, 'author', e.target.value)}
                   className="h-9 w-full rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none"
@@ -439,7 +463,7 @@ export function CheckInFormDialog({
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="字数 *"
+                    placeholder={needWords ? '字数 *' : '字数（选填）'}
                     value={row.wanWords}
                     onChange={(e) =>
                       updateRow(row.id, 'wanWords', e.target.value.replace(/[^\d.]/g, ''))

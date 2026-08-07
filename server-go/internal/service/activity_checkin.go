@@ -24,6 +24,21 @@ func (e *DuplicateBookError) Error() string {
 	return "书目已在本活动期内打卡过：" + strings.Join(e.Titles, "、")
 }
 
+// requiresAuthor 该任务类型是否必填作者：
+// 作者国籍 / 同一作者 / 群内交叉需要作者信息参与判定，其余格子作者选填。
+func requiresAuthor(taskType string) bool {
+	switch taskType {
+	case model.TaskTypeAuthorNationality, model.TaskTypeSameAuthor, model.TaskTypeGroupCross:
+		return true
+	}
+	return false
+}
+
+// requiresWordCount 该任务类型是否必填字数：仅累计字数格需要。
+func requiresWordCount(taskType string) bool {
+	return taskType == model.TaskTypeTotalWords
+}
+
 // SubmitCheckIn 提交打卡。
 //
 // 提交前校验：活动周期内、成员身份、队伍可提交（非计时中/已完成）、书目查重。
@@ -83,14 +98,27 @@ func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req 
 		}
 	}
 
-	// 必填三要素校验 + 组内自查重
+	// 按格子任务类型校验必填项：书名必填；作者仅作者相关格必填，
+	// 字数仅累计字数格必填；其余格子只需书名即可（PRD 8.1 调整）。
+	// 组内自查重
 	seen := make(map[string]bool, len(req.Books))
 	keys := make([]string, 0, len(req.Books))
 	for i := range req.Books {
 		b := &req.Books[i]
 		b.Title = strings.TrimSpace(b.Title)
 		b.Author = strings.TrimSpace(b.Author)
-		if b.Title == "" || b.Author == "" || b.WordCount <= 0 {
+		if b.Title == "" {
+			return nil, ErrActivityInvalidInput
+		}
+		if requiresAuthor(tile.TaskType) && b.Author == "" {
+			return nil, ErrActivityInvalidInput
+		}
+		// 非作者相关格作者选填：未填时用「未知」占位，保证展示与查重键稳定
+		if b.Author == "" {
+			b.Author = "未知"
+		}
+		// 字数未填时为 0；仅累计字数格强制要求
+		if requiresWordCount(tile.TaskType) && b.WordCount <= 0 {
 			return nil, ErrActivityInvalidInput
 		}
 		// 累计时长格必填阅读时长，避免 0 分钟提交进审核流

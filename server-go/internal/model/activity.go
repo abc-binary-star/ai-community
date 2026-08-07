@@ -103,7 +103,8 @@ type ActivityTeam struct {
 	Status   string `gorm:"size:24;default:in-progress;not null;index" json:"status"`
 	// TileProgress 当前格任务累计完成量，仅统计符合条件且终审通过的书
 	TileProgress int64 `gorm:"default:0;not null" json:"tileProgress"`
-	// FallbackCount 当前格保底计数，达 40 触发保底（P1-5）
+	// FallbackCount 全队全局保底计数：累计通过审核的书目数（跨格不清零），
+	// 满阈值点亮当前格后消耗阈值本数（P1-5 全局保底）
 	FallbackCount int `gorm:"default:0;not null" json:"fallbackCount"`
 	// TimerEndsAt 计时惩罚格到期时间，仅 timer-running 时有值（P1-6）
 	TimerEndsAt *time.Time `json:"timerEndsAt,omitempty"`
@@ -374,14 +375,44 @@ func (e *ActivityEvent) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// ActivitySeedState 活动重置 seed 的执行标记（只执行一次的幂等锁）。
-// server 启动时若该表不存在对应 seed_key，则清空活动业务数据并重建 10 支空队伍，
-// 随后写入标记；此后每次重启都会跳过，避免反复清空群员已产生的数据。
-type ActivitySeedState struct {
-	// SeedKey 种子唯一标识，如 hell-board-v1
-	SeedKey string `gorm:"primaryKey;size:64" json:"seedKey"`
-	// AppliedAt 本次 seed 实际执行时间
-	AppliedAt time.Time `json:"appliedAt"`
+// 反馈类型
+const (
+	FeedbackTypeBug     = "bug"
+	FeedbackTypeFeature = "feature"
+	FeedbackTypeOther   = "other"
+)
+
+// 反馈状态
+const (
+	FeedbackStatusPending  = "pending"
+	FeedbackStatusResolved = "resolved"
+)
+
+// ActivityFeedback 活动反馈：用户在「我的」页面提交 bug / 需求，
+// 管理员在打卡监督台（审批台）查看并标记处理完成。
+type ActivityFeedback struct {
+	ID     string `gorm:"primaryKey" json:"id"`
+	UserID string `gorm:"index;not null" json:"userId"`
+	User   User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
+	// Type: bug / feature / other
+	Type string `gorm:"size:16;not null" json:"type"`
+	// Content 反馈内容（bug 描述 / 需求说明）
+	Content string `gorm:"size:2000;not null" json:"content"`
+	// Contact 联系方式（选填）
+	Contact string `gorm:"size:100" json:"contact,omitempty"`
+	// Status: pending / resolved
+	Status string `gorm:"size:16;default:pending;not null;index" json:"status"`
+	// Reply 管理员处理回复（选填）
+	Reply     string    `gorm:"size:1000" json:"reply,omitempty"`
+	CreatedAt time.Time `gorm:"index" json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-func (ActivitySeedState) TableName() string { return "activity_seed_state" }
+func (ActivityFeedback) TableName() string { return "activity_feedbacks" }
+
+func (f *ActivityFeedback) BeforeCreate(tx *gorm.DB) error {
+	if f.ID == "" {
+		f.ID = uuid.New().String()
+	}
+	return nil
+}

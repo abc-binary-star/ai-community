@@ -13,7 +13,7 @@ const TileCount = 20
 // MaxTeamSize 队伍容量上限：满员后自助入队/队长拉人均拒绝
 const MaxTeamSize = 5
 
-// FallbackThreshold 格子内保底阈值：本格累计通过审核 40 本即保底点亮（P1-5）
+// FallbackThreshold 全局保底阈值：全队累计通过审核 40 本即保底点亮当前格（P1-5）
 const FallbackThreshold = 40
 
 // 计时惩罚格编号与时长（P1-6）

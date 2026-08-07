@@ -13,7 +13,7 @@ export function isTaskDone(team: Team, tile: Tile): boolean {
   return team.tileProgress >= tile.target
 }
 
-/** 保底是否达成：本格累计通过审核 40 本（P1-5）。阈值由服务端下发 */
+/** 保底是否达成：全队累计通过审核达 40 本即触发全局保底（P1-5）。阈值由服务端下发 */
 export function isFallbackDone(
   team: Team,
   tile: Tile,

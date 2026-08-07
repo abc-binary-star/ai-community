@@ -4,6 +4,8 @@ import type {
   BookLibraryItem,
   CheckInDraftBook,
   EnrollmentItem,
+  FeedbackItem,
+  FeedbackType,
   FeedItem,
   MemberProfile,
   RankingMetric,
@@ -128,6 +130,47 @@ export function unlikeCheckIn(checkInId: string): Promise<void> {
 /** 队长掷骰前进。点数由服务端生成（PRD 10.3 防篡改） */
 export function rollDice(): Promise<RollResult> {
   return apiFetch<RollResult>(`${BASE}/roll`, { method: 'POST' })
+}
+
+/** 队长手动前进指定格数（1–6 格，替代掷骰）。步数由队长选择，服务端校验 */
+export function advanceTeam(steps: number): Promise<RollResult> {
+  return apiFetch<RollResult>(`${BASE}/advance`, {
+    method: 'POST',
+    body: JSON.stringify({ steps }),
+  })
+}
+
+// --- 反馈（bug / 需求） ---
+
+/** 提交活动反馈：进入管理员监督台（审批台）的待处理列表 */
+export function submitFeedback(payload: {
+  type: FeedbackType
+  content: string
+  contact?: string
+}): Promise<FeedbackItem> {
+  return apiFetch<FeedbackItem>(`${BASE}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** 管理员查看反馈列表（审批台），支持按状态筛选 */
+export function fetchFeedback(
+  status?: 'pending' | 'resolved',
+): Promise<{ items: FeedbackItem[]; total: number }> {
+  const suffix = status ? `?status=${status}` : ''
+  return apiFetch(`${BASE}/admin/feedback${suffix}`)
+}
+
+/** 管理员标记反馈已处理（可附回复） */
+export function resolveFeedback(
+  feedbackId: string,
+  reply: string,
+): Promise<FeedbackItem> {
+  return apiFetch<FeedbackItem>(`${BASE}/admin/feedback/${feedbackId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ reply }),
+  })
 }
 
 /** 读取当前判定会话，当前格无特殊判定时返回 null */

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
@@ -49,27 +50,35 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 		return err
 	}
 
-	// 保底计数与任务进度只对「队伍当前所在格 + 当前轮次」的提交生效。
-	// 补卡到已点亮历史格的书目：仍进榜单，但只累加该格对应轮次的保底展示计数，
-	// 不影响当前格进度（格子已点亮，不再触发点亮）。
+	// 保底计数为全队全局累计：任何通过审核的书目都计入（不论格子与轮次），
+	// 满阈值即点亮当前格并消耗阈值本数，其余计数顺延到下一格（P1-5 全局保底）。
+	// 任务进度只对「队伍当前所在格 + 当前轮次」的提交累加；补卡到已点亮历史格的
+	// 书目仍进榜单，并累加该格对应轮次的保底展示计数，但不影响当前格进度。
 	isCurrent := book.TileIndex == team.Position && book.Lap == team.Lap
 	if !isCurrent {
-		return s.boostTileBookCountTx(tx, book)
-	}
-
-	// 保底计数统计本格内通过审核的全部书目，不论是否符合格子条件（PRD 7.3）
-	progressRow, err := s.progressRowTx(tx, team.ID, book.TileIndex, book.Lap)
-	if err != nil {
-		return err
-	}
-	if err := tx.Model(progressRow).
-		Update("book_count", gorm.Expr("book_count + 1")).Error; err != nil {
-		return err
+		if err := s.boostTileBookCountTx(tx, book); err != nil {
+			return err
+		}
+	} else {
+		// 保底展示计数统计本格内通过审核的全部书目，不论是否符合格子条件（PRD 7.3）
+		progressRow, err := s.progressRowTx(tx, team.ID, book.TileIndex, book.Lap)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(progressRow).
+			Update("book_count", gorm.Expr("book_count + 1")).Error; err != nil {
+			return err
+		}
+		if countsForTask {
+			team.TileProgress += taskDelta(book, tile)
+		}
 	}
 	team.FallbackCount++
 
-	if countsForTask {
-		team.TileProgress += taskDelta(book, tile)
+	// 保底点亮的是队伍当前所在格：取当前格定义做判定（书的格子可能已离开）
+	curTile, err := s.getTileTx(tx, team.Position)
+	if err != nil {
+		return err
 	}
 
 	litTiles, err := s.litTilesTx(tx, team.ID)
@@ -77,26 +86,39 @@ func (s *ActivityService) applyApproval(tx *gorm.DB, book *model.ActivityCheckIn
 		return err
 	}
 
-	// 保底达成时立即点亮当前格（P1-5 / 验收标准 5）
-	fallbackJustHit := hellboard.IsFallbackDone(team.FallbackCount, tile)
-	if fallbackJustHit {
-		if _, already := litTiles[team.Position]; !already {
-			if err := s.markLitTx(tx, &team, team.Position, model.LitReasonFallback, now); err != nil {
-				return err
-			}
-			if err := s.addEvent(tx, team.ID, model.EventTypeFallback,
-				"本格累计通过审核 40 本，保底完成并解锁掷骰"); err != nil {
-				return err
-			}
-			litTiles, err = s.litTilesTx(tx, team.ID)
-			if err != nil {
-				return err
-			}
+	// 全局保底达成时立即点亮当前格（P1-5 / 验收标准 5），并消耗阈值本数。
+	// 当前格已点亮（如绕圈回到已点亮格）时不重复点亮、不消耗计数。
+	fallbackJustHit := false
+	if _, already := litTiles[team.Position]; !already && hellboard.IsFallbackDone(team.FallbackCount, curTile) {
+		fallbackJustHit = true
+		if err := s.markLitTx(tx, &team, team.Position, model.LitReasonFallback, now); err != nil {
+			return err
+		}
+		if err := s.addEvent(tx, team.ID, model.EventTypeFallback,
+			fmt.Sprintf("全队累计通过审核达到 %d 本保底，本格点亮并解锁前进", hellboard.FallbackThreshold)); err != nil {
+			return err
+		}
+		team.FallbackCount -= hellboard.FallbackThreshold
+		if team.FallbackCount < 0 {
+			team.FallbackCount = 0
+		}
+		litTiles, err = s.litTilesTx(tx, team.ID)
+		if err != nil {
+			return err
 		}
 	}
 
 	prevStatus := team.Status
-	team.Status = hellboard.DeriveStatus(&team, tile, len(litTiles))
+	if fallbackJustHit {
+		// 保底点亮后直接进入待前进，无需依赖任务进度（判定格同样视为判定通过）
+		if len(litTiles) >= hellboard.TileCount {
+			team.Status = model.TeamStatusCompleted
+		} else {
+			team.Status = model.TeamStatusAwaitingRoll
+		}
+	} else {
+		team.Status = hellboard.DeriveStatus(&team, curTile, len(litTiles))
+	}
 
 	if err := tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).
 		Updates(map[string]any{
@@ -164,34 +186,40 @@ func (s *ActivityService) rollbackApproval(tx *gorm.DB, book *model.ActivityChec
 		} else if err != nil && err != gorm.ErrRecordNotFound {
 			return err
 		}
-		return nil
+	} else {
+		progressRow, err := s.progressRowTx(tx, team.ID, book.TileIndex, book.Lap)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(progressRow).
+			Update("book_count", gorm.Expr("GREATEST(book_count - 1, 0)")).Error; err != nil {
+			return err
+		}
+		if book.CountsForTask {
+			team.TileProgress -= taskDelta(book, tile)
+			if team.TileProgress < 0 {
+				team.TileProgress = 0
+			}
+		}
 	}
 
-	progressRow, err := s.progressRowTx(tx, team.ID, book.TileIndex, book.Lap)
-	if err != nil {
-		return err
-	}
-	if err := tx.Model(progressRow).
-		Update("book_count", gorm.Expr("GREATEST(book_count - 1, 0)")).Error; err != nil {
-		return err
-	}
+	// 全局保底计数：通过审核时累计、撤销时同步回退（点亮状态不可逆，不在此撤销）
 	if team.FallbackCount > 0 {
 		team.FallbackCount--
-	}
-	if book.CountsForTask {
-		team.TileProgress -= taskDelta(book, tile)
-		if team.TileProgress < 0 {
-			team.TileProgress = 0
-		}
 	}
 
 	litTiles, err := s.litTilesTx(tx, team.ID)
 	if err != nil {
 		return err
 	}
+	// 撤销书目用队伍当前格定义重新推导状态（书的格子可能已离开）
+	curTile, err := s.getTileTx(tx, team.Position)
+	if err != nil {
+		return err
+	}
 	// 已点亮的格子不因撤销回退状态：队伍可能已经掷骰离开
 	if _, lit := litTiles[team.Position]; !lit {
-		team.Status = hellboard.DeriveStatus(&team, tile, len(litTiles))
+		team.Status = hellboard.DeriveStatus(&team, curTile, len(litTiles))
 	}
 
 	return tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).

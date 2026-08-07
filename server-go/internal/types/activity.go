@@ -292,11 +292,13 @@ type ActivityMemberProfileDTO struct {
 // --- 请求 DTO ---
 
 // ActivityBookReq 提交打卡中的单条书目。
-// 书名、作者、字数为必填三要素，缺一不可提交（PRD 8.1）。
+// 书名必填；作者仅作者相关格（作者国籍/同一作者/群内交叉）必填，
+// 字数仅累计字数格必填，其余格子选填（PRD 8.1 调整为按格子要求校验）。
 type ActivityBookReq struct {
-	Title     string `json:"title" vd:"len($)>=1 && len($)<=200"`
-	Author    string `json:"author" vd:"len($)>=1 && len($)<=100"`
-	WordCount int64  `json:"wordCount" vd:"$>0 && $<=50000000"`
+	Title  string `json:"title" vd:"len($)>=1 && len($)<=200"`
+	Author string `json:"author" vd:"len($)<=100"`
+	// WordCount 仅在累计字数格必填；其余格子可为 0（表示未填写）
+	WordCount int64 `json:"wordCount"`
 	// 上限 7 天，下限 0：负值会让 taskDelta 反向扣减 TileProgress
 	DurationMinutes int    `json:"durationMinutes" vd:"$>=0 && $<=10080"`
 	CoverURL        string `json:"coverUrl" vd:"len($)<=500"`
@@ -309,6 +311,41 @@ type ActivityCheckInReq struct {
 	TileIndex   int               `json:"tileIndex" vd:"$>=1 && $<=20"`
 	Books       []ActivityBookReq `json:"books"`
 	EvidenceURL string            `json:"evidenceUrl" vd:"len($)<=500"`
+}
+
+// ActivityAdvanceReq 队长手动前进请求：步数 1–6（替代掷骰随机点数）
+type ActivityAdvanceReq struct {
+	Steps int `json:"steps" vd:"$>=1 && $<=6"`
+}
+
+// --- 反馈（bug / 需求） ---
+
+// ActivityFeedbackReq 提交反馈请求
+type ActivityFeedbackReq struct {
+	// Type: bug / feature / other
+	Type    string `json:"type" vd:"in($,'bug','feature','other')"`
+	Content string `json:"content" vd:"len($)>=1 && len($)<=2000"`
+	// Contact 联系方式（选填）
+	Contact string `json:"contact" vd:"len($)<=100"`
+}
+
+// ActivityFeedbackResolveReq 管理员标记反馈已处理
+type ActivityFeedbackResolveReq struct {
+	// Reply 处理回复（选填）
+	Reply string `json:"reply" vd:"len($)<=1000"`
+}
+
+// ActivityFeedbackDTO 反馈条目（管理员监督台展示）
+type ActivityFeedbackDTO struct {
+	ID        string `json:"id"`
+	UserID    string `json:"userId"`
+	UserName  string `json:"userName"`
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Contact   string `json:"contact,omitempty"`
+	Status    string `json:"status"`
+	Reply     string `json:"reply,omitempty"`
+	CreatedAt string `json:"createdAt"`
 }
 
 // ActivityReviewReq 人工终审操作（PRD 9.3）

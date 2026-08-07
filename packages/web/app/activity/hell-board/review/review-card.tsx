@@ -35,16 +35,25 @@ export function ReviewCard({
   return (
     <article className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-stone-900">{book.title}</h2>
-          <p className="mt-0.5 text-xs text-stone-500">
-            {book.author} · {formatWords(book.wordCount)}
-            {book.durationMinutes ? ` · ${formatReadingMinutes(book.durationMinutes)}` : ''}
-          </p>
-          <p className="mt-1 text-[11px] text-stone-500">
-            {book.memberName}
-            {book.teamName ? ` · ${book.teamName}` : ''} · 第 {book.tileIndex} 格第 {book.lap} 轮
-          </p>
+        <div className="flex min-w-0 items-start gap-2.5">
+          {book.coverUrl && (
+            <img
+              src={book.coverUrl}
+              alt={`《${book.title}》封面`}
+              className="h-20 w-14 shrink-0 rounded border border-stone-200 object-cover"
+            />
+          )}
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-stone-900">{book.title}</h2>
+            <p className="mt-0.5 text-xs text-stone-500">
+              {book.author} · {formatWords(book.wordCount)}
+              {book.durationMinutes ? ` · ${formatReadingMinutes(book.durationMinutes)}` : ''}
+            </p>
+            <p className="mt-1 text-[11px] text-stone-500">
+              {book.memberName}
+              {book.teamName ? ` · ${book.teamName}` : ''} · 第 {book.tileIndex} 格第 {book.lap} 轮
+            </p>
+          </div>
         </div>
         <ReviewBadge status={book.reviewStatus} />
       </div>

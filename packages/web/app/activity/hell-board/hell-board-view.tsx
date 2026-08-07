@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ActivityFeedPanel } from './components/activity-feed-panel'
+import { AdvanceDialog } from './components/advance-dialog'
 import { AllTeamsPanel } from './components/all-teams-panel'
 import { BoardGrid } from './components/board-grid'
 import { CheckInFormDialog } from './components/checkin-form-dialog'
@@ -165,6 +166,8 @@ export function HellBoardView() {
   const [showTeamInit, setShowTeamInit] = useState(false)
   const [showTeamManage, setShowTeamManage] = useState(false)
   const [showMyProfile, setShowMyProfile] = useState(false)
+  // 向下一格进发：队长手动选择前进格数（替代掷骰随机点数）
+  const [showAdvance, setShowAdvance] = useState(false)
 
   useEffect(() => {
     void loadAll()
@@ -317,6 +320,7 @@ export function HellBoardView() {
                   isCaptain={isCaptain}
                   readOnly={archived}
                   onOpenCheckIn={() => setShowCheckInForm(true)}
+                  onOpenAdvance={() => setShowAdvance(true)}
                 />
               ) : (
                 <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
@@ -425,6 +429,10 @@ export function HellBoardView() {
       )}
 
       {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
+
+      {showAdvance && currentTeam && (
+        <AdvanceDialog onClose={() => setShowAdvance(false)} />
+      )}
 
       {showMyProfile && <MyProfileDialog onClose={() => setShowMyProfile(false)} />}
 

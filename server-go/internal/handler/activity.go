@@ -78,6 +78,23 @@ func RollActivityDice(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
+// AdvanceActivityTeam 队长手动前进指定格数（1–6 格，替代掷骰随机点数）
+// POST /api/activity/hell-board/advance
+func AdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityAdvanceReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	result, err := activityService.AdvanceTeam(ctx, userID, req.Steps)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // GetActivityJudgement 读取当前判定会话
 // GET /api/activity/hell-board/judgement
 func GetActivityJudgement(ctx context.Context, c *app.RequestContext) {
@@ -574,6 +591,53 @@ func InitializeActivityTeam(ctx context.Context, c *app.RequestContext) {
 	}
 	userID := middleware.GetCurrentUserID(c)
 	dto, err := activityService.InitializeTeam(ctx, userID, req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
+
+// --- 反馈（bug / 需求） ---
+
+// CreateActivityFeedback 提交活动反馈
+// POST /api/activity/hell-board/feedback
+func CreateActivityFeedback(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityFeedbackReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.SubmitFeedback(ctx, userID, req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, dto)
+}
+
+// ListActivityFeedback 管理员查看反馈列表（审批台）
+// GET /api/activity/hell-board/admin/feedback?status=pending|resolved
+func ListActivityFeedback(ctx context.Context, c *app.RequestContext) {
+	page, pageSize := pagination.Parse(c)
+	result, err := activityService.ListFeedback(ctx, c.Query("status"), page, pageSize)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
+// ResolveActivityFeedback 管理员标记反馈已处理
+// PUT /api/activity/hell-board/admin/feedback/:id
+func ResolveActivityFeedback(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityFeedbackResolveReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	dto, err := activityService.ResolveFeedback(ctx, c.Param("id"), req)
 	if err != nil {
 		handleServiceError(c, err)
 		return

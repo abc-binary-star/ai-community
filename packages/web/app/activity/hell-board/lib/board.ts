@@ -3,7 +3,7 @@ import type { SpecialRule, SpecialRuleKind, Tile } from './types'
 /** 环形棋盘固定 20 格 */
 export const TILE_COUNT = 20
 
-/** 格子内保底阈值：本格累计通过审核 40 本即保底点亮（P1-5） */
+/** 全局保底阈值：全队累计通过审核 40 本即保底点亮当前格（P1-5） */
 export const FALLBACK_THRESHOLD = 40
 
 /** 计时惩罚格编号与时长（P1-6） */

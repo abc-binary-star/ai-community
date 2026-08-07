@@ -75,7 +75,7 @@ export interface Team {
   status: TeamStatus
   /** 当前格任务累计完成量（仅统计符合条件的书） */
   tileProgress: number
-  /** 当前格保底计数，达 40 触发保底（P1-5） */
+  /** 全队全局保底计数：累计通过审核的书目数（跨格不清零，满阈值消耗后点亮当前格） */
   fallbackCount: number
   /** 计时惩罚格到期时间（ISO），仅 timer-running 时有值 */
   timerEndsAt?: string
@@ -418,4 +418,23 @@ export interface EnrollmentItem {
   teamId?: string
   teamName?: string
   joined: boolean
+}
+
+/** 反馈类型：bug / 需求 / 其他 */
+export type FeedbackType = 'bug' | 'feature' | 'other'
+
+/** 反馈状态：待处理 / 已处理 */
+export type FeedbackStatus = 'pending' | 'resolved'
+
+/** 活动反馈条目（用户在「我的」页面提交，管理员在监督台查看） */
+export interface FeedbackItem {
+  id: string
+  userId: string
+  userName: string
+  type: FeedbackType
+  content: string
+  contact?: string
+  status: FeedbackStatus
+  reply?: string
+  createdAt: string
 }

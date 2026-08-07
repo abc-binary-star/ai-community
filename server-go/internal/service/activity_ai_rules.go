@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
@@ -17,13 +19,20 @@ import (
 // evaluateTitleLength 书名字数判定（PRD 9.2 书名字数类）。
 // 先按查重同款口径归一化（去书名号、括号、空格，转小写），再按字符计数。
 // 精确匹配通过；偏离 ≤2 存疑（副标题/系列名噪声可能干扰）；偏离较大驳回。
+//
+// 目标字数从格子文案解析（如「看八本标题为两个字的书」→ 2 字）：
+// tile.Target 存的是本数（8 本），不能直接当标题字数用，
+// 否则两字标题书会被误判成「字数与目标不符」而进人工审核。
 func evaluateTitleLength(book *model.ActivityCheckInBook, tile *model.ActivityTile) aiVerdict {
 	title := strings.TrimSpace(book.Title)
 	if title == "" {
 		return aiRejected(0.9, "书名为空")
 	}
+	target, ok := titleLengthTargetFromTile(tile)
+	if !ok {
+		return aiUnsure(0.5, "无法从格子文案解析标题字数要求，请人工复核")
+	}
 	count := len([]rune(hellboard.NormalizeBookField(title)))
-	target := int(tile.Target)
 	diff := count - target
 	if diff < 0 {
 		diff = -diff
@@ -38,10 +47,40 @@ func evaluateTitleLength(book *model.ActivityCheckInBook, tile *model.ActivityTi
 	}
 }
 
+// titleLengthTargetRe 从格子文案里抠出标题字数，如「看十本标题为四个字的书」→「四」。
+// 数字用中文（一~十 / 两），兼容阿拉伯数字以防运营改文案。
+var titleLengthTargetRe = regexp.MustCompile(`标题为([0-9一二三四五六七八九十两]+)个字`)
+
+// chineseNum 中文数字 → 阿拉伯数字
+var chineseNum = map[string]int{
+	"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
+	"六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+}
+
+// titleLengthTargetFromTile 从格子文案解析标题字数目标；解析失败返回 ok=false
+func titleLengthTargetFromTile(tile *model.ActivityTile) (int, bool) {
+	m := titleLengthTargetRe.FindStringSubmatch(tile.Title)
+	if len(m) < 2 {
+		return 0, false
+	}
+	if n, ok := chineseNum[m[1]]; ok {
+		return n, true
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
 // evaluatePlainCount 纯数量格：任何书都计数，仅做单本字数异常识别（防虚报）。
+// 字数在本格为选填（未填时为 0），直接通过，不误判。
 func evaluatePlainCount(book *model.ActivityCheckInBook) aiVerdict {
 	wc := book.WordCount
-	if wc <= 0 || wc > 5_000_000 {
+	if wc == 0 {
+		return aiPassed(0.85, "字数未填写（本格选填），直接按纯数量格通过")
+	}
+	if wc > 5_000_000 {
 		return aiUnsure(0.7, fmt.Sprintf("单本字数 %d 异常，请人工复核", wc))
 	}
 	return aiPassed(0.8, "字数在常见区间内")

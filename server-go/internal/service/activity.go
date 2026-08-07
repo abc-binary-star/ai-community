@@ -26,36 +26,37 @@ type ActivityError struct {
 func (e *ActivityError) Error() string { return e.Msg }
 
 var (
-	ErrActivityNotMember       = &ActivityError{Msg: "你不在本次活动的任何小组中", Code: 403}
-	ErrActivityNotCaptain      = &ActivityError{Msg: "仅队长可执行该操作", Code: 403}
-	ErrActivityTeamNotFound    = &ActivityError{Msg: "小组不存在", Code: 404}
-	ErrActivityMemberNotFound  = &ActivityError{Msg: "成员不存在", Code: 404}
-	ErrActivityTileNotFound    = &ActivityError{Msg: "格子不存在", Code: 404}
-	ErrActivityBookNotFound    = &ActivityError{Msg: "书目记录不存在", Code: 404}
-	ErrActivityInvalidInput    = &ActivityError{Msg: "输入不合法", Code: 400}
-	ErrActivityArchived        = &ActivityError{Msg: "活动周期已结束，页面为只读归档态", Code: 403}
-	ErrActivityNotStarted      = &ActivityError{Msg: "活动尚未开始", Code: 403}
-	ErrActivityTimerRunning    = &ActivityError{Msg: "惩罚计时中，期间无法打卡与掷骰", Code: 409}
-	ErrActivityCompleted       = &ActivityError{Msg: "本队已完成活动", Code: 409}
-	ErrActivityNotRollable     = &ActivityError{Msg: "当前不可掷骰，请先完成本格任务", Code: 409}
-	ErrActivityRollInFlight    = &ActivityError{Msg: "本队有掷骰正在进行中，请稍后再试", Code: 409}
-	ErrActivityNoJudgement     = &ActivityError{Msg: "当前格无特殊判定或状态不符", Code: 409}
-	ErrActivityAlreadyRolled   = &ActivityError{Msg: "你已在本轮判定中掷过骰", Code: 409}
-	ErrActivityJudgeIncomplete = &ActivityError{Msg: "尚有成员未掷骰，无法结算判定", Code: 409}
-	ErrActivityDuplicateBook   = &ActivityError{Msg: "书目重复提交", Code: 409}
-	ErrActivityReasonMissing   = &ActivityError{Msg: "驳回与撤销必须填写理由", Code: 400}
-	ErrActivityNotEditable     = &ActivityError{Msg: "该打卡已进入终审，不可自行删除", Code: 409}
-	ErrActivityAlreadyInTeam   = &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
-	ErrActivityNotEnrolled     = &ActivityError{Msg: "该用户尚未报名活动", Code: 409}
-	ErrActivityTeamFull        = &ActivityError{Msg: "该队伍已满员", Code: 409}
-	ErrActivityCaptainTaken    = &ActivityError{Msg: "该队伍已有队长，队长位不可重复选择", Code: 409}
+	ErrActivityNotMember        = &ActivityError{Msg: "你不在本次活动的任何小组中", Code: 403}
+	ErrActivityNotCaptain       = &ActivityError{Msg: "仅队长可执行该操作", Code: 403}
+	ErrActivityTeamNotFound     = &ActivityError{Msg: "小组不存在", Code: 404}
+	ErrActivityMemberNotFound   = &ActivityError{Msg: "成员不存在", Code: 404}
+	ErrActivityTileNotFound     = &ActivityError{Msg: "格子不存在", Code: 404}
+	ErrActivityBookNotFound     = &ActivityError{Msg: "书目记录不存在", Code: 404}
+	ErrActivityFeedbackNotFound = &ActivityError{Msg: "反馈记录不存在", Code: 404}
+	ErrActivityInvalidInput     = &ActivityError{Msg: "输入不合法", Code: 400}
+	ErrActivityArchived         = &ActivityError{Msg: "活动周期已结束，页面为只读归档态", Code: 403}
+	ErrActivityNotStarted       = &ActivityError{Msg: "活动尚未开始", Code: 403}
+	ErrActivityTimerRunning     = &ActivityError{Msg: "惩罚计时中，期间无法打卡与掷骰", Code: 409}
+	ErrActivityCompleted        = &ActivityError{Msg: "本队已完成活动", Code: 409}
+	ErrActivityNotRollable      = &ActivityError{Msg: "当前不可掷骰，请先完成本格任务", Code: 409}
+	ErrActivityRollInFlight     = &ActivityError{Msg: "本队有掷骰正在进行中，请稍后再试", Code: 409}
+	ErrActivityNoJudgement      = &ActivityError{Msg: "当前格无特殊判定或状态不符", Code: 409}
+	ErrActivityAlreadyRolled    = &ActivityError{Msg: "你已在本轮判定中掷过骰", Code: 409}
+	ErrActivityJudgeIncomplete  = &ActivityError{Msg: "尚有成员未掷骰，无法结算判定", Code: 409}
+	ErrActivityDuplicateBook    = &ActivityError{Msg: "书目重复提交", Code: 409}
+	ErrActivityReasonMissing    = &ActivityError{Msg: "驳回与撤销必须填写理由", Code: 400}
+	ErrActivityNotEditable      = &ActivityError{Msg: "该打卡已进入终审，不可自行删除", Code: 409}
+	ErrActivityAlreadyInTeam    = &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
+	ErrActivityNotEnrolled      = &ActivityError{Msg: "该用户尚未报名活动", Code: 409}
+	ErrActivityTeamFull         = &ActivityError{Msg: "该队伍已满员", Code: 409}
+	ErrActivityCaptainTaken     = &ActivityError{Msg: "该队伍已有队长，队长位不可重复选择", Code: 409}
 	// 退出队伍的前置条件：已产生的痕迹无法在退出时安全回滚，只允许干净退出
 	ErrActivityLeaveHasCheckIn  = &ActivityError{Msg: "你已经有打卡记录，无法退出队伍。如需换队请联系管理员", Code: 409}
 	ErrActivityLeaveHasDiceRoll = &ActivityError{Msg: "你已经掷过骰子，无法退出队伍。如需换队请联系管理员", Code: 409}
 	ErrActivityLeaveHasVote     = &ActivityError{Msg: "你已经投过审核票，无法退出队伍。如需换队请联系管理员", Code: 409}
-	ErrActivityEmblemLocked    = &ActivityError{Msg: "队伍形象已确定，一次性选择后不可更换", Code: 409}
-	ErrActivityEmblemTaken     = &ActivityError{Msg: "该徽章已被其他队伍选用，请选择其他徽章", Code: 409}
-	ErrActivityVoteOwnTeam     = &ActivityError{Msg: "不能给自己队伍的书目投票，避免利益冲突", Code: 409}
+	ErrActivityEmblemLocked     = &ActivityError{Msg: "队伍形象已确定，一次性选择后不可更换", Code: 409}
+	ErrActivityEmblemTaken      = &ActivityError{Msg: "该徽章已被其他队伍选用，请选择其他徽章", Code: 409}
+	ErrActivityVoteOwnTeam      = &ActivityError{Msg: "不能给自己队伍的书目投票，避免利益冲突", Code: 409}
 )
 
 // --- 内部查询辅助 ---

@@ -197,6 +197,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.POST("/checkins/:id/like", handler.LikeActivityCheckIn)
 	activity.DELETE("/checkins/:id/like", handler.UnlikeActivityCheckIn)
 	activity.POST("/roll", handler.RollActivityDice)
+	activity.POST("/advance", handler.AdvanceActivityTeam)
 	activity.GET("/judgement", handler.GetActivityJudgement)
 	activity.POST("/judgement/roll", handler.RollActivityJudgement)
 	activity.GET("/tiles/:index", handler.GetActivityTileDetail)
@@ -207,6 +208,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.GET("/feed", handler.ListActivityFeed)
 	activity.GET("/library", handler.ListActivityBookLibrary)
 	activity.POST("/enroll", handler.EnrollActivity)
+	// 反馈（bug / 需求）：登录用户即可提交，管理员在监督台（审批台）查看
+	activity.POST("/feedback", handler.CreateActivityFeedback)
 
 	// 队长管理（报名名单拉人 / 换队名 / 一次性选形象）
 	captain := h.Group("/api/activity/hell-board/team", middleware.Auth())
@@ -230,6 +233,9 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activityAdmin.GET("/reviews", handler.ListActivityReviewQueue)
 	activityAdmin.POST("/reviews/batch-approve", handler.BatchApproveActivityBooks)
 	activityAdmin.POST("/reviews/:bookId", handler.ReviewActivityBook)
+	// 反馈（bug / 需求）审批台：查看与标记已处理
+	activityAdmin.GET("/feedback", handler.ListActivityFeedback)
+	activityAdmin.PUT("/feedback/:id", handler.ResolveActivityFeedback)
 	activityAdmin.GET("/export", handler.ExportActivityResults)
 	activityAdmin.POST("/teams", handler.CreateActivityTeam)
 	activityAdmin.PUT("/teams/:id", handler.UpdateActivityTeam)

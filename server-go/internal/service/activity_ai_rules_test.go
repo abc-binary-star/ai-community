@@ -11,7 +11,14 @@ func testTile(taskType string, target int64) *model.ActivityTile {
 }
 
 func TestEvaluateTitleLength(t *testing.T) {
-	tile := testTile(model.TaskTypeTitleLength, 4)
+	// 目标字数从格子文案解析（tile.Target 存的是本数），
+	// 用真实文案「看十本标题为四个字的书」覆盖该解析路径
+	tile := &model.ActivityTile{
+		Index:    1,
+		Title:    "看十本标题为四个字的书",
+		TaskType: model.TaskTypeTitleLength,
+		Target:   10,
+	}
 	cases := []struct {
 		name   string
 		title  string
@@ -32,6 +39,26 @@ func TestEvaluateTitleLength(t *testing.T) {
 				t.Fatalf("title=%q status=%s, want %s (reason=%s)", c.title, got.Status, c.status, got.Reason)
 			}
 		})
+	}
+}
+
+func TestEvaluateTitleLengthTwoCharTile(t *testing.T) {
+	// 回归：第 11 格「看八本标题为两个字的书」中，两字标题书应直接通过，
+	// 不得因 target=8（本数）被误判为「字数不符」而进入人工审核。
+	tile := &model.ActivityTile{
+		Index:    11,
+		Title:    "看八本标题为两个字的书",
+		TaskType: model.TaskTypeTitleLength,
+		Target:   8,
+	}
+	for _, title := range []string{"活着", "《活着》"} {
+		if got := evaluateTitleLength(&model.ActivityCheckInBook{Title: title}, tile); got.Status != "passed" {
+			t.Fatalf("title=%q status=%s, want passed (reason=%s)", title, got.Status, got.Reason)
+		}
+	}
+	// 三字书名差一位 → 存疑交人工
+	if got := evaluateTitleLength(&model.ActivityCheckInBook{Title: "红楼梦"}, tile); got.Status != "unsure" {
+		t.Fatalf("title=红楼梦 status=%s, want unsure", got.Status)
 	}
 }
 
@@ -60,7 +87,11 @@ func TestEvaluatePlainCount(t *testing.T) {
 	if got := evaluatePlainCount(&model.ActivityCheckInBook{WordCount: 100}); got.Status != "passed" {
 		t.Fatalf("want passed, got %s", got.Status)
 	}
-	if got := evaluatePlainCount(&model.ActivityCheckInBook{WordCount: 0}); got.Status != "unsure" {
+	// 纯数量格字数为选填：未填写（0）直接通过，不再走人工审核
+	if got := evaluatePlainCount(&model.ActivityCheckInBook{WordCount: 0}); got.Status != "passed" {
+		t.Fatalf("want passed (选填未填), got %s", got.Status)
+	}
+	if got := evaluatePlainCount(&model.ActivityCheckInBook{WordCount: 6_000_000}); got.Status != "unsure" {
 		t.Fatalf("want unsure, got %s", got.Status)
 	}
 }

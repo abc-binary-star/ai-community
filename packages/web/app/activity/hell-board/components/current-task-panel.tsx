@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Dices, Flame, Hourglass, Info, PlusCircle } from 'lucide-react'
+import { Dices, Flame, Footprints, Hourglass, Info, PlusCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TASK_TYPE_LABEL } from '../lib/board'
 import {
@@ -52,12 +52,15 @@ export function CurrentTaskPanel({
   isCaptain,
   readOnly = false,
   onOpenCheckIn,
+  onOpenAdvance,
 }: {
   team: Team
   isCaptain: boolean
   /** 归档态下隐藏全部写操作（P1-7 / 验收标准 12） */
   readOnly?: boolean
   onOpenCheckIn: () => void
+  /** 打开「向下一格进发」（手动选择 1–6 格替代掷骰） */
+  onOpenAdvance: () => void
 }) {
   const tile = useTile(team.position)
   const judgement = useActivityStore((s) => s.judgement)
@@ -107,14 +110,14 @@ export function CurrentTaskPanel({
               ratio={team.tileProgress / tile.target}
             />
             <ProgressBar
-              label="保底进度（本格累计通过审核）"
+              label="保底进度（全队累计通过审核）"
               valueText={`${team.fallbackCount} / ${fallbackThreshold} 本`}
               ratio={team.fallbackCount / fallbackThreshold}
               tone="amber"
               hint={
                 fallbackDone
-                  ? '已达保底，本格由保底完成，可直接掷骰前进'
-                  : '本格读满 40 本即保底点亮，无需依赖判定结果'
+                  ? '已达保底，本格由保底完成，可直接前进'
+                  : '全队读满 40 本即保底点亮，无需依赖判定结果'
               }
             />
           </div>
@@ -156,20 +159,36 @@ export function CurrentTaskPanel({
             </button>
 
             {canRollDice(team, isCaptain) && (
-              <button
-                type="button"
-                onClick={() => void rollDice()}
-                disabled={rolling}
-                className={cn(
-                  'flex h-10 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-sm font-black shadow-[3px_3px_0_#292524] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none',
-                  rolling
-                    ? 'cursor-not-allowed border-stone-300 bg-stone-200 text-stone-400 shadow-none'
-                    : 'bg-[#ffd166] text-stone-900 hover:bg-[#f5c34f]',
-                )}
-              >
-                <Dices aria-hidden className="size-4" />
-                {rolling ? '掷骰中…' : '掷骰前进'}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void rollDice()}
+                  disabled={rolling}
+                  className={cn(
+                    'flex h-10 items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-sm font-black shadow-[3px_3px_0_#292524] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none',
+                    rolling
+                      ? 'cursor-not-allowed border-stone-300 bg-stone-200 text-stone-400 shadow-none'
+                      : 'bg-[#ffd166] text-stone-900 hover:bg-[#f5c34f]',
+                  )}
+                >
+                  <Dices aria-hidden className="size-4" />
+                  {rolling ? '掷骰中…' : '掷骰前进'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenAdvance}
+                  disabled={rolling}
+                  className={cn(
+                    'flex h-10 items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-sm font-black shadow-[3px_3px_0_#292524] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none',
+                    rolling
+                      ? 'cursor-not-allowed border-stone-300 bg-stone-200 text-stone-400 shadow-none'
+                      : 'bg-white text-stone-900 hover:bg-[#fff4cf]',
+                  )}
+                >
+                  <Footprints aria-hidden className="size-4" />
+                  向下一格进发
+                </button>
+              </div>
             )}
           </>
         )}

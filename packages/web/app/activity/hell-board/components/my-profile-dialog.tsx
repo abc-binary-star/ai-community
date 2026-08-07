@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, UserRound, X } from 'lucide-react'
+import { Loader2, MessageSquareWarning, UserRound, X } from 'lucide-react'
 import { useActivityStore } from '../lib/store'
+import { FeedbackDialog } from './feedback-dialog'
 
 const MAX_LEN = 50
 
@@ -19,6 +20,7 @@ export function MyProfileDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(nickname ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   const trimmed = name.trim()
   const dirty = trimmed !== (nickname ?? '')
@@ -91,6 +93,14 @@ export function MyProfileDialog({ onClose }: { onClose: () => void }) {
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
+            onClick={() => setShowFeedback(true)}
+            className="mr-auto inline-flex h-8 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+          >
+            <MessageSquareWarning aria-hidden className="size-3.5 text-emerald-700" />
+            反馈
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             className="h-8 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
           >
@@ -109,6 +119,8 @@ export function MyProfileDialog({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
+
+      {showFeedback && <FeedbackDialog onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }

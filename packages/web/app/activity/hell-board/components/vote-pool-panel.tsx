@@ -111,9 +111,20 @@ export function VotePoolPanel() {
               const totalVoted = item.yesCount + item.noCount
               return (
                 <li key={book.id} className="rounded-md border border-stone-300 bg-[#fffdf5] p-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold text-stone-900">{book.title}</p>
+                  <div className="flex items-start gap-2">
+                    {/* 封面图：封面颜色格靠它核验颜色，直出缩略图便于队长判断 */}
+                    {book.coverUrl && (
+                      <img
+                        src={book.coverUrl}
+                        alt={`《${book.title}》封面`}
+                        className="h-16 w-12 shrink-0 rounded border border-stone-200 object-cover"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-xs font-bold text-stone-900">{book.title}</p>
+                        <ReviewBadge status={book.reviewStatus} />
+                      </div>
                       <p className="mt-0.5 text-[11px] text-stone-500">
                         {book.author} · {formatWords(book.wordCount)}
                         {book.durationMinutes
@@ -121,7 +132,6 @@ export function VotePoolPanel() {
                           : ''}
                       </p>
                     </div>
-                    <ReviewBadge status={book.reviewStatus} />
                   </div>
                   <p className="mt-1.5 rounded bg-stone-50 px-1.5 py-1 text-[10px] leading-relaxed text-stone-500">
                     {book.memberName} · 第 {book.tileIndex} 格「{tile.title}」

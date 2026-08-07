@@ -11,6 +11,7 @@ import type {
   CheckInDraftBook,
   JudgementSession,
   RankingRow,
+  RollResult,
   ServerBook,
   ServerCheckIn,
   ServerJudgement,
@@ -127,6 +128,7 @@ interface ActivityState {
   refresh: () => Promise<void>
   selectTile: (index: number | null) => void
   rollDice: () => Promise<void>
+  advanceTeam: (steps: number) => Promise<RollResult | undefined>
   rollJudgement: () => Promise<void>
   submitCheckIn: (tileIndex: number, books: CheckInDraftBook[], evidenceUrl?: string) => Promise<void>
   deleteCheckIn: (checkInId: string) => Promise<void>
@@ -269,6 +271,23 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       await get().refresh()
     } catch (err) {
       set({ error: errMessage(err, '掷骰失败') })
+    } finally {
+      set({ rolling: false })
+    }
+  },
+
+  /** 队长手动前进指定格数（1–6 格，替代掷骰随机点数）。成功后刷新棋盘并返回结果 */
+  advanceTeam: async (steps: number) => {
+    if (get().rolling) return
+    set({ rolling: true, error: null })
+    try {
+      const result = await api.advanceTeam(steps)
+      set({ lastRoll: result.value })
+      await get().refresh()
+      return result
+    } catch (err) {
+      set({ error: errMessage(err, '前进失败') })
+      throw err
     } finally {
       set({ rolling: false })
     }
