@@ -122,6 +122,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const data = await res.json().catch(() => null)
   if (!res.ok) {
+    // 413 由反向代理直接返回 HTML 错误页，body 解析不出 error 字段，
+    // 兜底给出可操作的文案，避免只显示「请求失败 (413)」
+    if (res.status === 413) {
+      throw new ApiError('文件体积超出服务器上限，请压缩后重试', 413, data)
+    }
     throw new ApiError(data?.error || `请求失败 (${res.status})`, res.status, data)
   }
   return data as T
