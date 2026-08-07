@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BookX, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { deleteCheckIn, fetchMyBooks } from '../lib/api'
+import { fetchMyBooks } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam } from '../lib/store'
 import type { ServerBook } from '../lib/types'
@@ -33,6 +33,9 @@ export function MyCheckInsPanel() {
 
   const team = useCurrentTeam()
   const archived = useActivityStore((s) => s.archived)
+  // 走 store action 而非直接调 api：deleteCheckIn 内部会 refresh() 重拉棋盘快照，
+  // 撤回后任务进度 / 保底 / 队伍状态立即同步，不用等 10 秒轮询
+  const storeDeleteCheckIn = useActivityStore((s) => s.deleteCheckIn)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -60,7 +63,7 @@ export function MyCheckInsPanel() {
     if (!book.checkInId) return
     setWithdrawing(book.checkInId)
     try {
-      await deleteCheckIn(book.checkInId)
+      await storeDeleteCheckIn(book.checkInId)
       void load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '撤回失败')

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, CheckCheck, Loader2 } from 'lucide-react'
+import { ArrowLeft, CheckCheck, Loader2, ShieldAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 import { batchApprove, fetchReviewQueue, reviewBook } from '../lib/api'
 import type { ReviewQueueItem, ReviewStatus } from '../lib/types'
 import { ReviewCard } from './review-card'
@@ -23,6 +24,8 @@ const STATUS_FILTERS: Array<{ key: string; label: string }> = [
  * 支持批量确认 AI 通过项。AI 不具终裁权，三条 AI 结论都必须人工过一遍。
  */
 export function ReviewConsoleView() {
+  const role = useAuthStore((s) => s.user?.role)
+  const canReview = role === 'admin' || role === 'moderator'
   const [items, setItems] = useState<ReviewQueueItem[]>([])
   const [status, setStatus] = useState('')
   const [tileIndex, setTileIndex] = useState(0)
@@ -47,8 +50,10 @@ export function ReviewConsoleView() {
   }, [status, tileIndex])
 
   useEffect(() => {
+    // 无权限时连队列请求都不发，只渲染无权限页
+    if (!canReview) return
     void load()
-  }, [load])
+  }, [load, canReview])
 
   const handleReview = async (
     bookId: string,
@@ -82,6 +87,29 @@ export function ReviewConsoleView() {
     } catch (err) {
       setError(err instanceof Error ? err.message : '批量确认失败')
     }
+  }
+
+  // 前端角色拦截：非 admin / moderator 直接显示无权限页，不发无效请求。
+  // 权限真正的兜底仍是接口层 403（如账号角色过期）。
+  if (!canReview) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f7f6ed] px-6">
+        <div className="flex max-w-md flex-col items-center gap-3 rounded-lg border-2 border-stone-800 bg-white p-6 text-center shadow-[5px_5px_0_#292524]">
+          <ShieldAlert aria-hidden className="size-8 text-rose-500" />
+          <h1 className="text-base font-black text-stone-900">没有终审权限</h1>
+          <p className="text-xs leading-relaxed text-stone-500">
+            人工终审台仅对管理员和版主开放。如果认为这是误判，请确认账号角色后再试。
+          </p>
+          <Link
+            href="/activity/hell-board"
+            className="mt-1 inline-flex h-8 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+          >
+            <ArrowLeft aria-hidden className="size-3.5" />
+            返回活动页
+          </Link>
+        </div>
+      </main>
+    )
   }
 
   return (

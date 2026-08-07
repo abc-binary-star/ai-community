@@ -1,17 +1,19 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { fetchMe } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 /**
- * 活动页必须登录才能访问（P1-9 / 验收标准 9）：
- * 未登录用户直接跳转登录页（登录成功后回跳本页），不展示棋盘与榜单。
+ * 活动相关页面必须登录才能访问（P1-9 / 验收标准 9）：
+ * 未登录用户直接跳转登录页（登录成功后回跳当前页），不展示棋盘与榜单。
+ * 棋盘页与人工终审台共用，回跳目标按所在路径自动生成。
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
   const hasHydrated = useAuthStore((s) => s._hasHydrated)
@@ -20,9 +22,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hasHydrated) return
 
-    // 未登录：直接跳转登录页，登录成功后回跳本页
+    // 未登录：直接跳转登录页，登录成功后回跳当前页
     if (!token || !user) {
-      router.replace('/login?redirect=%2Factivity%2Fhell-board')
+      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`)
       return
     }
 
