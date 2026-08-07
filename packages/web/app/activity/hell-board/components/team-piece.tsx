@@ -26,7 +26,9 @@ export function TeamPiece({
       <span
         className={cn(
           'rounded-full transition-shadow',
-          isSelf && 'ring-2 ring-stone-900/70 ring-offset-1 ring-offset-white',
+          // 本队高亮：用与徽章盘面同形的金色发光 + 轻微放大区分，
+          // 不再叠加外圈圆环（徽章本身是圆形盘面，再套环会变成一大一小两个圈）
+          isSelf && 'scale-110 drop-shadow-[0_0_5px_rgba(217,164,65,0.95)]',
         )}
       >
         <TeamEmblem emblem={team.emblem} size={emblemSize} className="drop-shadow-sm" />
