@@ -1,8 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { BookOpen, ClipboardList, Gavel, History, Loader2, LogOut, Settings2, Sparkles, Users } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  BookOpen,
+  ChevronDown,
+  ClipboardList,
+  Crown,
+  Gavel,
+  History,
+  Loader2,
+  LogOut,
+  Settings2,
+  Sparkles,
+  Users,
+} from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ActivityFeedPanel } from './components/activity-feed-panel'
@@ -41,6 +53,90 @@ const TOP_VIEWS = [
 ] as const
 
 type TopView = (typeof TOP_VIEWS)[number][0]
+
+/**
+ * 队长操作下拉：把「补录」「队伍管理」收进一个入口。
+ * 管理员兼队长时页头会同时出现终审台/时间线/退出，平铺容易在中等宽度换行。
+ */
+function CaptainMenu({
+  archived,
+  onOpenInit,
+  onOpenManage,
+}: {
+  archived: boolean
+  onOpenInit: () => void
+  onOpenManage: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  // 点击外部与 Esc 关闭
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const items = [
+    { label: '进度初始化 / 补录', icon: ClipboardList, disabled: archived, run: onOpenInit },
+    { label: '队伍管理', icon: Settings2, disabled: false, run: onOpenManage },
+  ]
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="队长操作"
+        className={cn(
+          'inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
+          open ? 'bg-[#ffd166]' : 'bg-white hover:-translate-y-0.5 hover:bg-[#fff4cf]',
+        )}
+      >
+        <Crown className="size-3.5 text-amber-600" />
+        <span className="hidden sm:inline">队长</span>
+        <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1.5 w-48 overflow-hidden rounded-md border-2 border-stone-800 bg-white shadow-[3px_3px_0_#292524]"
+        >
+          {items.map(({ label, icon: Icon, disabled, run }) => (
+            <button
+              key={label}
+              type="button"
+              role="menuitem"
+              disabled={disabled}
+              onClick={() => {
+                setOpen(false)
+                run()
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold text-stone-700 transition-colors hover:bg-[#fff4cf] disabled:cursor-not-allowed disabled:text-stone-400 disabled:hover:bg-transparent"
+            >
+              <Icon className="size-3.5 shrink-0" />
+              {label}
+              {disabled && <span className="ml-auto text-[10px] font-medium">已归档</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function HellBoardView() {
   const teams = useActivityStore((s) => s.teams)
@@ -152,28 +248,13 @@ export function HellBoardView() {
                     <History className="size-3.5" />
                     <span className="hidden sm:inline">时间线</span>
                   </button>
+                  {/* 队长专属操作收进下拉，避免管理员兼队长时页头挤到换行 */}
                   {isCaptain && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setShowTeamInit(true)}
-                        disabled={archived}
-                        title="进度初始化 / 补录"
-                        className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#fff8e5] px-3 text-xs font-bold text-[#7a5c1e] shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff3d6] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <ClipboardList className="size-3.5" />
-                        <span className="hidden sm:inline">补录</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowTeamManage(true)}
-                        title="队伍管理"
-                        className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                      >
-                        <Settings2 className="size-3.5" />
-                        <span className="hidden sm:inline">队伍管理</span>
-                      </button>
-                    </>
+                    <CaptainMenu
+                      archived={archived}
+                      onOpenInit={() => setShowTeamInit(true)}
+                      onOpenManage={() => setShowTeamManage(true)}
+                    />
                   )}
                 </>
               )}
