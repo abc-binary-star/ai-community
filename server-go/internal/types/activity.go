@@ -153,6 +153,29 @@ type ActivityEventDTO struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+// ActivityFeedItemDTO 活动大事件流条目：全员打卡与全队事件的合并视图。
+// Kind 区分数据来源，前端据此决定渲染成打卡卡片还是事件条目。
+type ActivityFeedItemDTO struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	// Type 事件类型（打卡条目固定为 checkin）
+	Type       string `json:"type"`
+	TeamID     string `json:"teamId"`
+	TeamName   string `json:"teamName"`
+	TeamColor  string `json:"teamColor,omitempty"`
+	TeamEmblem string `json:"teamEmblem,omitempty"`
+	MemberName string `json:"memberName,omitempty"`
+	TileIndex  int    `json:"tileIndex,omitempty"`
+	Lap        int    `json:"lap,omitempty"`
+	Text       string `json:"text,omitempty"`
+	BookCount  int    `json:"bookCount,omitempty"`
+	WordCount  int64  `json:"wordCount,omitempty"`
+	// BookTitles 仅本队可见：其他队伍只给数量，避免互相抄书单（与格子详情口径一致）
+	BookTitles []string `json:"bookTitles,omitempty"`
+	OwnTeam    bool     `json:"ownTeam"`
+	CreatedAt  string   `json:"createdAt"`
+}
+
 // ActivityRollResultDTO 掷骰结果。点数由服务端生成，前端仅做动画表现
 type ActivityRollResultDTO struct {
 	Value    int `json:"value"`

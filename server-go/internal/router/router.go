@@ -203,6 +203,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.GET("/ranking", handler.GetActivityRanking)
 	activity.GET("/ranking/lit", handler.GetActivityLitRanking)
 	activity.GET("/timeline", handler.ListActivityTimeline)
+	// 活动大事件流：全员打卡 + 全场事件，未入组的观战用户也可查看
+	activity.GET("/feed", handler.ListActivityFeed)
 	activity.GET("/library", handler.ListActivityBookLibrary)
 	activity.POST("/enroll", handler.EnrollActivity)
 

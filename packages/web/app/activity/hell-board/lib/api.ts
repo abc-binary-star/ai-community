@@ -4,6 +4,7 @@ import type {
   BookLibraryItem,
   CheckInDraftBook,
   EnrollmentItem,
+  FeedItem,
   MemberProfile,
   RankingMetric,
   RankingRow,
@@ -172,6 +173,12 @@ export async function fetchBookLibrary(keyword: string): Promise<BookLibraryItem
 /** 本队时间线（PRD 10.3）：打卡 / 审核 / 掷骰 / 点亮 / 判定 / 保底 / 计时 / 人工事件 */
 export async function fetchTimeline(): Promise<TimelineEvent[]> {
   const res = await apiFetch<{ items: TimelineEvent[] }>(`${BASE}/timeline`)
+  return res.items ?? []
+}
+
+/** 活动大事件流：全员打卡 + 全场事件合并，观战用户也可查看 */
+export async function fetchFeed(): Promise<FeedItem[]> {
+  const res = await apiFetch<{ items: FeedItem[] }>(`${BASE}/feed`)
   return res.items ?? []
 }
 

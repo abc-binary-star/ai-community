@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { BookOpen, Eye, EyeOff, Gavel, Loader2, LogOut, Sparkles, Users } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { ActivityFeedPanel } from './components/activity-feed-panel'
 import { AllTeamsPanel } from './components/all-teams-panel'
 import { BoardGrid } from './components/board-grid'
 import { BoardTextView } from './components/board-text-view'
@@ -32,6 +33,7 @@ type SideTab = (typeof SIDE_TABS)[number][0]
 /** 顶部导航：棋盘（默认）+ 内容量大的独立视图 */
 const TOP_VIEWS = [
   ['board', '棋盘'],
+  ['feed', '🎉 大事件'],
   ['pool', '审核池'],
   ['teams', '全部队伍'],
 ] as const
@@ -164,7 +166,7 @@ export function HellBoardView() {
         {/* 顶部导航：棋盘为默认视图；审核池 / 全部队伍内容量大，单独整页展示 */}
         <nav
           aria-label="页面视图切换"
-          className="mb-4 grid grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524] sm:flex"
+          className="mb-4 grid grid-cols-2 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524] sm:flex"
         >
           {TOP_VIEWS.map(([key, label]) => (
             <button
@@ -290,8 +292,9 @@ export function HellBoardView() {
           </aside>
         </div>
         ) : (
-          /* 审核池 / 全部队伍：独立整页视图，内容量大时在面板内部滚动 */
+          /* 大事件 / 审核池 / 全部队伍：独立整页视图，内容量大时在面板内部滚动 */
           <div className="mx-auto w-full max-w-5xl xl:h-[calc(100dvh-8rem)]">
+            {topView === 'feed' && <ActivityFeedPanel />}
             {topView === 'pool' && <VotePoolPanel />}
             {topView === 'teams' && <AllTeamsPanel />}
           </div>

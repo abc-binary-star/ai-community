@@ -162,6 +162,18 @@ func ListActivityTimeline(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]any{"items": events})
 }
 
+// ListActivityFeed 活动大事件流：全员打卡 + 全部队伍事件
+// GET /api/activity/hell-board/feed
+func ListActivityFeed(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	items, err := activityService.ListGlobalFeed(ctx, userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]any{"items": items})
+}
+
 // ListActivityBookLibrary 第 20 格候选书库
 // GET /api/activity/hell-board/library?keyword=
 func ListActivityBookLibrary(ctx context.Context, c *app.RequestContext) {

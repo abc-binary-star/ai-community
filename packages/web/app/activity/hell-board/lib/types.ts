@@ -179,6 +179,27 @@ export interface TimelineEvent {
   createdAt: string
 }
 
+/** 活动大事件流条目：全员打卡（kind=checkin）与全场事件（kind=event）的合并流 */
+export interface FeedItem {
+  id: string
+  kind: 'checkin' | 'event'
+  type: TimelineEventType
+  teamId: string
+  teamName: string
+  teamColor?: string
+  teamEmblem?: string
+  memberName?: string
+  tileIndex?: number
+  lap?: number
+  text?: string
+  bookCount?: number
+  wordCount?: number
+  /** 仅本队可见的书名清单；其他队伍只下发数量 */
+  bookTitles?: string[]
+  ownTeam: boolean
+  createdAt: string
+}
+
 /** 榜单维度与主体（PRD 第 11 节） */
 export type RankingMetric = 'books' | 'words'
 export type RankingSubject = 'team' | 'member'
