@@ -420,6 +420,17 @@ export interface EnrollmentItem {
   joined: boolean
 }
 
+/** 管理员补卡的目标参与人（审批台「补卡」入口） */
+export interface AdminCheckInTarget {
+  /** 活动成员 ID（服务端按此定位补卡人） */
+  memberId: string
+  name: string
+  teamId: string
+  teamName: string
+  /** 队伍当前格：补卡默认落在该格（服务端校验当前格或已点亮历史格） */
+  position: number
+}
+
 /** 反馈类型：bug / 需求 / 其他 */
 export type FeedbackType = 'bug' | 'feature' | 'other'
 

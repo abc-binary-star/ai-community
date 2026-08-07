@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Copy, Plus, Search, Trash2, X } from 'lucide-react'
-import { DuplicateBookError, fetchBookLibrary } from '../lib/api'
+import { AlertCircle, ChevronDown, Copy, Plus, Search, Trash2, X } from 'lucide-react'
+import { adminSubmitCheckIn, DuplicateBookError, fetchBookLibrary } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useActivityStore, useCurrentTeam, useTile } from '../lib/store'
-import type { BookLibraryItem, CheckInDraftBook } from '../lib/types'
+import type { AdminCheckInTarget, BookLibraryItem, CheckInDraftBook, Tile } from '../lib/types'
 import { ImageUploadField } from './image-upload-field'
 
 interface BookFormRow {
@@ -46,21 +46,39 @@ function wanToWords(wan: string): number {
  *
  * initialBooks 用于「驳回后重新提交」：预填被驳回的书目信息，
  * 提交仍落在队伍当前格（服务端校验），原驳回记录被新提交替换。
+ *
+ * adminMode 为审批台「补卡」入口：多一个补卡人选择器，
+ * 提交走管理员代打卡接口（打卡归属所选参与人）。
  */
 export function CheckInFormDialog({
   tileIndex,
   onClose,
   initialBooks,
+  adminMode,
+  adminTargets,
+  adminTiles,
 }: {
   tileIndex: number
   onClose: () => void
   initialBooks?: CheckInDraftBook[]
+  adminMode?: boolean
+  /** 管理员补卡：活动参与人列表（已入队成员及其队伍当前格） */
+  adminTargets?: AdminCheckInTarget[]
+  /** 管理员补卡：格子定义（审批台页面不加载活动 store，需传入） */
+  adminTiles?: Tile[]
 }) {
   const team = useCurrentTeam()
-  const tile = useTile(tileIndex)
+  const storeTile = useTile(tileIndex)
+  // 管理员补卡：目标格取所选补卡人所在队伍的当前格，否则用外部传入格
+  const [adminTarget, setAdminTarget] = useState<AdminCheckInTarget | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const effTileIndex = adminMode && adminTarget ? adminTarget.position : tileIndex
+  const tile = adminMode ? adminTiles?.find((t) => t.index === effTileIndex) : storeTile
   const findDuplicates = useActivityStore((s) => s.findDuplicates)
   const submitCheckIn = useActivityStore((s) => s.submitCheckIn)
   const currentMemberId = useActivityStore((s) => s.myMemberId ?? '')
+  // 补卡人成员 ID：管理员补卡时以所选参与人为准，本地查重与服务端口径一致
+  const memberIdForDup = adminMode ? (adminTarget?.memberId ?? '') : currentMemberId
 
   // 颜色类任务需靠封面图核验，其余格子不展示封面字段
   const needCover = tile?.taskType === 'cover-color'
@@ -200,7 +218,7 @@ export function CheckInFormDialog({
     // 本地查重先给即时反馈，权威查重仍在服务端（P1-8）。
     // 作者未填时与提交口径一致用「未知」占位，保证本地查重键与服务端一致
     const dups = findDuplicates(
-      currentMemberId,
+      memberIdForDup,
       valid.map((r) => ({ title: r.title.trim(), author: r.author.trim() || '未知' })),
     )
     if (dups.length > 0) {
@@ -225,7 +243,21 @@ export function CheckInFormDialog({
     setSubmitting(true)
     setError(null)
     try {
-      await submitCheckIn(tileIndex, books, evidenceUrl.trim() || undefined)
+      if (adminMode) {
+        // 管理员补卡：必须已选择补卡人
+        if (!adminTarget) {
+          setError('请先选择补卡人')
+          return
+        }
+        await adminSubmitCheckIn({
+          memberId: adminTarget.memberId,
+          tileIndex: effTileIndex,
+          books,
+          evidenceUrl: evidenceUrl.trim() || undefined,
+        })
+      } else {
+        await submitCheckIn(tileIndex, books, evidenceUrl.trim() || undefined)
+      }
     } catch (err) {
       // 服务端查重命中时回显命中书名与所在格子（验收标准 10）
       if (err instanceof DuplicateBookError) {
@@ -249,7 +281,9 @@ export function CheckInFormDialog({
         return `《${b.title}》 ${b.author} ${formatWords(b.wordCount)}${dur}`
       })
       .join('\n')
-    setGroupText(`#地狱打卡 ${team?.name ?? ''}-第${tileIndex}格-${books.length}本\n${text}`)
+    setGroupText(
+      `#地狱打卡 ${adminMode ? adminTarget?.teamName ?? '' : team?.name ?? ''}-第${effTileIndex}格-${books.length}本\n${text}`,
+    )
   }
 
   const copyGroupText = () => {
@@ -316,7 +350,7 @@ export function CheckInFormDialog({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="checkin-title" className="text-lg font-black text-stone-900">
-              提交打卡 · 第 {tileIndex} 格
+              {adminMode ? '补卡' : '提交打卡'} · 第 {effTileIndex} 格
             </h2>
             <p className="mt-0.5 text-xs font-medium text-stone-500">{tile?.title ?? ''}</p>
           </div>
@@ -330,6 +364,53 @@ export function CheckInFormDialog({
           </button>
         </div>
 
+        {adminMode && (
+          <div className="relative mt-3">
+            <p className="mb-1.5 text-xs font-bold text-stone-600">补卡人</p>
+            <button
+              type="button"
+              onClick={() => setPickerOpen((v) => !v)}
+              className="flex h-9 w-full items-center justify-between gap-2 rounded-md border-2 border-stone-300 bg-white px-3 text-xs text-stone-900 hover:border-stone-800"
+            >
+              <span className="truncate">
+                {adminTarget
+                  ? `${adminTarget.name}（${adminTarget.teamName} · 第 ${adminTarget.position} 格）`
+                  : '请选择补卡人'}
+              </span>
+              <ChevronDown className="size-3.5 shrink-0 text-stone-400" />
+            </button>
+
+            {pickerOpen && (
+              <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border-2 border-stone-300 bg-white p-1 shadow-lg">
+                {adminTargets && adminTargets.length > 0 ? (
+                  adminTargets.map((t) => (
+                    <button
+                      key={t.memberId}
+                      type="button"
+                      onClick={() => {
+                        setAdminTarget(t)
+                        setPickerOpen(false)
+                      }}
+                      className="flex w-full items-center justify-between gap-2 rounded px-2.5 py-2 text-left transition-colors hover:bg-emerald-50"
+                    >
+                      <span className="min-w-0 truncate text-xs font-bold text-stone-900">
+                        {t.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-stone-500">
+                        {t.teamName} · 第 {t.position} 格
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-2.5 py-2 text-[11px] text-stone-400">
+                    暂无已入队参与人
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="mt-3 rounded-md border border-amber-300 bg-[#fff0b8] px-3 py-2 text-xs font-bold text-amber-900">
           书名必填{needAuthor && '，本格为作者相关任务，作者必填'}
           {needWords && '，本格为累计字数任务，字数必填'}
@@ -339,7 +420,7 @@ export function CheckInFormDialog({
 
         {isResubmit && (
           <p className="mt-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
-            重新提交：将计入队伍当前格（第 {tileIndex} 格），提交后原驳回记录会被替换。
+            重新提交：将计入队伍当前格（第 {effTileIndex} 格），提交后原驳回记录会被替换。
           </p>
         )}
 
@@ -552,7 +633,7 @@ export function CheckInFormDialog({
             disabled={submitting}
             className="h-10 flex-1 rounded-lg bg-[#78c6a3] text-sm font-black text-stone-900 transition-colors hover:bg-[#65b891] disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
           >
-            {submitting ? '提交中…' : '提交打卡'}
+            {submitting ? '提交中…' : adminMode ? '提交补卡' : '提交打卡'}
           </button>
         </div>
       </div>

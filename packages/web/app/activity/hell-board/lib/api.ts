@@ -77,6 +77,32 @@ export async function submitCheckIn(payload: {
   }
 }
 
+/** 管理员代成员补打卡（审批台「补卡」入口）。memberId 为目标成员（补卡人） */
+export async function adminSubmitCheckIn(payload: {
+  memberId: string
+  tileIndex: number
+  books: CheckInDraftBook[]
+  evidenceUrl?: string
+}): Promise<ServerCheckIn> {
+  try {
+    return await apiFetch<ServerCheckIn>(`${BASE}/admin/checkins`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      const detail = err.body as
+        | { titles?: string[]; duplicates?: Record<string, number> }
+        | null
+        | undefined
+      if (detail?.duplicates) {
+        throw new DuplicateBookError(err.message, detail.titles ?? [], detail.duplicates)
+      }
+    }
+    throw err
+  }
+}
+
 /** 撤回未进入终审的打卡（PRD 8.4） */
 export function deleteCheckIn(checkInId: string): Promise<void> {
   return apiFetch<void>(`${BASE}/checkins/${checkInId}`, { method: 'DELETE' })

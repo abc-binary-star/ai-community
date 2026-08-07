@@ -55,6 +55,27 @@ func CreateActivityCheckIn(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, dto)
 }
 
+// AdminCreateActivityCheckIn 管理员代成员补打卡（审批台「补卡」入口）
+// POST /api/activity/hell-board/admin/checkins
+func AdminCreateActivityCheckIn(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityAdminCheckInReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	inner := types.ActivityCheckInReq{
+		TileIndex:   req.TileIndex,
+		Books:       req.Books,
+		EvidenceURL: req.EvidenceURL,
+	}
+	dto, err := activityService.AdminSubmitCheckIn(ctx, req.MemberID, inner)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, dto)
+}
+
 // DeleteActivityCheckIn 撤回未审打卡
 // DELETE /api/activity/hell-board/checkins/:id
 func DeleteActivityCheckIn(ctx context.Context, c *app.RequestContext) {

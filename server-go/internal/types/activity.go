@@ -313,6 +313,16 @@ type ActivityCheckInReq struct {
 	EvidenceURL string            `json:"evidenceUrl" vd:"len($)<=500"`
 }
 
+// ActivityAdminCheckInReq 管理员代成员补打卡请求（审批台「补卡」入口）
+type ActivityAdminCheckInReq struct {
+	// MemberID 目标成员（补卡人），服务端按活动成员 ID 定位
+	MemberID string `json:"memberId" vd:"len($)>=1"`
+	// TileIndex 补卡目标格：队伍当前格或本队已点亮的历史格
+	TileIndex   int               `json:"tileIndex" vd:"$>=1 && $<=20"`
+	Books       []ActivityBookReq `json:"books"`
+	EvidenceURL string            `json:"evidenceUrl" vd:"len($)<=500"`
+}
+
 // ActivityAdvanceReq 队长手动前进请求：步数 1–6（替代掷骰随机点数）
 type ActivityAdvanceReq struct {
 	Steps int `json:"steps" vd:"$>=1 && $<=6"`

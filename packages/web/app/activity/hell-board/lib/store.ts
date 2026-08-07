@@ -34,7 +34,8 @@ export function normalizeBookKey(title: string, author: string): string {
 // --- 服务端 DTO → 组件消费结构的映射 ---
 // 服务端把判定规则与 AI 结论平铺下发，组件消费嵌套结构，在此统一转换。
 
-function toTile(t: ServerTile): Tile {
+/** 服务端格子定义转组件消费结构（审批台补卡等独立页面复用） */
+export function toTile(t: ServerTile): Tile {
   return {
     index: t.index,
     title: t.title,

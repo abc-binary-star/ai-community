@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, CalendarPlus, Loader2, ShieldAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
-import { fetchReviewQueue, reviewBook } from '../lib/api'
-import type { ReviewQueueItem } from '../lib/types'
+import { CheckInFormDialog } from '../components/checkin-form-dialog'
+import { fetchBoard, fetchReviewQueue, reviewBook } from '../lib/api'
+import { toTile } from '../lib/store'
+import type { AdminCheckInTarget, ReviewQueueItem, Tile } from '../lib/types'
 import { FeedbackConsolePanel } from './feedback-console-panel'
 import { ReviewCard } from './review-card'
 
@@ -37,6 +39,40 @@ export function ReviewConsoleView() {
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState(0)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // 补卡入口：管理员代成员补打卡
+  const [showAdminCheckIn, setShowAdminCheckIn] = useState(false)
+  const [adminTargets, setAdminTargets] = useState<AdminCheckInTarget[]>([])
+  const [adminTiles, setAdminTiles] = useState<Tile[]>([])
+  const [adminLoadError, setAdminLoadError] = useState<string | null>(null)
+  const [adminLoading, setAdminLoading] = useState(false)
+
+  /** 打开补卡表单前先拉取棋盘快照，组装参与人列表与格子定义 */
+  const openAdminCheckIn = async () => {
+    setAdminLoadError(null)
+    setAdminLoading(true)
+    try {
+      const board = await fetchBoard()
+      const targets: AdminCheckInTarget[] = []
+      for (const team of board.teams ?? []) {
+        for (const m of team.members ?? []) {
+          targets.push({
+            memberId: m.id,
+            name: m.name,
+            teamId: team.id,
+            teamName: team.name,
+            position: team.position,
+          })
+        }
+      }
+      setAdminTargets(targets)
+      setAdminTiles((board.tiles ?? []).map(toTile))
+      setShowAdminCheckIn(true)
+    } catch (err) {
+      setAdminLoadError(err instanceof Error ? err.message : '参与人列表加载失败')
+    } finally {
+      setAdminLoading(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,7 +182,29 @@ export function ReviewConsoleView() {
           >
             用户反馈
           </button>
+          <button
+            type="button"
+            onClick={() => void openAdminCheckIn()}
+            disabled={adminLoading}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#78c6a3] px-3 py-1.5 text-[11px] font-bold text-stone-900 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500"
+          >
+            {adminLoading ? (
+              <Loader2 aria-label="加载中" className="size-3.5 animate-spin" />
+            ) : (
+              <CalendarPlus aria-hidden className="size-3.5" />
+            )}
+            补卡
+          </button>
         </div>
+
+        {adminLoadError && (
+          <p
+            role="alert"
+            className="mt-3 rounded-md border-2 border-rose-300 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800"
+          >
+            {adminLoadError}
+          </p>
+        )}
 
         {tab === 'reviews' ? (
           <>
@@ -221,6 +279,16 @@ export function ReviewConsoleView() {
           <FeedbackConsolePanel />
         )}
       </div>
+
+      {showAdminCheckIn && (
+        <CheckInFormDialog
+          tileIndex={adminTargets[0]?.position ?? 1}
+          adminMode
+          adminTargets={adminTargets}
+          adminTiles={adminTiles}
+          onClose={() => setShowAdminCheckIn(false)}
+        />
+      )}
     </main>
   )
 }

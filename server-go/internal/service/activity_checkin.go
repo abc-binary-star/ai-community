@@ -44,17 +44,35 @@ func requiresWordCount(taskType string) bool {
 // 提交前校验：活动周期内、成员身份、队伍可提交（非计时中/已完成）、书目查重。
 // 提交后书目进入待初审，不直接改动任务进度——进度仅由人工终审累加（验收标准 2）。
 func (s *ActivityService) SubmitCheckIn(ctx context.Context, userID string, req types.ActivityCheckInReq) (*types.ActivityCheckInDTO, error) {
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.submitCheckInFor(ctx, me, req)
+}
+
+// AdminSubmitCheckIn 管理员代成员补打卡（审批台「补卡」入口）。
+// 打卡归属目标成员（me），其余提交校验与正常打卡完全一致；
+// 权限由路由层 RequireRole("admin","moderator") 兜底。
+func (s *ActivityService) AdminSubmitCheckIn(ctx context.Context, memberID string, req types.ActivityCheckInReq) (*types.ActivityCheckInDTO, error) {
+	var me model.ActivityMember
+	if err := dal.DB.WithContext(ctx).First(&me, "id = ?", memberID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrActivityMemberNotFound
+		}
+		return nil, err
+	}
+	return s.submitCheckInFor(ctx, &me, req)
+}
+
+// submitCheckInFor 打卡核心逻辑，调用方负责定位打卡成员 me。
+func (s *ActivityService) submitCheckInFor(ctx context.Context, me *model.ActivityMember, req types.ActivityCheckInReq) (*types.ActivityCheckInDTO, error) {
 	now := time.Now()
 	if err := s.requireWritable(now); err != nil {
 		return nil, err
 	}
 	if len(req.Books) == 0 {
 		return nil, ErrActivityInvalidInput
-	}
-
-	me, err := s.requireMember(ctx, userID)
-	if err != nil {
-		return nil, err
 	}
 
 	var team model.ActivityTeam
