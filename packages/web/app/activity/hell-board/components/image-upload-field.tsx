@@ -5,7 +5,7 @@ import { ImagePlus, Loader2, X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-const MAX_SIZE = 5 << 20
+const MAX_SIZE = 30 << 20
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
 
 /**
@@ -32,7 +32,7 @@ export function ImageUploadField({
     setError(null)
 
     if (file.size > MAX_SIZE) {
-      setError('图片不能超过 5MB')
+      setError('图片不能超过 30MB')
       return
     }
 

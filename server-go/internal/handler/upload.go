@@ -23,11 +23,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// 最大头像文件 5MB
-const maxAvatarSize = 5 << 20
+// 最大头像文件 30MB
+const maxAvatarSize = 30 << 20
 
-// 最大帖子图片 5MB
-const maxImageSize = 5 << 20
+// 最大帖子图片 30MB
+const maxImageSize = 30 << 20
 
 // 允许的图片 MIME 类型
 var allowedImageTypes = map[string]bool{
@@ -64,7 +64,7 @@ func UploadAvatar(ctx context.Context, c *app.RequestContext) {
 	}
 
 	if fileHeader.Size > maxAvatarSize {
-		response.BadRequest(c, "图片文件太大，最多 5MB")
+		response.BadRequest(c, "图片文件太大，最多 30MB")
 		return
 	}
 
@@ -159,7 +159,7 @@ func UploadImage(ctx context.Context, c *app.RequestContext) {
 	}
 
 	if fileHeader.Size > maxImageSize {
-		response.BadRequest(c, "图片文件太大，最多 5MB")
+		response.BadRequest(c, "图片文件太大，最多 30MB")
 		return
 	}
 
