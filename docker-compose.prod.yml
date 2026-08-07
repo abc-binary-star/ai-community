@@ -56,6 +56,10 @@ services:
       - DATABASE_URL=postgresql://aicom:aicom_password@postgres:5432/aicom?sslmode=disable
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=${CORS_ORIGIN}
+      # 读书地狱活动重置开关：默认空 = 永不清库。
+      # 仅在正式开局前需要清空旧数据时，在 .env 里设为 reset-hell-board-v1，
+      # 部署一次后即可删掉（有 activity_seed_state 标记兜底，不会重复执行）。
+      - ACTIVITY_RESET=${ACTIVITY_RESET:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}

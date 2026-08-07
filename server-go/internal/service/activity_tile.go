@@ -49,23 +49,36 @@ func (s *ActivityService) GetTileDetail(ctx context.Context, userID string, tile
 		colors[t.ID] = t.Color
 	}
 
-	// 本组书目清单一次查出，其他组不查明细
-	myBooks := map[int][]types.ActivityBookDTO{}
-	if myTeamID != "" {
+	// 全部队伍的书目清单一次查出：这是共享型读书活动，跨队书单公开可见，
+	// 群友可以互相看别队读了什么书并借鉴选书（PRD 共享阅读定位）。
+	// 差异只在审核态：本队连待审 / 被驳回的都能看到（自己要跟进处理），
+	// 其他队只下发已通过的，避免把别人待审中的提交提前曝光。
+	booksByTeamLap := map[string]map[int][]types.ActivityBookDTO{}
+	{
 		var books []model.ActivityCheckInBook
-		if err := dal.DB.WithContext(ctx).
-			Where("team_id = ? AND tile_index = ?", myTeamID, tileIndex).
-			Order("created_at asc").
-			Find(&books).Error; err != nil {
+		q := dal.DB.WithContext(ctx).Where("tile_index = ?", tileIndex)
+		if myTeamID != "" {
+			q = q.Where("team_id = ? OR review_status = ?", myTeamID, model.ReviewStatusApproved)
+		} else {
+			q = q.Where("review_status = ?", model.ReviewStatusApproved)
+		}
+		if err := q.Order("created_at asc").Find(&books).Error; err != nil {
 			return nil, err
 		}
-		names, err := s.memberNames(ctx, myTeamID)
+		// 全局成员名映射：跨队展示需要所有队伍的成员昵称
+		names, err := s.memberNames(ctx, "")
 		if err != nil {
 			return nil, err
 		}
 		for i := range books {
 			b := &books[i]
-			myBooks[b.Lap] = append(myBooks[b.Lap], bookToDTO(b, names[b.MemberID], teamNames[b.TeamID]))
+			if booksByTeamLap[b.TeamID] == nil {
+				booksByTeamLap[b.TeamID] = map[int][]types.ActivityBookDTO{}
+			}
+			booksByTeamLap[b.TeamID][b.Lap] = append(
+				booksByTeamLap[b.TeamID][b.Lap],
+				bookToDTO(b, names[b.MemberID], teamNames[b.TeamID]),
+			)
 		}
 	}
 
@@ -89,11 +102,10 @@ func (s *ActivityService) GetTileDetail(ctx context.Context, userID string, tile
 			LitReason: r.LitReason,
 			IsMyTeam:  r.TeamID == myTeamID,
 		}
-		if rec.IsMyTeam {
-			// 本组可见完整清单（含待审与被驳回的），但 bookCount 统一表示
-			// 「已通过审核的书目数」，与其他队伍口径一致，避免同一字段两种含义
-			rec.Books = myBooks[r.Lap]
-		}
+		// 跨队书单公开：本队为完整清单（含待审 / 被驳回），他队为已通过清单。
+		// bookCount 统一表示「已通过审核的书目数」，与列表长度可能不等（本队含待审），
+		// 这是刻意的：计数口径全队一致，清单则按可见范围下发
+		rec.Books = booksByTeamLap[r.TeamID][r.Lap]
 		out.Records = append(out.Records, rec)
 	}
 

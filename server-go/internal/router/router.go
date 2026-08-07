@@ -217,6 +217,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	captain.POST("/initialize", handler.InitializeActivityTeam)
 	// 自助选组入队（可选成为队长）
 	captain.POST("/join", handler.JoinActivityTeam)
+	// 入队后补选队长（队长位空缺时）：入队时没勾队长的成员也能成为队长
+	captain.POST("/claim-captain", handler.ClaimActivityCaptain)
 
 	// 人工终审台与运营后台（PRD 9.3 / 第 13 节）
 	activityAdmin := h.Group("/api/activity/hell-board/admin",

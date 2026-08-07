@@ -2,26 +2,27 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, CheckCheck, Loader2, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
-import { batchApprove, fetchReviewQueue, reviewBook } from '../lib/api'
-import type { ReviewQueueItem, ReviewStatus } from '../lib/types'
+import { fetchReviewQueue, reviewBook } from '../lib/api'
+import type { ReviewQueueItem } from '../lib/types'
 import { ReviewCard } from './review-card'
 
-/** 队列筛选项，对应 PRD 9.1 的审核状态流 */
+/** 队列筛选项：默认看已通过（监督视角），也可回看投票池与被驳回的 */
 const STATUS_FILTERS: Array<{ key: string; label: string }> = [
-  { key: '', label: '全部待处理' },
-  { key: 'ai-rejected', label: 'AI 驳回' },
-  { key: 'ai-unsure', label: 'AI 存疑' },
-  { key: 'ai-passed', label: 'AI 通过' },
-  { key: 'approved', label: '已通过' },
+  { key: '', label: '已打卡成功' },
+  { key: 'in-voting', label: '队长投票中' },
   { key: 'rejected', label: '已驳回' },
+  { key: 'revoked', label: '已撤销' },
 ]
 
 /**
- * 人工终审台（PRD 9.3）：按小组、格子、状态筛选，逐条通过或驳回，
- * 支持批量确认 AI 通过项。AI 不具终裁权，三条 AI 结论都必须人工过一遍。
+ * 监督台（原人工终审台）。
+ *
+ * 审核权已完全交给队长投票：AI 初审通过直接生效，未过则进投票池由队长过半通过，
+ * 管理员不再决定「能不能通过」。这里默认只列已打卡成功的书目，用于事后监督——
+ * 发现刷量或不符合任务要求时驳回 / 撤销，撤销会同步回滚格子进度。
  */
 export function ReviewConsoleView() {
   const role = useAuthStore((s) => s.user?.role)
@@ -73,22 +74,6 @@ export function ReviewConsoleView() {
     }
   }
 
-  // 批量确认仅对 AI 通过项开放，存疑与驳回必须逐条看证据
-  const aiPassedIds = items
-    .filter((i) => i.book.reviewStatus === ('ai-passed' as ReviewStatus))
-    .map((i) => i.book.id)
-
-  const handleBatch = async () => {
-    if (aiPassedIds.length === 0) return
-    setError(null)
-    try {
-      await batchApprove(aiPassedIds)
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '批量确认失败')
-    }
-  }
-
   // 前端角色拦截：非 admin / moderator 直接显示无权限页，不发无效请求。
   // 权限真正的兜底仍是接口层 403（如账号角色过期）。
   if (!canReview) {
@@ -123,23 +108,12 @@ export function ReviewConsoleView() {
           返回活动页
         </Link>
 
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-black text-stone-900">人工终审台</h1>
-            <p className="mt-1 text-xs text-stone-500">
-              共 {total} 条待处理。任务进度仅由终审通过的打卡累加，AI 结论不直接改变进度。
-            </p>
-          </div>
-          {aiPassedIds.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void handleBatch()}
-              className="flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#78c6a3] px-3 text-xs font-black text-stone-900 shadow-[3px_3px_0_#292524] transition-colors hover:bg-[#65b891]"
-            >
-              <CheckCheck aria-hidden className="size-3.5" />
-              批量确认 AI 通过项（{aiPassedIds.length}）
-            </button>
-          )}
+        <div className="mt-3">
+          <h1 className="text-2xl font-black text-stone-900">打卡监督台</h1>
+          <p className="mt-1 text-xs leading-relaxed text-stone-500">
+            共 {total} 条。审核由队长投票决定，这里只做事后监督：发现刷量或不符合任务要求时驳回，
+            撤销会同步回滚该格进度。
+          </p>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-1.5">

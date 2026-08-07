@@ -163,11 +163,7 @@ function FeedRow({ item }: { item: FeedItem }) {
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="mt-1 text-[10px] font-medium italic text-stone-400">
-                  书单已加密 🔒 别队的秘密武器，看不得
-                </p>
-              )}
+              ) : null}
               {bookHype(item.bookCount ?? 0) && (
                 <p className="mt-1.5 text-[10px] font-bold text-stone-500">
                   {bookHype(item.bookCount ?? 0)}
@@ -199,7 +195,7 @@ type Filter = (typeof FILTERS)[number][0]
 /**
  * 活动大事件（顶部导航独立整页视图）：
  * 全员打卡 + 全场事件的合并直播流，播报口吻刻意夸张，配符号标签便于扫读。
- * 书单仅本队可见，其他队伍只展示数量（与格子详情的可见性口径一致）。
+ * 书单全场公开：这是共享型活动，大家互相看别队读了什么书并借鉴选书。
  */
 export function ActivityFeedPanel() {
   const [items, setItems] = useState<FeedItem[] | null>(null)

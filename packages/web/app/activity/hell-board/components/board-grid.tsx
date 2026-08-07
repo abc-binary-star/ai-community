@@ -45,7 +45,7 @@ export function BoardGrid({
 
   return (
     <div
-      className="board-ring"
+      className="board-ring w-full"
       style={
         {
           '--ring-cols': BOARD_COLS,

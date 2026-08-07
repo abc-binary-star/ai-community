@@ -71,12 +71,15 @@ func (s *ActivityService) ListGlobalFeed(ctx context.Context, userID string) ([]
 		}
 		own := myTeamID != "" && c.TeamID == myTeamID
 		var words int64
+		// 共享型活动：书名对全场公开，别队读了什么书大家都能看见并互相借鉴。
+		// 只跳过被驳回的，避免把判定不通过的书当成有效阅读展示
 		titles := make([]string, 0, len(c.Books))
 		for j := range c.Books {
 			words += c.Books[j].WordCount
-			if own {
-				titles = append(titles, c.Books[j].Title)
+			if c.Books[j].ReviewStatus == model.ReviewStatusRejected {
+				continue
 			}
+			titles = append(titles, c.Books[j].Title)
 		}
 		rows = append(rows, feedRow{
 			at: c.CreatedAt,

@@ -13,8 +13,19 @@ type TabKey = 'ranking' | 'lit'
 /** 榜单只展示前四名，保证卡片高度与队伍面板一致 */
 const RANK_LIMIT = 4
 
+/**
+ * 前四名的奖牌配色：金 / 银 / 铜 / 铁。
+ * 榜单只取前四，四个名次各有辨识度，比统一金色更容易一眼读出排位。
+ */
+const MEDAL_STYLES: Record<number, string> = {
+  1: 'border-[#8b6b2c] bg-gradient-to-b from-[#ffe066] to-[#f0b429] text-[#5c430d] shadow-[1px_1px_0_rgba(139,107,44,0.5)]',
+  2: 'border-[#8c8c94] bg-gradient-to-b from-[#f3f4f6] to-[#c9ccd3] text-[#4b4f57] shadow-[1px_1px_0_rgba(120,124,132,0.5)]',
+  3: 'border-[#8a5a33] bg-gradient-to-b from-[#e8a87c] to-[#c4703a] text-[#4a2a12] shadow-[1px_1px_0_rgba(138,90,51,0.5)]',
+  4: 'border-[#6b7280] bg-gradient-to-b from-[#9ca3af] to-[#6b7280] text-white shadow-[1px_1px_0_rgba(75,85,99,0.5)]',
+}
+
 function RankRow({ row, metric, emblem }: { row: RankingRow; metric: RankingMetric | 'lit'; emblem?: string }) {
-  const top3 = row.rank <= 3
+  const medal = MEDAL_STYLES[row.rank]
   return (
     <li
       className={cn(
@@ -28,9 +39,7 @@ function RankRow({ row, metric, emblem }: { row: RankingRow; metric: RankingMetr
       <span
         className={cn(
           'flex size-6 shrink-0 items-center justify-center rounded-full border-2 text-[11px] font-black',
-          top3
-            ? 'border-[#8b6b2c] bg-[#ffd166] text-[#5c430d] shadow-[1px_1px_0_rgba(139,107,44,0.45)]'
-            : 'border-[#c9b98f] bg-[#f4edda] text-stone-500',
+          medal ?? 'border-[#c9b98f] bg-[#f4edda] text-stone-500',
         )}
       >
         {row.rank}

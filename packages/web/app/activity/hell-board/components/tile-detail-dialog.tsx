@@ -8,7 +8,6 @@ import {
   Hourglass,
   Library,
   Loader2,
-  Lock,
   Search,
   X,
 } from 'lucide-react'
@@ -143,10 +142,10 @@ function GroupCrossLibrary({ canView }: { canView: boolean }) {
 
 /**
  * 格子打卡记录（PRD 8.2 / 验收标准 11）：
- * 所有登录用户可见已打卡小组汇总；仅本组成员可见本组完整书目清单。
+ * 所有登录用户可见已打卡小组汇总与各队书目清单。
  *
- * 可见性由服务端裁剪——非本组记录不下发 books 字段，
- * 前端不做过滤，避免明细泄漏到网络响应里。
+ * 这是共享型读书活动，跨队书单公开可见，群友可以互相看别队读了什么书。
+ * 审核态差异由服务端裁剪：本队含待审 / 被驳回，其他队只下发已通过的。
  */
 export function TileDetailDialog({
   tileIndex,
@@ -211,9 +210,15 @@ export function TileDetailDialog({
 
   const records: TileRecord[] = detail?.records ?? []
 
-  // 本组记录按轮次倒序展示，跨轮次落入同格时分轮分组（PRD 8.2）
-  const ownRecords = useMemo(
-    () => records.filter((r) => r.isMyTeam).sort((a, b) => b.lap - a.lap),
+  // 书单记录：共享活动下跨队公开，本队优先、其次按轮次倒序（PRD 8.2）
+  const bookRecords = useMemo(
+    () =>
+      records
+        .filter((r) => r.books?.length)
+        .sort((a, b) => {
+          if (a.isMyTeam !== b.isMyTeam) return a.isMyTeam ? -1 : 1
+          return b.lap - a.lap
+        }),
     [records],
   )
 
@@ -320,16 +325,25 @@ export function TileDetailDialog({
 
         <section aria-labelledby="tile-books-heading" className="mt-5">
           <h3 id="tile-books-heading" className="flex items-center gap-1.5 text-sm font-medium text-stone-800">
-            本组书目清单
-            <Lock aria-hidden className="size-3 text-stone-400" />
-            <span className="text-[11px] font-normal text-stone-400">仅本组成员可见</span>
+            本格书目清单
+            <Library aria-hidden className="size-3 text-emerald-600" />
+            <span className="text-[11px] font-normal text-stone-400">全场公开 · 可互相参考选书</span>
           </h3>
-          {ownRecords.every((r) => !r.books?.length) ? (
-            <p className="mt-2 text-xs font-bold text-emerald-700">本组在该格暂无打卡记录。</p>
+          {bookRecords.length === 0 ? (
+            <p className="mt-2 text-xs font-bold text-emerald-700">该格暂无打卡记录。</p>
           ) : (
-            ownRecords.map((record) => (
+            bookRecords.map((record) => (
               <div key={`${record.teamId}-${record.lap}`} className="mt-3">
-                <p className="text-[11px] text-stone-400">第 {record.lap} 轮</p>
+                <p className="flex items-center gap-1.5 text-[11px] text-stone-400">
+                  <span
+                    aria-hidden
+                    className="size-2 shrink-0 rounded-full border border-stone-400/60"
+                    style={{ backgroundColor: record.teamColor }}
+                  />
+                  <span className="font-bold text-stone-600">{record.teamName}</span>
+                  {record.isMyTeam && <span className="text-[10px] font-black text-sky-600">本组</span>}
+                  <span>· 第 {record.lap} 轮</span>
+                </p>
                 <ul className="mt-1.5 space-y-1">
                   {(record.books ?? []).map((book) => (
                     <li

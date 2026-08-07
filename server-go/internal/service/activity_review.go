@@ -12,16 +12,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// pendingReviewStatuses 待人工处理的状态集合。
-// 三条 AI 结论都进入人工队列（PRD 9.1）；pending-ai 也纳入，
-// 覆盖 AI 回写失败或未启用时提交仍能被审的情况。
-// in-voting（队长投票池）也纳入，供管理员兜底终审。
+// pendingReviewStatuses 终审台默认展示的状态集合。
+//
+// 审核权已完全交给队长投票：AI 初审通过直接生效，未过则进投票池由队长过半通过，
+// 管理员不再参与「决定能不能通过」。因此终审台默认只列已通过（approved）的书目，
+// 定位为事后监督——发现刷量或不符合任务要求时驳回（reject）或撤销（revoke）。
+// 仍可通过 status 参数显式查看投票池等其他状态。
 var pendingReviewStatuses = []string{
-	model.ReviewStatusPendingAI,
-	model.ReviewStatusAIPassed,
-	model.ReviewStatusAIUnsure,
-	model.ReviewStatusAIRejected,
-	model.ReviewStatusInVoting,
+	model.ReviewStatusApproved,
 }
 
 // ListReviewQueue 人工终审队列，支持按小组、格子、状态筛选（PRD 9.3）
@@ -49,10 +47,9 @@ func (s *ActivityService) ListReviewQueue(
 	}
 
 	var books []model.ActivityCheckInBook
-	// AI 存疑与驳回优先处理，其次按提交时间先后
+	// 终审台是事后监督：最新通过的排在最前，便于及时发现异常提交
 	if err := q.
-		Order("CASE review_status WHEN 'ai-rejected' THEN 0 WHEN 'ai-unsure' THEN 1 WHEN 'pending-ai' THEN 2 ELSE 3 END").
-		Order("created_at asc").
+		Order("created_at desc").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(&books).Error; err != nil {

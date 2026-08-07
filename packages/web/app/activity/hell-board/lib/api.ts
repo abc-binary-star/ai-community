@@ -259,6 +259,11 @@ export function joinTeam(teamId: string, isCaptain: boolean): Promise<unknown> {
   })
 }
 
+/** 入队后补选队长：仅当本队队长位空缺时可用（入队时没勾队长的补救入口） */
+export function claimCaptain(): Promise<unknown> {
+  return apiFetch(`${BASE}/team/claim-captain`, { method: 'POST' })
+}
+
 /** 报名名单（仅队长可见）：已报名人员及入队状态 */
 export async function fetchEnrollments(): Promise<EnrollmentItem[]> {
   const res = await apiFetch<{ items: EnrollmentItem[] }>(`${BASE}/team/enrollments`)

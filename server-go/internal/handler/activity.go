@@ -478,6 +478,18 @@ func JoinActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, dto)
 }
 
+// ClaimActivityCaptain 已入队成员自助补选为本队队长（队长位空缺时）
+// POST /api/activity/hell-board/team/claim-captain
+func ClaimActivityCaptain(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.ClaimCaptain(ctx, userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
+
 // ListActivityEnrollments 报名名单（仅队长可见）
 // GET /api/activity/hell-board/team/enrollments
 func ListActivityEnrollments(ctx context.Context, c *app.RequestContext) {

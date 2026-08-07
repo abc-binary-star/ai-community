@@ -13,6 +13,7 @@ import {
   LogOut,
   Settings2,
   Sparkles,
+  UserRound,
   Users,
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
@@ -24,6 +25,7 @@ import { CheckInFormDialog } from './components/checkin-form-dialog'
 import { CurrentTaskPanel } from './components/current-task-panel'
 import { EnrollWizard } from './components/enroll-wizard'
 import { MyCheckInsPanel } from './components/my-checkins-panel'
+import { MyProfileDialog } from './components/my-profile-dialog'
 import { RankingPanel } from './components/ranking-panel'
 import { TeamInitDialog } from './components/team-init-dialog'
 import { TeamManageDialog } from './components/team-manage-dialog'
@@ -162,6 +164,7 @@ export function HellBoardView() {
   const [showTimeline, setShowTimeline] = useState(false)
   const [showTeamInit, setShowTeamInit] = useState(false)
   const [showTeamManage, setShowTeamManage] = useState(false)
+  const [showMyProfile, setShowMyProfile] = useState(false)
 
   useEffect(() => {
     void loadAll()
@@ -218,6 +221,16 @@ export function HellBoardView() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-lg font-black text-stone-900 sm:text-xl lg:text-2xl">无限循环读书地狱</h1>
+                  {/* 「我的」：就近提供昵称修改入口，不必跳去设置页 */}
+                  <button
+                    type="button"
+                    onClick={() => setShowMyProfile(true)}
+                    title="我的资料 / 改昵称"
+                    className="inline-flex h-7 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 text-[11px] font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                  >
+                    <UserRound aria-hidden className="size-3" />
+                    我的
+                  </button>
                 </div>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-stone-600 lg:text-sm">
                   <span className="inline-flex items-center gap-1"><Sparkles className="size-3.5 text-amber-600" />推理小说群月度活动</span>
@@ -236,27 +249,13 @@ export function HellBoardView() {
                   终审台
                 </Link>
               )}
-              {/* 队伍工具：入队后才有意义，收在右上角与终审台/退出同排 */}
-              {currentTeam && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowTimeline(true)}
-                    title="本队时间线"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                  >
-                    <History className="size-3.5" />
-                    <span className="hidden sm:inline">时间线</span>
-                  </button>
-                  {/* 队长专属操作收进下拉，避免管理员兼队长时页头挤到换行 */}
-                  {isCaptain && (
-                    <CaptainMenu
-                      archived={archived}
-                      onOpenInit={() => setShowTeamInit(true)}
-                      onOpenManage={() => setShowTeamManage(true)}
-                    />
-                  )}
-                </>
+              {/* 队长专属操作收进下拉；本队时间线已下移到队伍卡头像右侧 */}
+              {currentTeam && isCaptain && (
+                <CaptainMenu
+                  archived={archived}
+                  onOpenInit={() => setShowTeamInit(true)}
+                  onOpenManage={() => setShowTeamManage(true)}
+                />
               )}
               <button
                 type="button"
@@ -299,8 +298,10 @@ export function HellBoardView() {
           // xl 下棋盘在左、右栏独立成列：右栏吸顶且高度限制在视口内，
           // 面板区因此始终有界，内容多时不撑高整页导致溢出
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
-          <div className="min-w-0">
-            <div className="mx-auto max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3">
+          {/* 棋盘列与右栏同高：右栏被钉在 calc(100dvh-6rem)，棋盘容器取同一高度后，
+              内部格子按比例拉长填满，两列卡片下沿即可对齐 */}
+          <div className="min-w-0 xl:h-[calc(100dvh-6rem)]">
+            <div className="mx-auto flex max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3 xl:h-full">
               <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
             </div>
           </div>
@@ -368,7 +369,11 @@ export function HellBoardView() {
                 className="xl:h-full"
               >
                 {currentTeam ? (
-                  <TeamPanel team={currentTeam} currentMemberId={myMemberId ?? ''} />
+                  <TeamPanel
+                    team={currentTeam}
+                    currentMemberId={myMemberId ?? ''}
+                    onOpenTimeline={() => setShowTimeline(true)}
+                  />
                 ) : (
                   <p className="rounded-lg border-2 border-stone-800 bg-white p-4 text-xs text-stone-600 shadow-[3px_3px_0_#292524] xl:h-full">
                     你不在本次活动的小组中，可查看棋盘与榜单
@@ -397,8 +402,10 @@ export function HellBoardView() {
           </aside>
         </div>
         ) : (
-          /* 大事件 / 审核池 / 全部队伍：独立整页视图，内容量大时在面板内部滚动 */
-          <div className="mx-auto w-full max-w-5xl xl:h-[calc(100dvh-8rem)]">
+          /* 大事件 / 审核池 / 全部队伍：独立整页视图。
+             宽度跟随页头与导航（同为容器满宽），避免点进来卡片突然变窄、
+             和上方通栏导航对不齐；内容量大时在面板内部滚动 */
+          <div className="w-full xl:h-[calc(100dvh-8rem)]">
             {topView === 'feed' && <ActivityFeedPanel />}
             {topView === 'pool' && <VotePoolPanel />}
             {topView === 'teams' && <AllTeamsPanel />}
@@ -418,6 +425,8 @@ export function HellBoardView() {
       )}
 
       {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
+
+      {showMyProfile && <MyProfileDialog onClose={() => setShowMyProfile(false)} />}
 
       {showTeamInit && currentTeam && (
         <TeamInitDialog team={currentTeam} onClose={() => setShowTeamInit(false)} />

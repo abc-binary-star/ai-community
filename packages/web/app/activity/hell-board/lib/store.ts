@@ -132,6 +132,8 @@ interface ActivityState {
   deleteCheckIn: (checkInId: string) => Promise<void>
   /** 队长初始化队伍进度（补录线下真实状态）；成功后刷新棋盘 */
   initializeTeam: (payload: { startTile: number; litTiles: number[]; currentTile: number }) => Promise<void>
+  /** 入队后补选队长（队长位空缺时）；成功后刷新快照 */
+  claimCaptain: () => Promise<void>
   /** 报名活动（幂等）；成功后刷新快照，enrolled 随之更新 */
   enroll: (nickname?: string) => Promise<void>
   /** 自助选组入队（可选成为队长）；成功后刷新快照进入队伍视图 */
@@ -329,6 +331,18 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       throw err
     } finally {
       set({ enrolling: false })
+    }
+  },
+
+  claimCaptain: async () => {
+    set({ error: null })
+    try {
+      await api.claimCaptain()
+      // 刷新快照：isCaptain 就位后队长专属入口（掷骰/管理）立即出现
+      await get().refresh()
+    } catch (err) {
+      set({ error: errMessage(err, '设置队长失败') })
+      throw err
     }
   },
 

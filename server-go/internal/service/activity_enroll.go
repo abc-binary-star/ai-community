@@ -168,6 +168,76 @@ func (s *ActivityService) Enrollments(ctx context.Context, captainUserID string)
 	return out, nil
 }
 
+// ClaimCaptain 已入队成员自助补选为本队队长。
+//
+// 解决的问题：入队时没勾「成为队长」，之后就再没有入口能当队长了
+// （JoinTeam 只在入队那一刻能选，admin 接口前端没有入口）。
+// 约束与 JoinTeam 一致：队长位必须空缺，一队只有一名队长；
+// 加锁串行化，防并发下出现双队长。
+func (s *ActivityService) ClaimCaptain(ctx context.Context, userID string) (*types.ActivityMemberDTO, error) {
+	if hellboard.IsArchived(time.Now()) {
+		return nil, ErrActivityArchived
+	}
+	me, err := s.memberOf(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if me == nil {
+		return nil, ErrActivityNotMember
+	}
+	if me.IsCaptain {
+		// 已是队长，幂等返回当前状态
+		return s.memberDTO(ctx, me)
+	}
+
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 锁队伍行：与 JoinTeam 抢队长位用同一把锁，避免并发双队长
+		var t model.ActivityTeam
+		if err := tx.Clauses(lockForUpdate()).First(&t, "id = ?", me.TeamID).Error; err != nil {
+			return err
+		}
+		var captainCount int64
+		if err := tx.Model(&model.ActivityMember{}).
+			Where("team_id = ? AND is_captain = ?", me.TeamID, true).
+			Count(&captainCount).Error; err != nil {
+			return err
+		}
+		if captainCount > 0 {
+			return ErrActivityCaptainTaken
+		}
+		if err := tx.Model(&model.ActivityMember{}).
+			Where("id = ?", me.ID).
+			Update("is_captain", true).Error; err != nil {
+			return err
+		}
+		me.IsCaptain = true
+		return s.addEvent(tx, me.TeamID, model.EventTypeManual,
+			fmt.Sprintf("成员「%s」成为本队队长", memberNameOf(me)))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.memberDTO(ctx, me)
+}
+
+// memberDTO 组装成员 DTO，补齐用户头像等关联信息
+func (s *ActivityService) memberDTO(ctx context.Context, m *model.ActivityMember) (*types.ActivityMemberDTO, error) {
+	var user model.User
+	if err := dal.DB.WithContext(ctx).First(&user, "id = ?", m.UserID).Error; err != nil {
+		return nil, err
+	}
+	m.User = user
+	return &types.ActivityMemberDTO{
+		ID:        m.ID,
+		UserID:    m.UserID,
+		Name:      memberNameOf(m),
+		AvatarURL: avatarOf(&m.User),
+		IsCaptain: m.IsCaptain,
+		BookCount: m.BookCount,
+		WordCount: m.WordCount,
+	}, nil
+}
+
 // JoinTeam 自助选组入队：报名用户可直接加入某队，并可选择成为队长。
 // 每队至多 MaxTeamSize 人；队长位仅当空缺时可选，一支队伍只有一名队长。
 func (s *ActivityService) JoinTeam(ctx context.Context, userID, teamID string, wantCaptain bool) (*types.ActivityMemberDTO, error) {

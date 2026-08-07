@@ -107,6 +107,16 @@
       grid-row: 2 / var(--ring-rows);
     }
   }
+
+  /* xl 起棋盘与右栏并排：右栏高度被钉为 calc(100dvh-6rem)，
+     棋盘若只按内容高度排版会比右栏短，卡片下沿对不齐。
+     这里让棋盘整体撑满同一高度，行高按比例分摊（格子随之略微拉长）。 */
+  @media (min-width: 1280px) {
+    .board-ring {
+      height: 100%;
+      grid-template-rows: repeat(var(--ring-rows), minmax(112px, 1fr));
+    }
+  }
 }
 
 /* ============================================================

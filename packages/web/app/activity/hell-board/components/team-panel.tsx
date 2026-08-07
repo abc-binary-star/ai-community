@@ -1,8 +1,10 @@
 'use client'
 
-import { Crown, Star, UserRoundPlus } from 'lucide-react'
+import { useState } from 'react'
+import { Crown, History, Loader2, Star, UserRoundPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatWords } from '../lib/rules'
+import { useActivityStore } from '../lib/store'
 import type { Team } from '../lib/types'
 import { TeamEmblem } from './team-emblem'
 
@@ -10,13 +12,42 @@ import { TeamEmblem } from './team-emblem'
 const TEAM_SIZE = 5
 
 /**
- * 队伍卡：只呈现队伍身份与成员名单。
- * 时间线 / 补录 / 队伍管理等操作入口统一收在页头右上角工具条，
- * 避免按钮堆叠把卡片撑出右栏可视高度。
+ * 队伍卡：呈现队伍身份与成员名单，队名右侧留出的空白位放本队时间线入口。
+ * 补录 / 队伍管理等队长操作仍收在页头右上角，避免卡片被按钮撑高。
  */
-export function TeamPanel({ team, currentMemberId }: { team: Team; currentMemberId: string }) {
+export function TeamPanel({
+  team,
+  currentMemberId,
+  onOpenTimeline,
+}: {
+  team: Team
+  currentMemberId: string
+  onOpenTimeline?: () => void
+}) {
   // 成员不足 5 人时用空槽补齐，保持卡片高度稳定
   const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
+  const claimCaptain = useActivityStore((s) => s.claimCaptain)
+  const archived = useActivityStore((s) => s.archived)
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState<string | null>(null)
+
+  // 队长位空缺时，本队成员可自助补选（入队时没勾队长也有补救入口）
+  const hasCaptain = team.members.some((m) => m.isCaptain)
+  const iAmMember = team.members.some((m) => m.id === currentMemberId)
+  const canClaim = !hasCaptain && iAmMember && !archived
+
+  const handleClaim = async () => {
+    if (!window.confirm('确认成为本队队长？队长负责掷骰、拉人、设置队伍形象与投票。')) return
+    setClaiming(true)
+    setClaimError(null)
+    try {
+      await claimCaptain()
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : '设置队长失败')
+    } finally {
+      setClaiming(false)
+    }
+  }
 
   return (
     <section
@@ -31,7 +62,33 @@ export function TeamPanel({ team, currentMemberId }: { team: Team; currentMember
             <span className="truncate">{team.name}</span>
           </span>
         </h2>
+        {/* 头像右侧的空白位放时间线入口，就近可达且不额外占高度 */}
+        {onOpenTimeline && (
+          <button
+            type="button"
+            onClick={onOpenTimeline}
+            title="本队时间线"
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 text-[11px] font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+          >
+            <History aria-hidden className="size-3" />
+            时间线
+          </button>
+        )}
       </div>
+
+      {/* 队长位空缺提示：任何本队成员都能点击补选，避免队伍无人可掷骰 */}
+      {canClaim && (
+        <button
+          type="button"
+          onClick={() => void handleClaim()}
+          disabled={claiming}
+          className="mt-2.5 flex w-full items-center gap-1.5 rounded-md border-2 border-dashed border-amber-500 bg-[#fff8e5] px-2.5 py-2 text-left text-[11px] font-bold text-amber-800 transition-colors hover:bg-[#fff3d0] disabled:opacity-60"
+        >
+          {claiming ? <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin" /> : <Crown aria-hidden className="size-3.5 shrink-0" />}
+          本队暂无队长，点此成为队长
+        </button>
+      )}
+      {claimError && <p className="mt-1.5 text-[11px] font-medium text-rose-600">{claimError}</p>}
 
       {/* 名单区有界：卡片高度由右栏决定，成员多时名单自身滚动而非撑高卡片 */}
       <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-dashed border-[#dccfa8] pt-3.5">
