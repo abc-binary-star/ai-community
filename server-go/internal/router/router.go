@@ -219,6 +219,10 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	captain.POST("/join", handler.JoinActivityTeam)
 	// 入队后补选队长（队长位空缺时）：入队时没勾队长的成员也能成为队长
 	captain.POST("/claim-captain", handler.ClaimActivityCaptain)
+	// 退出队伍（选错队伍时退出重选）：仅在还没有任何打卡/掷骰/投票时允许
+	captain.POST("/leave", handler.LeaveActivityTeam)
+	// 修改活动内昵称（榜单与成员名单的展示名）
+	captain.PUT("/nickname", handler.UpdateActivityNickname)
 
 	// 人工终审台与运营后台（PRD 9.3 / 第 13 节）
 	activityAdmin := h.Group("/api/activity/hell-board/admin",

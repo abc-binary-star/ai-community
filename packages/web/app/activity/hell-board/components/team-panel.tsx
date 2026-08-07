@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Crown, History, Loader2, Star, UserRoundPlus } from 'lucide-react'
+import { Crown, History, Loader2, LogOut, Star, UserRoundPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatWords } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
@@ -27,13 +27,17 @@ export function TeamPanel({
   // 成员不足 5 人时用空槽补齐，保持卡片高度稳定
   const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
   const claimCaptain = useActivityStore((s) => s.claimCaptain)
+  const leaveTeam = useActivityStore((s) => s.leaveTeam)
   const archived = useActivityStore((s) => s.archived)
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState(false)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
 
   // 队长位空缺时，本队成员可自助补选（入队时没勾队长也有补救入口）
   const hasCaptain = team.members.some((m) => m.isCaptain)
   const iAmMember = team.members.some((m) => m.id === currentMemberId)
+  const iAmCaptain = team.members.some((m) => m.id === currentMemberId && m.isCaptain)
   const canClaim = !hasCaptain && iAmMember && !archived
 
   const handleClaim = async () => {
@@ -46,6 +50,22 @@ export function TeamPanel({
       setClaimError(err instanceof Error ? err.message : '设置队长失败')
     } finally {
       setClaiming(false)
+    }
+  }
+
+  const handleLeave = async () => {
+    const warn = iAmCaptain
+      ? '你是队长，退出后队长位会空置，需要其他成员重新补选。确认退出？'
+      : '确认退出当前队伍？退出后可以重新选择队伍，不用再报名。'
+    if (!window.confirm(warn)) return
+    setLeaving(true)
+    setLeaveError(null)
+    try {
+      await leaveTeam()
+    } catch (err) {
+      setLeaveError(err instanceof Error ? err.message : '退出队伍失败')
+    } finally {
+      setLeaving(false)
     }
   }
 
@@ -138,6 +158,21 @@ export function TeamPanel({
         </ul>
       </div>
 
+      {/* 退出队伍：选错队伍时的补救入口。有痕迹时服务端会拒绝并说明原因 */}
+      {iAmMember && !archived && (
+        <div className="mt-2.5 shrink-0 border-t border-dashed border-[#dccfa8] pt-2">
+          <button
+            type="button"
+            onClick={() => void handleLeave()}
+            disabled={leaving}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-400 transition-colors hover:text-rose-600 disabled:opacity-60"
+          >
+            {leaving ? <Loader2 aria-hidden className="size-3 animate-spin" /> : <LogOut aria-hidden className="size-3" />}
+            退出队伍
+          </button>
+          {leaveError && <p className="mt-1 text-[11px] font-medium text-rose-600">{leaveError}</p>}
+        </div>
+      )}
     </section>
   )
 }

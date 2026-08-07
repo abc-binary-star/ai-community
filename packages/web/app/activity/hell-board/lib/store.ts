@@ -132,6 +132,12 @@ interface ActivityState {
   deleteCheckIn: (checkInId: string) => Promise<void>
   /** 队长初始化队伍进度（补录线下真实状态）；成功后刷新棋盘 */
   initializeTeam: (payload: { startTile: number; litTiles: number[]; currentTile: number }) => Promise<void>
+  /** 当前用户的活动昵称；空串表示沿用账号昵称 */
+  nickname: string
+  /** 修改活动昵称（榜单/名单/时间线展示名）；成功后刷新快照 */
+  updateNickname: (nickname: string) => Promise<void>
+  /** 退出队伍（选错队伍时退出重选）；成功后刷新快照回到观战态 */
+  leaveTeam: () => Promise<void>
   /** 入队后补选队长（队长位空缺时）；成功后刷新快照 */
   claimCaptain: () => Promise<void>
   /** 报名活动（幂等）；成功后刷新快照，enrolled 随之更新 */
@@ -157,6 +163,7 @@ function applySnapshot(snapshot: BoardSnapshot) {
     myMemberId: snapshot.myMemberId ?? null,
     isCaptain: snapshot.isCaptain ?? false,
     enrolled: snapshot.enrolled ?? false,
+    nickname: snapshot.myNickname ?? '',
     archived: snapshot.archived ?? false,
     cycleStarted: snapshot.cycleStarted ?? true,
     fallbackThreshold: snapshot.fallbackThreshold ?? 40,
@@ -178,6 +185,7 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
   myMemberId: null,
   isCaptain: false,
   enrolled: false,
+  nickname: '',
   enrolling: false,
   archived: false,
   cycleStarted: true,
@@ -237,6 +245,7 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
         next.myMemberId === cur.myMemberId &&
         next.isCaptain === cur.isCaptain &&
         next.enrolled === cur.enrolled &&
+        next.nickname === cur.nickname &&
         next.archived === cur.archived &&
         next.cycleStarted === cur.cycleStarted &&
         next.fallbackThreshold === cur.fallbackThreshold
@@ -331,6 +340,30 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       throw err
     } finally {
       set({ enrolling: false })
+    }
+  },
+
+  updateNickname: async (nickname) => {
+    set({ error: null })
+    try {
+      await api.updateNickname(nickname)
+      // 刷新快照：榜单与队伍名单的展示名立即跟着变
+      await get().refresh()
+    } catch (err) {
+      set({ error: errMessage(err, '修改昵称失败') })
+      throw err
+    }
+  },
+
+  leaveTeam: async () => {
+    set({ error: null })
+    try {
+      await api.leaveTeam()
+      // 刷新快照：退出后右侧栏回到观战卡，可重新选队
+      await get().refresh()
+    } catch (err) {
+      set({ error: errMessage(err, '退出队伍失败') })
+      throw err
     }
   },
 

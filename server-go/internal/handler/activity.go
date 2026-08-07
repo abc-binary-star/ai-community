@@ -478,6 +478,34 @@ func JoinActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, dto)
 }
 
+// UpdateActivityNickname 修改活动内昵称（榜单与成员名单的展示名）
+// PUT /api/activity/hell-board/team/nickname
+func UpdateActivityNickname(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityEnrollReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.UpdateNickname(ctx, userID, req.Nickname)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
+
+// LeaveActivityTeam 退出当前队伍（选错队伍时可退出重选）
+// POST /api/activity/hell-board/team/leave
+func LeaveActivityTeam(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	if err := activityService.LeaveTeam(ctx, userID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]bool{"left": true})
+}
+
 // ClaimActivityCaptain 已入队成员自助补选为本队队长（队长位空缺时）
 // POST /api/activity/hell-board/team/claim-captain
 func ClaimActivityCaptain(ctx context.Context, c *app.RequestContext) {

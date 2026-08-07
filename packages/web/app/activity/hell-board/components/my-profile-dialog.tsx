@@ -2,38 +2,32 @@
 
 import { useState } from 'react'
 import { Loader2, UserRound, X } from 'lucide-react'
-import type { User } from 'shared'
-import { api } from '@/lib/api'
-import { useAuthStore } from '@/lib/store'
+import { useActivityStore } from '../lib/store'
 
-const MAX_LEN = 30
+const MAX_LEN = 50
 
 /**
- * 「我的」弹窗：调整社区昵称（displayName）。
+ * 「我的」弹窗：修改活动内昵称。
  *
- * 注意与活动内昵称的区别：活动昵称在报名时写入、入队时快照，改这里不会
- * 追改已入队的活动名单；这里改的是社区账号昵称，影响全站展示。
+ * 这个昵称决定你在榜单、队伍名单、时间线里的显示名，只在本活动内生效，
+ * 不影响社区账号昵称（那个在站内设置页改）。留空则回退到账号昵称。
  */
 export function MyProfileDialog({ onClose }: { onClose: () => void }) {
-  const user = useAuthStore((s) => s.user)
-  const setUser = useAuthStore((s) => s.setUser)
-  const [name, setName] = useState(user?.displayName ?? '')
+  const nickname = useActivityStore((s) => s.nickname)
+  const updateNickname = useActivityStore((s) => s.updateNickname)
+  const enrolled = useActivityStore((s) => s.enrolled)
+  const [name, setName] = useState(nickname ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const trimmed = name.trim()
-  const dirty = trimmed !== (user?.displayName ?? '')
+  const dirty = trimmed !== (nickname ?? '')
 
   const handleSave = async () => {
-    if (!trimmed) {
-      setError('昵称不能为空')
-      return
-    }
     setSaving(true)
     setError(null)
     try {
-      const updated = await api.put<User>('/users/me', { displayName: trimmed })
-      setUser(updated)
+      await updateNickname(trimmed)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
@@ -57,7 +51,7 @@ export function MyProfileDialog({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between gap-2">
           <h2 id="my-profile-title" className="flex items-center gap-2 text-sm font-black text-stone-900">
             <UserRound aria-hidden className="size-4 text-emerald-700" />
-            我的资料
+            我的活动昵称
           </h2>
           <button
             type="button"
@@ -69,20 +63,28 @@ export function MyProfileDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <label htmlFor="my-nickname" className="mt-4 block text-xs font-bold text-stone-700">
-          昵称
-        </label>
-        <input
-          id="my-nickname"
-          value={name}
-          maxLength={MAX_LEN}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={user?.username ?? '输入昵称'}
-          className="mt-1.5 w-full rounded-md border-2 border-stone-800 bg-white px-2.5 py-2 text-sm font-medium shadow-[2px_2px_0_#292524] outline-none focus:bg-[#fffbe9]"
-        />
-        <p className="mt-1.5 text-[11px] leading-relaxed text-stone-500">
-          {trimmed.length}/{MAX_LEN} · 影响全站展示。已入队的活动名单沿用入队时的昵称，不会跟着变。
-        </p>
+        {!enrolled ? (
+          <p className="mt-4 text-xs font-medium text-stone-600">
+            还没报名，报名后就能设置活动昵称了。
+          </p>
+        ) : (
+          <>
+            <label htmlFor="my-nickname" className="mt-4 block text-xs font-bold text-stone-700">
+              昵称
+            </label>
+            <input
+              id="my-nickname"
+              value={name}
+              maxLength={MAX_LEN}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="留空则用账号昵称"
+              className="mt-1.5 w-full rounded-md border-2 border-stone-800 bg-white px-2.5 py-2 text-sm font-medium shadow-[2px_2px_0_#292524] outline-none focus:bg-[#fffbe9]"
+            />
+            <p className="mt-1.5 text-[11px] leading-relaxed text-stone-500">
+              {trimmed.length}/{MAX_LEN} · 决定你在榜单、队伍名单和时间线里的显示名，改完立即生效。只在本活动内使用，不影响社区账号昵称。
+            </p>
+          </>
+        )}
 
         {error && <p className="mt-2 text-xs font-medium text-rose-600">{error}</p>}
 
@@ -94,15 +96,17 @@ export function MyProfileDialog({ onClose }: { onClose: () => void }) {
           >
             取消
           </button>
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saving || !dirty}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#ffd166] px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving && <Loader2 aria-hidden className="size-3.5 animate-spin" />}
-            保存
-          </button>
+          {enrolled && (
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving || !dirty}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-[#ffd166] px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving && <Loader2 aria-hidden className="size-3.5 animate-spin" />}
+              保存
+            </button>
+          )}
         </div>
       </div>
     </div>

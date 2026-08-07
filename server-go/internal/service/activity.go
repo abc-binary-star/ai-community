@@ -49,6 +49,10 @@ var (
 	ErrActivityNotEnrolled     = &ActivityError{Msg: "该用户尚未报名活动", Code: 409}
 	ErrActivityTeamFull        = &ActivityError{Msg: "该队伍已满员", Code: 409}
 	ErrActivityCaptainTaken    = &ActivityError{Msg: "该队伍已有队长，队长位不可重复选择", Code: 409}
+	// 退出队伍的前置条件：已产生的痕迹无法在退出时安全回滚，只允许干净退出
+	ErrActivityLeaveHasCheckIn  = &ActivityError{Msg: "你已经有打卡记录，无法退出队伍。如需换队请联系管理员", Code: 409}
+	ErrActivityLeaveHasDiceRoll = &ActivityError{Msg: "你已经掷过骰子，无法退出队伍。如需换队请联系管理员", Code: 409}
+	ErrActivityLeaveHasVote     = &ActivityError{Msg: "你已经投过审核票，无法退出队伍。如需换队请联系管理员", Code: 409}
 	ErrActivityEmblemLocked    = &ActivityError{Msg: "队伍形象已确定，一次性选择后不可更换", Code: 409}
 	ErrActivityEmblemTaken     = &ActivityError{Msg: "该徽章已被其他队伍选用，请选择其他徽章", Code: 409}
 	ErrActivityVoteOwnTeam     = &ActivityError{Msg: "不能给自己队伍的书目投票，避免利益冲突", Code: 409}

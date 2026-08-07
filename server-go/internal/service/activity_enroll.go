@@ -168,6 +168,120 @@ func (s *ActivityService) Enrollments(ctx context.Context, captainUserID string)
 	return out, nil
 }
 
+// UpdateNickname 修改活动内昵称（榜单、成员名单、时间线的展示名）。
+//
+// 同时更新报名记录与成员记录：报名记录是「下次入队时带入的值」，
+// 成员记录是「当前队伍里实际展示的值」，只改一处会导致退队重进后昵称回退。
+// 未入队时只有报名记录，改它即可。
+// 昵称留空表示回退到账号昵称，不是错误。
+func (s *ActivityService) UpdateNickname(ctx context.Context, userID, nickname string) (*types.EnrollmentDTO, error) {
+	if hellboard.IsArchived(time.Now()) {
+		return nil, ErrActivityArchived
+	}
+	nickname = strings.TrimSpace(nickname)
+	if len([]rune(nickname)) > 50 {
+		return nil, ErrActivityInvalidInput
+	}
+
+	e, err := s.enrolledOf(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil {
+		return nil, ErrActivityNotEnrolled
+	}
+
+	if err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ActivityEnrollment{}).
+			Where("user_id = ?", userID).
+			Update("nickname", nickname).Error; err != nil {
+			return err
+		}
+		// 已入队则同步当前成员记录，让榜单与名单立即生效
+		return tx.Model(&model.ActivityMember{}).
+			Where("user_id = ?", userID).
+			Update("nickname", nickname).Error
+	}); err != nil {
+		return nil, err
+	}
+
+	m, err := s.memberOf(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if m == nil {
+		return s.enrollmentDTO(ctx, userID, "", "")
+	}
+	team, err := s.getTeam(ctx, m.TeamID)
+	if err != nil {
+		return nil, err
+	}
+	return s.enrollmentDTO(ctx, userID, team.ID, team.Name)
+}
+
+// LeaveTeam 退出当前队伍，退出后可重新选队（解决选错队伍的场景）。
+//
+// 只允许「干净退出」：该成员必须还没有产生任何活动痕迹。
+// 一旦有打卡、掷骰或投票，退出就会破坏数据一致性——
+// 打卡书目会成为无主记录且已计入队伍进度与榜单，掷骰已推进过棋盘，
+// 投票已计入过半判定。这几类记录都无法在退出时安全回滚，
+// 因此有痕迹时拒绝退出，改由管理员处理。
+//
+// 队长退出后队长位直接空置，其他成员可用 ClaimCaptain 补选，
+// 不自动指定继任者（避免把队长身份塞给没准备的人）。
+// 报名记录保留，所以退出后不用重新报名，直接选队即可。
+func (s *ActivityService) LeaveTeam(ctx context.Context, userID string) error {
+	if hellboard.IsArchived(time.Now()) {
+		return ErrActivityArchived
+	}
+	me, err := s.memberOf(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if me == nil {
+		return ErrActivityNotMember
+	}
+
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 锁队伍行：与入队 / 补选队长共用同一把锁，避免并发下人数或队长位错乱
+		var t model.ActivityTeam
+		if err := tx.Clauses(lockForUpdate()).First(&t, "id = ?", me.TeamID).Error; err != nil {
+			return err
+		}
+
+		// 逐项检查活动痕迹，任一存在即拒绝退出
+		for _, c := range []struct {
+			table string
+			where string
+			err   error
+		}{
+			{"activity_checkins", "member_id = ?", ErrActivityLeaveHasCheckIn},
+			// 掷骰表的成员列是 roller_id，不是 member_id
+			{"activity_dice_rolls", "roller_id = ?", ErrActivityLeaveHasDiceRoll},
+			{"activity_book_votes", "voter_member_id = ?", ErrActivityLeaveHasVote},
+		} {
+			var n int64
+			if err := tx.Table(c.table).Where(c.where, me.ID).Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				return c.err
+			}
+		}
+
+		if err := tx.Delete(&model.ActivityMember{}, "id = ?", me.ID).Error; err != nil {
+			return err
+		}
+		// 队长退出：队长位空置，由剩余成员自助补选
+		suffix := ""
+		if me.IsCaptain {
+			suffix = "，队长位空置"
+		}
+		return s.addEvent(tx, me.TeamID, model.EventTypeManual,
+			fmt.Sprintf("成员「%s」退出队伍%s", memberNameOf(me), suffix))
+	})
+}
+
 // ClaimCaptain 已入队成员自助补选为本队队长。
 //
 // 解决的问题：入队时没勾「成为队长」，之后就再没有入口能当队长了

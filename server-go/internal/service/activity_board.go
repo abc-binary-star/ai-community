@@ -140,6 +140,12 @@ func (s *ActivityService) GetBoard(ctx context.Context, userID string) (*types.A
 		return nil, err
 	}
 	out.Enrolled = en != nil
+	// 活动昵称回填「我的」弹窗：已入队以成员记录为准，否则用报名记录
+	if me != nil {
+		out.MyNickname = me.Nickname
+	} else if en != nil {
+		out.MyNickname = en.Nickname
+	}
 	return out, nil
 }
 

@@ -294,6 +294,8 @@ export interface BoardSnapshot {
   isCaptain: boolean
   /** 当前用户是否已报名活动（报名是入队的前提） */
   enrolled: boolean
+  /** 当前用户的活动昵称；空表示沿用账号昵称 */
+  myNickname?: string
   /** 活动周期已结束，页面转只读归档态（P1-7 / 验收标准 12） */
   archived: boolean
   cycleStarted: boolean

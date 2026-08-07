@@ -54,6 +54,8 @@ type ActivityBoardDTO struct {
 	IsCaptain  bool   `json:"isCaptain"`
 	// Enrolled 当前用户是否已报名（报名是入队的前提）
 	Enrolled bool `json:"enrolled"`
+	// MyNickname 当前用户的活动内昵称，供「我的」弹窗回填；为空表示沿用账号昵称
+	MyNickname string `json:"myNickname,omitempty"`
 	// Archived 为 true 时页面转只读归档态（P1-7 / 验收标准 12）
 	Archived     bool   `json:"archived"`
 	CycleStarted bool   `json:"cycleStarted"`

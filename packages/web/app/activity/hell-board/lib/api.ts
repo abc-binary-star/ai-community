@@ -259,6 +259,19 @@ export function joinTeam(teamId: string, isCaptain: boolean): Promise<unknown> {
   })
 }
 
+/** 修改活动内昵称：影响榜单、队伍名单与时间线的展示名 */
+export function updateNickname(nickname: string): Promise<unknown> {
+  return apiFetch(`${BASE}/team/nickname`, {
+    method: 'PUT',
+    body: JSON.stringify({ nickname }),
+  })
+}
+
+/** 退出队伍：选错队伍时退出重选，仅在还没有任何打卡/掷骰/投票时允许 */
+export function leaveTeam(): Promise<unknown> {
+  return apiFetch(`${BASE}/team/leave`, { method: 'POST' })
+}
+
 /** 入队后补选队长：仅当本队队长位空缺时可用（入队时没勾队长的补救入口） */
 export function claimCaptain(): Promise<unknown> {
   return apiFetch(`${BASE}/team/claim-captain`, { method: 'POST' })
