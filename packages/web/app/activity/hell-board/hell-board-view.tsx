@@ -20,16 +20,23 @@ import { useActivityStore, useCurrentTeam, useIsCaptain } from './lib/store'
 
 const POLL_INTERVAL_MS = 10_000
 
-/** 侧边栏五个标签页 */
+/** 右侧栏标签页：队伍/榜单/我的打卡；内容量更大的审核池与全部队伍移到顶部导航。 */
 const SIDE_TABS = [
   ['team', '队伍'],
   ['ranking', '榜单'],
   ['mine', '我的打卡'],
+] as const
+
+type SideTab = (typeof SIDE_TABS)[number][0]
+
+/** 顶部导航：棋盘（默认）+ 内容量大的独立视图 */
+const TOP_VIEWS = [
+  ['board', '棋盘'],
   ['pool', '审核池'],
   ['teams', '全部队伍'],
 ] as const
 
-type SideTab = (typeof SIDE_TABS)[number][0]
+type TopView = (typeof TOP_VIEWS)[number][0]
 
 export function HellBoardView() {
   const teams = useActivityStore((s) => s.teams)
@@ -51,6 +58,7 @@ export function HellBoardView() {
   const [showTextView, setShowTextView] = useState(false)
   const [showCheckInForm, setShowCheckInForm] = useState(false)
   const [sideTab, setSideTab] = useState<SideTab>('team')
+  const [topView, setTopView] = useState<TopView>('board')
 
   useEffect(() => {
     void loadAll()
@@ -125,18 +133,20 @@ export function HellBoardView() {
                   终审台
                 </Link>
               )}
-              <button
-                type="button"
-                onClick={() => setShowTextView((v) => !v)}
-                className={cn(
-                  'flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
-                  showTextView ? 'bg-[#78c6a3]' : 'bg-white hover:bg-[#fff4cf]',
-                )}
-                aria-pressed={showTextView}
-              >
-                {showTextView ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                <span className="hidden sm:inline">文本视图</span>
-              </button>
+              {topView === 'board' && (
+                <button
+                  type="button"
+                  onClick={() => setShowTextView((v) => !v)}
+                  className={cn(
+                    'flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
+                    showTextView ? 'bg-[#78c6a3]' : 'bg-white hover:bg-[#fff4cf]',
+                  )}
+                  aria-pressed={showTextView}
+                >
+                  {showTextView ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <span className="hidden sm:inline">文本视图</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={clearAuth}
@@ -151,10 +161,33 @@ export function HellBoardView() {
           </div>
         </header>
 
-        {/* xl 下棋盘在左、右栏独立成列：右栏吸顶且高度限制在视口内，
-            面板区因此始终有界，内容多时（10 队 / 审核池多本书）在面板内部滚动，
-            不会再撑高整页导致溢出 */}
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
+        {/* 顶部导航：棋盘为默认视图；审核池 / 全部队伍内容量大，单独整页展示 */}
+        <nav
+          aria-label="页面视图切换"
+          className="mb-4 grid grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524] sm:flex"
+        >
+          {TOP_VIEWS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={topView === key ? 'page' : undefined}
+              onClick={() => setTopView(key)}
+              className={cn(
+                'h-9 flex-1 rounded-md text-xs font-bold transition-colors sm:px-4',
+                topView === key
+                  ? 'bg-[#ffd166] text-stone-900'
+                  : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {topView === 'board' ? (
+          // xl 下棋盘在左、右栏独立成列：右栏吸顶且高度限制在视口内，
+          // 面板区因此始终有界，内容多时不撑高整页导致溢出
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
           <div className="min-w-0">
             {showTextView ? (
               <BoardTextView teams={teams} currentTeam={currentTeam} />
@@ -165,7 +198,7 @@ export function HellBoardView() {
             )}
           </div>
 
-          {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单收进切换栏，
+          {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单/我的打卡收进切换栏，
               使电脑端与棋盘同屏，打卡无需滚动。高度 = 视口减去顶部页头与边距，
               超出部分由面板自身滚动 */}
           <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:h-[calc(100dvh-6rem)] xl:flex-col">
@@ -193,7 +226,7 @@ export function HellBoardView() {
             <div
               role="tablist"
               aria-label="侧边栏切换"
-              className="grid shrink-0 grid-cols-5 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
+              className="grid shrink-0 grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
             >
               {SIDE_TABS.map(([key, label]) => (
                 <button
@@ -253,27 +286,16 @@ export function HellBoardView() {
               >
                 <MyCheckInsPanel />
               </div>
-              <div
-                id="side-panel-pool"
-                role="tabpanel"
-                aria-labelledby="side-tab-pool"
-                hidden={sideTab !== 'pool'}
-                className="xl:h-full"
-              >
-                <VotePoolPanel />
-              </div>
-              <div
-                id="side-panel-teams"
-                role="tabpanel"
-                aria-labelledby="side-tab-teams"
-                hidden={sideTab !== 'teams'}
-                className="xl:h-full"
-              >
-                <AllTeamsPanel />
-              </div>
             </div>
           </aside>
         </div>
+        ) : (
+          /* 审核池 / 全部队伍：独立整页视图，内容量大时在面板内部滚动 */
+          <div className="mx-auto w-full max-w-5xl xl:h-[calc(100dvh-8rem)]">
+            {topView === 'pool' && <VotePoolPanel />}
+            {topView === 'teams' && <AllTeamsPanel />}
+          </div>
+        )}
       </div>
 
       {selectedTile !== null && (
