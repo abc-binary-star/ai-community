@@ -53,6 +53,11 @@ type UpdateUserRoleReq struct {
 	Role string `json:"role"`
 }
 
+// ResetPasswordReq 管理员重置用户密码请求
+type ResetPasswordReq struct {
+	Password string `json:"password" vd:"len($)>=6 && len($)<=64"`
+}
+
 type SuggestTagsReq struct {
 	Title   string `json:"title" vd:"len($)>=1"`
 	Content string `json:"content" vd:"len($)>=1"`

@@ -148,8 +148,13 @@ interface ActivityState {
   enroll: (nickname?: string) => Promise<void>
   /** 自助选组入队（可选成为队长）；成功后刷新快照进入队伍视图 */
   joinTeam: (teamId: string, isCaptain: boolean) => Promise<void>
-  /** 表单内即时提示用的本地查重，返回重复书名 */
-  findDuplicates: (memberId: string, books: Array<{ title: string; author: string }>) => string[]
+  /** 表单内即时提示用的本地查重，返回重复书名。
+   *  excludeCheckInId 用于编辑模式：跳过正在编辑的打卡自身，避免把修改中的书误判为重复提交。 */
+  findDuplicates: (
+    memberId: string,
+    books: Array<{ title: string; author: string }>,
+    excludeCheckInId?: string,
+  ) => string[]
 }
 
 function applySnapshot(snapshot: BoardSnapshot) {
@@ -415,10 +420,12 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     }
   },
 
-  findDuplicates: (memberId, books) => {
+  findDuplicates: (memberId, books, excludeCheckInId) => {
     const existing = new Set<string>()
     get().checkIns.forEach((ci) => {
       if (ci.memberId !== memberId) return
+      // 编辑模式跳过自身打卡，避免把正在修改的书误判为重复提交
+      if (ci.id === excludeCheckInId) return
       // 已驳回或撤销的书目不占用查重名额，与服务端口径一致
       ci.books.forEach((b) => {
         if (b.reviewStatus === 'rejected' || b.reviewStatus === 'revoked') return

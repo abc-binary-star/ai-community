@@ -147,6 +147,23 @@ func UpdateUserRole(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, dto)
 }
 
+// ResetUserPassword 管理员重置用户密码（仅管理员）
+// POST /api/users/:username/reset-password
+func ResetUserPassword(ctx context.Context, c *app.RequestContext) {
+	var req types.ResetPasswordReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "输入不合法")
+		return
+	}
+
+	username := c.Param("username")
+	if err := userService.ResetPassword(ctx, username, req.Password); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]string{"message": "密码已重置"})
+}
+
 // ========== Follow Handlers ==========
 
 // FollowUser 关注某用户

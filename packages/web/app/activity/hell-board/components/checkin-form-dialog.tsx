@@ -236,10 +236,12 @@ export function CheckInFormDialog({
     setError(null)
 
     // 本地查重先给即时反馈，权威查重仍在服务端（P1-8）。
-    // 作者未填时与提交口径一致用「未知」占位，保证本地查重键与服务端一致
+    // 作者未填时与提交口径一致用「未知」占位，保证本地查重键与服务端一致。
+    // 编辑模式排除自身打卡：正在修改的书不参与比对，避免误报「重复提交」
     const dups = findDuplicates(
       memberIdForDup,
       valid.map((r) => ({ title: r.title.trim(), author: r.author.trim() || '未知' })),
+      editCheckInId,
     )
     if (dups.length > 0) {
       setDuplicates(dups)

@@ -138,6 +138,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	users.POST("/:username/follow", middleware.Auth(), handler.FollowUser)
 	users.DELETE("/:username/follow", middleware.Auth(), handler.UnfollowUser)
 	users.PUT("/:username/role", middleware.Auth(), middleware.RequireRole("admin"), handler.UpdateUserRole)
+	// 管理员重置用户密码（仅 admin；新密码由管理员线下告知用户）
+	users.POST("/:username/reset-password", middleware.Auth(), middleware.RequireRole("admin"), handler.ResetUserPassword)
 	users.POST("/:username/block", middleware.Auth(), handler.BlockUser)
 	users.DELETE("/:username/block", middleware.Auth(), handler.UnblockUser)
 

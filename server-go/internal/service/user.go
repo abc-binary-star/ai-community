@@ -14,6 +14,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -114,8 +115,8 @@ func (s *UserService) SearchUsers(ctx context.Context, q string) ([]SearchUserIt
 	return items, nil
 }
 
-// SearchUsersAdmin 角色管理用搜索：按用户名或显示名模糊匹配，
-// 返回含角色与邮箱的完整信息（仅管理员调用）。
+// SearchUsersAdmin 角色管理用搜索：按邮箱或用户名模糊匹配（两者均唯一，
+// 昵称 display_name 可重复故不参与），返回含角色与邮箱的完整信息（仅管理员调用）。
 func (s *UserService) SearchUsersAdmin(ctx context.Context, q string) ([]AdminUserSearchItem, error) {
 	q = strings.TrimSpace(q)
 	if len(q) < 1 {
@@ -124,7 +125,7 @@ func (s *UserService) SearchUsersAdmin(ctx context.Context, q string) ([]AdminUs
 	like := "%" + q + "%"
 	var users []model.User
 	if err := dal.DB.WithContext(ctx).
-		Where("username ILIKE ? OR display_name ILIKE ?", like, like).
+		Where("username ILIKE ? OR email ILIKE ?", like, like).
 		Order("created_at ASC").
 		Limit(20).
 		Find(&users).Error; err != nil {
@@ -343,6 +344,34 @@ func (s *UserService) UpdateUserRole(ctx context.Context, username, role, curren
 	}
 	dto := mapper.UserToDTO(&user)
 	return &dto, nil
+}
+
+// ResetPassword 管理员重置指定用户密码（仅管理员可调用）。
+// 新密码按注册逻辑用 bcrypt 哈希后落库，任何入口都无法还原明文。
+func (s *UserService) ResetPassword(ctx context.Context, username, newPassword string) error {
+	var user model.User
+	err := dal.DB.WithContext(ctx).Select("id").Where("username = ?", username).First(&user).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrUserNotFound
+		}
+		log.Printf("[User/ResetPassword] 查询用户失败, username=%s, err=%v", username, err)
+		return err
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		log.Printf("[User/ResetPassword] 生成密码哈希失败, userID=%s, err=%v", user.ID, err)
+		return err
+	}
+
+	if err := dal.DB.WithContext(ctx).Model(&model.User{}).
+		Where("id = ?", user.ID).
+		Update("password", string(hashed)).Error; err != nil {
+		log.Printf("[User/ResetPassword] 重置密码失败, userID=%s, err=%v", user.ID, err)
+		return err
+	}
+	return nil
 }
 
 // ========== Follow Module ==========
