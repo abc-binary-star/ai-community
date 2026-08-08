@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Notebook, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
@@ -16,6 +17,7 @@ import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { HighlightableContent } from './highlightable-content'
+import { NotesPanel } from './notes-panel'
 import { fontFamily } from '@/lib/font-options'
 import { getChannelLabel, type Comment, type Paginated, type Post, type ThreadSummary } from 'shared'
 import { CommentTree } from './comment-tree'
@@ -38,6 +40,8 @@ export function PostDetailView({ id }: { id: string }) {
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [commentPage, setCommentPage] = useState(1)
   const [contentExpanded, setContentExpanded] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
   const { data: channels } = useChannels()
 
   const postQuery = useQuery({
@@ -124,9 +128,36 @@ export function PostDetailView({ id }: { id: string }) {
 
   if (postQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-        <Loader2 className="animate-spin" />
-        加载中…
+      <div className="mx-auto max-w-4xl space-y-6">
+        <Skeleton className="h-9 w-24" />
+        <Card>
+          <div className="space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Skeleton className="h-5 w-16" />
+                <Skeleton className="h-5 w-20" />
+              </div>
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <Skeleton className="size-8 rounded-full" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <Skeleton className="h-48 w-full" />
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <Skeleton className="h-9 w-20" />
+              <Skeleton className="h-9 w-20" />
+            </div>
+          </div>
+        </Card>
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
       </div>
     )
   }
@@ -182,9 +213,14 @@ export function PostDetailView({ id }: { id: string }) {
   const commentsData = commentsQuery.data
   const hasMoreComments = commentsData ? commentPage < commentsData.totalPages : false
 
-  // 长文折叠：超过 3000 字默认折叠
-  const isLongContent = post.content.length > 3000
+  // 长文折叠：超过 2000 字默认折叠（对齐 v2 规格）
+  const isLongContent = post.content.length > 2000
   const showCollapsed = isLongContent && !contentExpanded
+
+  const openNotes = () => {
+    if (showCollapsed) setContentExpanded(true)
+    setNotesOpen(true)
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -255,10 +291,16 @@ export function PostDetailView({ id }: { id: string }) {
 
           {(isGenerating || summaryQuery.data?.status === 'generating') && (
             <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="size-4 animate-spin" />
-                正在生成讨论摘要…
+              <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
+                <Sparkles className="size-4" />
+                AI 讨论摘要
               </div>
+              <div className="mt-3 space-y-2">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-5/6" />
+                <Skeleton className="h-3.5 w-2/3" />
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">正在生成讨论摘要…</p>
             </div>
           )}
 
@@ -306,36 +348,44 @@ export function PostDetailView({ id }: { id: string }) {
                 <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-transparent">版主</Badge>
               )}
             </div>
-            {(isAuthor || canModerate) && (
-              <div className="flex items-center gap-1">
-                {canModerate && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={handleTogglePin}>
-                      <Pin />
-                      {post.isPinned ? '取消置顶' : '置顶'}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleToggleFeatured}>
-                      <Star />
-                      {post.isFeatured ? '取消精华' : '精华'}
-                    </Button>
-                  </>
-                )}
-                {isAuthor && (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => router.push(`/community/post/${id}/edit`)}>
-                      <Pencil />
-                      编辑
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeletePost}>
-                      <Trash2 />
-                      删除帖子
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              {hydrated && token && (
+                <Button variant="ghost" size="sm" onClick={openNotes}>
+                  <Notebook />
+                  我的笔记
+                </Button>
+              )}
+              {(isAuthor || canModerate) && (
+                <>
+                  {canModerate && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={handleTogglePin}>
+                        <Pin />
+                        {post.isPinned ? '取消置顶' : '置顶'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleToggleFeatured}>
+                        <Star />
+                        {post.isFeatured ? '取消精华' : '精华'}
+                      </Button>
+                    </>
+                  )}
+                  {isAuthor && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => router.push(`/community/post/${id}/edit`)}>
+                        <Pencil />
+                        编辑
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleDeletePost}>
+                        <Trash2 />
+                        删除帖子
+                      </Button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-          <div className="break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
+          <div ref={contentRef} className="break-words border-t border-border pt-4 text-[15px] leading-7 text-foreground/90">
             {showCollapsed ? (
               <div className="relative">
                 <div className="max-h-[32rem] overflow-hidden">
@@ -419,9 +469,10 @@ export function PostDetailView({ id }: { id: string }) {
         )}
 
         {commentsQuery.isLoading && commentPage === 1 ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-            <Loader2 className="animate-spin" />
-            加载评论…
+          <div className="space-y-3">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
           </div>
         ) : commentsQuery.isError ? (
           <p className="py-6 text-center text-sm text-muted-foreground">评论加载失败，请稍后重试</p>
@@ -455,6 +506,14 @@ export function PostDetailView({ id }: { id: string }) {
           <p className="py-6 text-center text-sm text-muted-foreground">还没有评论，来说点什么吧</p>
         )}
       </div>
+
+      {notesOpen && (
+        <NotesPanel
+          postId={post.id}
+          containerRef={contentRef}
+          onClose={() => setNotesOpen(false)}
+        />
+      )}
     </div>
   )
 }
