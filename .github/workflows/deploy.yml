@@ -61,8 +61,24 @@ jobs:
             # docker-compose.prod.yml / deploy.sh 是服务器本地文件，
             # 不更新就永远是旧版本（改了 nginx.conf 也不会生效）。
             # 服务器目录若非 git 仓库（scp 部署），跳过并提示手动同步。
+            #
+            # 国内 ECS 拉 GitHub 常出现瞬时 curl 52 / RPC failed，故：
+            #   1) 重试 3 次，每次退避递增；
+            #   2) 仍失败也不阻断部署——git pull 只为同步几个本地配置文件，
+            #      核心的镜像分发与容器编排不依赖它，绝不能因一次网络抖动漏掉发布。
             if [ -d .git ]; then
-              git pull --ff-only
+              pulled=0
+              for i in 1 2 3; do
+                if git pull --ff-only; then
+                  pulled=1
+                  break
+                fi
+                echo "[warn] git pull 第 $i 次失败，$((i * 5))s 后重试…"
+                sleep $((i * 5))
+              done
+              if [ "$pulled" != "1" ]; then
+                echo "[warn] git pull 多次失败，跳过配置同步，继续用现有本地文件部署"
+              fi
             else
               echo "[skip] not a git repo; sync nginx.conf manually"
             fi
