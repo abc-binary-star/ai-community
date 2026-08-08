@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Bookmark, ChevronDown, FileText, LogOut, Megaphone, Menu, MessageCircle, PenLine, ScrollText, Settings, ShieldCheck, UserCog } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -22,6 +22,21 @@ import { api } from '@/lib/api'
 import type { PublicUser } from 'shared'
 import { NotificationBell } from './notification-bell'
 import { SearchBar } from './search-bar'
+
+// 品牌标识：珊瑚渐变圆角方块 + 快乐体字标 + 一枚暖色小圆点
+function BrandLogo() {
+  return (
+    <Link href="/community/discover" className="group flex items-center gap-2.5" aria-label="Commons 首页">
+      <span className="relative flex size-9 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-primary to-rose-500 shadow-[0_3px_10px_rgba(230,90,40,0.35)] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
+        <span className="font-display text-xl leading-none text-white drop-shadow-sm">C</span>
+        <span className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-background bg-emerald-400" />
+      </span>
+      <span className="font-display text-2xl leading-none tracking-wide text-foreground">
+        Commons
+      </span>
+    </Link>
+  )
+}
 
 // 私信入口：带未读角标，点击进入消息页
 function MessageEntry() {
@@ -54,7 +69,6 @@ function MessageEntry() {
 
 function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
-  const pathname = usePathname()
   const searchParams = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
@@ -74,9 +88,9 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full items-center justify-between gap-4 px-4">
-        <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 w-full border-b border-border/70 bg-background/85 backdrop-blur-md">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-4 lg:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
           {/* 移动端：汉堡菜单按钮 */}
           {onMenuClick && (
             <Button
@@ -89,37 +103,33 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
               <Menu className="size-5" />
             </Button>
           )}
-          {/* 品牌 */}
-          <Link href="/community/discover" className="flex items-center gap-2 font-semibold">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-              C
-            </span>
-            <span className="text-base">Commons</span>
-          </Link>
+          <BrandLogo />
         </div>
 
         {/* 搜索栏 */}
-        <div className="flex-1 max-w-md">
-          <SearchBar value={searchParams.get('q') || ''} />
+        <div className="hidden flex-1 justify-center sm:flex">
+          <div className="w-full max-w-md">
+            <SearchBar value={searchParams.get('q') || ''} />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {!hydrated ? (
             <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
           ) : user ? (
             <>
-              <Button asChild size="sm" className="hidden sm:inline-flex">
+              <Button asChild size="sm" className="hidden rounded-full sm:inline-flex">
                 <Link href="/community/post/new">
                   <PenLine />
                   发帖
                 </Link>
               </Button>
-              <Button asChild size="icon" className="sm:hidden">
-                <Link href="/community/post/new" aria-label="发帖">
+              <Button asChild size="icon" className="sm:hidden" aria-label="发帖">
+                <Link href="/community/post/new">
                   <PenLine />
                 </Link>
               </Button>
-              <Button asChild variant="ghost" size="icon" aria-label="收藏">
+              <Button asChild variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="收藏">
                 <Link href="/bookmarks">
                   <Bookmark />
                 </Link>
@@ -130,14 +140,14 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-full p-1 pr-2 transition-colors hover:bg-accent"
+                    className="flex items-center gap-2 rounded-full border border-border/60 bg-card p-1 pl-1.5 pr-2 transition-colors hover:border-primary/40 hover:bg-accent"
                   >
-                    <Avatar className="size-8">
+                    <Avatar className="size-7">
                       {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
-                      <AvatarFallback className="bg-primary/10 text-xs text-primary">{getInitials(user.username)}</AvatarFallback>
+                      <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
                     </Avatar>
-                    <span className="hidden text-sm font-medium sm:inline">{user.username}</span>
-                    <ChevronDown className="size-4 text-muted-foreground" />
+                    <span className="hidden max-w-24 truncate text-sm font-medium sm:inline">{user.username}</span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -147,21 +157,21 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <div className="flex items-stretch gap-1 px-1 py-1">
                     <Link
                       href={`/u/${encodeURIComponent(user.username)}`}
-                      className="flex flex-1 flex-col items-center rounded-md py-2 transition-colors hover:bg-accent"
+                      className="flex flex-1 flex-col items-center rounded-lg py-2 transition-colors hover:bg-accent"
                     >
                       <span className="text-base font-semibold">{stats?.postCount ?? '-'}</span>
                       <span className="text-xs text-muted-foreground">动态</span>
                     </Link>
                     <Link
                       href={`/u/${encodeURIComponent(user.username)}/following`}
-                      className="flex flex-1 flex-col items-center rounded-md py-2 transition-colors hover:bg-accent"
+                      className="flex flex-1 flex-col items-center rounded-lg py-2 transition-colors hover:bg-accent"
                     >
                       <span className="text-base font-semibold">{stats?.followingCount ?? '-'}</span>
                       <span className="text-xs text-muted-foreground">关注</span>
                     </Link>
                     <Link
                       href={`/u/${encodeURIComponent(user.username)}/followers`}
-                      className="flex flex-1 flex-col items-center rounded-md py-2 transition-colors hover:bg-accent"
+                      className="flex flex-1 flex-col items-center rounded-lg py-2 transition-colors hover:bg-accent"
                     >
                       <span className="text-base font-semibold">{stats?.followerCount ?? '-'}</span>
                       <span className="text-xs text-muted-foreground">粉丝</span>
@@ -228,10 +238,10 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
             </>
           ) : (
             <>
-              <Button asChild variant="ghost" size="sm">
+              <Button asChild variant="ghost" size="sm" className="hidden rounded-full sm:inline-flex">
                 <Link href="/login">登录</Link>
               </Button>
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="rounded-full">
                 <Link href="/register">注册</Link>
               </Button>
             </>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, MessageSquare, MessageSquarePlus, Share2, Trash2 } from 'lucide-react'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
@@ -27,6 +27,26 @@ const COLOR_OPTIONS = [
   { key: 'blue', cls: 'bg-blue-300' },
 ]
 
+// findScrollParent 找到元素最近的可滚动祖先。布局把正文放在 overflow-y-auto 的
+// main 里滚动，window 并不滚动，因此定位必须作用在这个容器上。
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let n = el.parentElement
+  while (n && n !== document.body) {
+    const overflowY = getComputedStyle(n).overflowY
+    if (/(auto|scroll)/.test(overflowY) && n.scrollHeight > n.clientHeight) return n
+    n = n.parentElement
+  }
+  return null
+}
+
+// centerDelta 返回要把 el 居中还需滚动的像素数（正数表示需要向下滚）。
+function centerDelta(el: HTMLElement, scroller: HTMLElement | null): number {
+  const elRect = el.getBoundingClientRect()
+  const viewTop = scroller ? scroller.getBoundingClientRect().top : 0
+  const viewHeight = scroller ? scroller.clientHeight : window.innerHeight
+  return Math.round(elRect.top - viewTop - (viewHeight - elRect.height) / 2)
+}
+
 interface Props {
   postId: string
   content: string
@@ -44,6 +64,7 @@ const EMPTY_ANCHOR_COUNTS: AnnotationAnchorCount[] = []
 
 export function HighlightableContent({ postId, content, fontFamily }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const containerRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
   const token = useAuthStore((s) => s.token)
@@ -62,6 +83,10 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
   const [badges, setBadges] = useState<{ anchor: string; top: number; count: number }[]>([])
   // 桌面端 hover 段落时的写想法图标
   const [hover, setHover] = useState<{ anchor: string; top: number; snapshot: string } | null>(null)
+  // 从想法流跳转进来时只定位一次，避免正文重渲染后反复滚动打断阅读
+  const jumpedRef = useRef(false)
+  // 组件是否已卸载，供定位循环自行终止
+  const unmountedRef = useRef(false)
 
   const highlightsQuery = useQuery({
     queryKey: ['highlights', postId],
@@ -105,6 +130,68 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, countMap, highlights])
+
+  // 从想法流跳转进来：?anchor= 指定要定位的段落，滚动到它并展开想法面板。
+  // 这是「想法是钩子、落点必须是原文」的落地点——如果点开一条想法只看到想法
+  // 本身，产品就退化成摘录聚合器，长文永远不会被真正读完。
+  useEffect(() => {
+    const target = searchParams.get('anchor')
+    if (!target || jumpedRef.current) return
+    const container = containerRef.current
+    if (!container) return
+
+    const blocks = container.querySelectorAll('[data-block-anchor]')
+    const block = Array.from(blocks).find(
+      (el) => (el as HTMLElement).getAttribute('data-block-anchor') === target,
+    ) as HTMLElement | undefined
+    if (!block) return
+
+    jumpedRef.current = true
+    setPanel({ anchor: target, quote: getBlockText(block).trim() })
+    block.classList.add('ring-2', 'ring-primary/40', 'rounded-md')
+
+    // 正文滚动发生在最近的可滚动祖先（布局里的 main）里，不是 window；
+    // 且外层有 overflow:hidden 的容器，scrollIntoView 在这种嵌套下不可靠，
+    // 因此直接对滚动容器设 scrollTop。
+    const scroller = findScrollParent(block)
+
+    // 开面板、加载想法列表、图片解码都会持续改变布局，单次滚动会被后续重排冲掉，
+    // 需要反复校正到稳定。
+    //
+    // 这个循环刻意不挂在本 effect 的 cleanup 上：effect 依赖 highlights，
+    // 想法数据到达时会重跑一次，若由 cleanup 取消循环，而 jumpedRef 又让新一轮
+    // 直接返回，循环就再也不会重启——表现为面板开了但页面停在顶部。
+    // 因此改由 unmount 标志位终止，生命周期与 effect 重跑解耦。
+    let tries = 0
+    let stable = 0
+
+    const settle = () => {
+      if (unmountedRef.current) return
+      const centerOffset = centerDelta(block, scroller)
+      if (Math.abs(centerOffset) <= 4) {
+        stable += 1
+      } else {
+        stable = 0
+        if (scroller) scroller.scrollTop += centerOffset
+        else window.scrollBy({ top: centerOffset, behavior: 'auto' })
+      }
+      tries += 1
+      if (stable < 3 && tries < 180) {
+        window.requestAnimationFrame(settle)
+        return
+      }
+      block.classList.remove('ring-2', 'ring-primary/40', 'rounded-md')
+    }
+    window.requestAnimationFrame(settle)
+  }, [searchParams, content, highlights])
+
+  // 卸载标志：供定位循环自行终止，避免在已卸载的节点上继续滚动
+  useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
+    }
+  }, [])
 
   // 选区监听：选中块内文本时弹出工具条
   useEffect(() => {

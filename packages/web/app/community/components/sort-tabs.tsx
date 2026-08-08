@@ -1,11 +1,12 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Flame, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TABS = [
-  { key: 'latest', label: '最新' },
-  { key: 'hot', label: '最热' },
+  { key: 'latest', label: '最新', icon: Timer },
+  { key: 'hot', label: '最热', icon: Flame },
 ] as const
 
 export function SortTabs({ current, basePath = '/community' }: { current: string; basePath?: string }) {
@@ -20,21 +21,23 @@ export function SortTabs({ current, basePath = '/community' }: { current: string
   }
 
   return (
-    <div className="inline-flex items-center rounded-lg bg-muted p-0.5">
+    <div className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card p-1 shadow-sm">
       {TABS.map((tab) => {
         const active = current === tab.key
+        const Icon = tab.icon
         return (
           <button
             key={tab.key}
             type="button"
             onClick={() => handleChange(tab.key)}
             className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200',
               active
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-[0_2px_8px_rgba(230,90,40,0.35)]'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >
+            <Icon className="size-3.5" />
             {tab.label}
           </button>
         )

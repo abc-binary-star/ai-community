@@ -10,7 +10,7 @@ export function CommunityShell({ banner, children }: { banner?: ReactNode; child
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-transparent">
       <Navbar onMenuClick={() => setSidebarOpen(true)} />
       {banner}
       <div className="flex flex-1 overflow-hidden">
@@ -18,8 +18,14 @@ export function CommunityShell({ banner, children }: { banner?: ReactNode; child
         <main className="scrollbar-thin flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-6 lg:px-8">
             {children}
-            <footer className="mt-12 border-t border-border py-6 text-center text-sm text-muted-foreground">
-              Commons · 一个清新的兴趣社区
+            <footer className="mt-16 flex flex-col items-center gap-1.5 border-t border-border/70 pt-6 text-center text-sm text-muted-foreground">
+              <p>
+                <span className="font-display text-base text-foreground/80">Commons</span>
+                {' '}· 一个新鲜有趣的兴趣社区
+              </p>
+              <p className="text-xs text-muted-foreground/80">
+                在这里分享想法、创作与灵感 —— 友善交流，尊重彼此
+              </p>
             </footer>
           </div>
         </main>

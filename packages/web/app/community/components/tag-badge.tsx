@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { channelColor } from '@/lib/channel-colors'
 import { cn } from '@/lib/utils'
 
 interface TagBadgeProps {
@@ -15,17 +16,20 @@ interface TagBadgeProps {
 export function TagBadge({ name, selected = false, onClick, size = 'sm', asLink = false, channel }: TagBadgeProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const color = channelColor(channel)
 
   const sizeClasses = size === 'sm'
-    ? 'text-[11px] px-2 py-0.5'
-    : 'text-xs px-2.5 py-1'
+    ? 'text-[11px] px-2.5 py-0.5'
+    : 'text-xs px-3 py-1'
 
   const variantClasses = selected
     ? 'bg-primary text-primary-foreground hover:bg-primary/90 border-primary'
-    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground border-transparent'
+    : channel
+      ? cn('bg-white/70 text-muted-foreground hover:border-transparent hover:bg-accent hover:text-foreground', 'border', color.border)
+      : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground border-transparent'
 
   const baseClasses = cn(
-    'inline-flex items-center rounded-full border font-medium transition-colors cursor-pointer',
+    'inline-flex items-center gap-1 rounded-full border font-medium transition-all duration-150 cursor-pointer hover:-translate-y-px',
     sizeClasses,
     variantClasses,
   )
@@ -47,14 +51,16 @@ export function TagBadge({ name, selected = false, onClick, size = 'sm', asLink 
       : `/community?tag=${encodeURIComponent(name)}`
     return (
       <a href={href} className={baseClasses} onClick={onClick}>
-        {name}
+        {channel && <span className={cn('size-1.5 rounded-full', color.dot)} />}
+        <span>{name}</span>
       </a>
     )
   }
 
   return (
     <button type="button" className={baseClasses} onClick={handleClick}>
-      {name}
+      {channel && <span className={cn('size-1.5 rounded-full', color.dot)} />}
+      <span>{name}</span>
     </button>
   )
 }

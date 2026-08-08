@@ -37,7 +37,7 @@ const zcool = ZCOOL_KuaiLe({
 
 export const metadata: Metadata = {
   title: 'Commons · 兴趣社区',
-  description: '一个清新的兴趣社区 — 在这里分享想法与创作',
+  description: '一个新鲜有趣的兴趣社区 — 在这里分享想法、创作与灵感',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

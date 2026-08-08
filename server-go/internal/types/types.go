@@ -558,6 +558,49 @@ type AnnotationList struct {
 	Total        int                     `json:"total"`
 }
 
+// --- 想法流（跨帖分发）---
+
+// IdeaCardPost 想法卡携带的来源帖子信息。
+// 任何形态的卡都必须带上它：一条想法不允许脱离原文单独存在。
+type IdeaCardPost struct {
+	ID       string     `json:"id"`
+	Title    string     `json:"title"`
+	Author   PublicUser `json:"author"`
+	Channel  string     `json:"channel"`
+	CoverURL *string    `json:"coverUrl,omitempty"`
+}
+
+// IdeaCard 想法流中的一张卡。
+//
+// Type 为 idea 时是真实的公开段落想法，Body/Author/互动计数有效；
+// 为 excerpt 时是系统从正文抽取的关键句，仅有 Excerpt，无人声、不可互动。
+// 两者共用 Excerpt + Anchor + Post 三件套，保证点击后能落回原文段落。
+type IdeaCard struct {
+	Type       string       `json:"type"` // idea / excerpt
+	ID         string       `json:"id"`   // idea 为想法 ID；excerpt 为 postID:anchor
+	Excerpt    string       `json:"excerpt"`
+	Anchor     string       `json:"anchor"`
+	Post       IdeaCardPost `json:"post"`
+	Body       string       `json:"body,omitempty"`
+	Author     *PublicUser  `json:"author,omitempty"`
+	Scope      string       `json:"scope,omitempty"`
+	ReplyCount int          `json:"replyCount"`
+	LikeCount  int          `json:"likeCount"`
+	Liked      bool         `json:"liked"`
+	CreatedAt  string       `json:"createdAt,omitempty"`
+}
+
+// IdeaFeed 想法流响应
+type IdeaFeed struct {
+	Items       []IdeaCard `json:"items"`
+	Total       int        `json:"total"`
+	Page        int        `json:"page"`
+	PageSize    int        `json:"pageSize"`
+	TotalPages  int        `json:"totalPages"`
+	IdeaCount   int        `json:"ideaCount"`   // 本页想法卡数量
+	FilledCount int        `json:"filledCount"` // 本页摘录卡数量，用于观察人声替换进度
+}
+
 // --- 官方公告 ---
 
 // PenaltyItem 处置公示名单条目

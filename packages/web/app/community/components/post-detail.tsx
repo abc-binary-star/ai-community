@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Notebook, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { useHydrated } from '@/lib/use-hydrated'
-import { formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
+import { channelColor } from '@/lib/channel-colors'
+import { cn, formatEditedTime, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { HighlightableContent } from './highlightable-content'
@@ -33,13 +34,16 @@ const COMMENT_PAGE_SIZE = 10
 
 export function PostDetailView({ id }: { id: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
   const hydrated = useHydrated()
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [commentPage, setCommentPage] = useState(1)
-  const [contentExpanded, setContentExpanded] = useState(false)
+  // 带 ?anchor= 从想法流跳转进来时必须展开全文：折叠态渲染的是截断正文，
+  // 段落锚点不存在，落点会停在折叠页上，等于跳转失败。
+  const [contentExpanded, setContentExpanded] = useState(() => !!searchParams.get('anchor'))
   const [notesOpen, setNotesOpen] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const { data: channels } = useChannels()
@@ -177,6 +181,7 @@ export function PostDetailView({ id }: { id: string }) {
   }
 
   const post = postQuery.data
+  const color = channelColor(post.channel)
   const isAuthor = hydrated && !!user && user.id === post.author.id
   const canModerate = hydrated && !!user && (user.role === 'admin' || user.role === 'moderator')
 
@@ -245,7 +250,10 @@ export function PostDetailView({ id }: { id: string }) {
                   精华
                 </Badge>
               )}
-              <Badge>{getChannelLabel(channels, post.channel)}</Badge>
+              <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium', color.chip, color.border)}>
+                <span className={cn('size-1.5 rounded-full', color.dot)} />
+                {getChannelLabel(channels, post.channel)}
+              </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">

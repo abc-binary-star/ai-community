@@ -23,6 +23,7 @@ import {
 import { useChannelTree } from '@/lib/use-channel-tree'
 import { useCollapsedState } from '@/lib/use-collapsed-state'
 import { useAnnouncementUnread } from '@/lib/use-announcements'
+import { channelColor } from '@/lib/channel-colors'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { cn } from '@/lib/utils'
 
@@ -105,11 +106,11 @@ function CollapsibleSection({
   const Icon = getIcon(icon)
 
   return (
-    <div className="mb-1">
+    <div className="mb-1.5">
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 transition-colors hover:text-foreground"
       >
         <ChevronRight
           className={cn(
@@ -134,6 +135,7 @@ function ChannelItem({
   href,
   active,
   badge,
+  colorKey,
   onNavigate,
 }: {
   label: string
@@ -142,22 +144,28 @@ function ChannelItem({
   href: string
   active: boolean
   badge?: number
+  colorKey?: string
   onNavigate?: () => void
 }) {
   const Icon = getIcon(icon, iconFallback)
+  const color = channelColor(colorKey)
 
   return (
     <Link
       href={href}
       onClick={onNavigate}
       className={cn(
-        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+        'group flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
         active
-          ? 'bg-primary/10 font-medium text-primary'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          ? cn('font-medium shadow-sm', color.soft, color.text)
+          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
       )}
     >
-      <Icon className="size-4 shrink-0" />
+      {colorKey ? (
+        <span className={cn('size-2 shrink-0 rounded-full transition-transform duration-150 group-hover:scale-125', color.dot)} />
+      ) : (
+        <Icon className="size-4 shrink-0" />
+      )}
       <span className="truncate">{label}</span>
       {typeof badge === 'number' && badge > 0 && (
         <span className="ml-auto flex size-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
@@ -232,24 +240,24 @@ function SidebarContent({
   }, [uncategorized, searchQuery])
 
   return (
-    <div className="flex h-full flex-col border-r border-border bg-card/40">
+    <div className="flex h-full flex-col border-r border-border/70 bg-card/50 backdrop-blur-sm">
       {/* 顶部：搜索栏 + 关闭按钮 */}
       <div className="flex items-center gap-2 p-3">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="搜索频道..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           />
         </div>
         {showCloseButton && (
           <button
             type="button"
             onClick={onClose}
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label="关闭"
           >
             <X className="size-4" />
@@ -258,38 +266,42 @@ function SidebarContent({
       </div>
 
       {/* 频道列表（可滚动） */}
-      <nav className="scrollbar-thin flex-1 overflow-y-auto px-2 pb-4">
+      <nav className="scrollbar-thin flex-1 overflow-y-auto px-2.5 pb-4">
         {/* 固定项：发现 */}
         <ChannelItem
           label="发现"
           icon="compass"
           href="/community/discover"
           active={isDiscover}
+          colorKey="general"
           onNavigate={onNavigate}
         />
 
         {/* 分组频道 */}
         {filteredCategories.map((cat) => (
-          <CollapsibleSection key={cat.id} label={cat.label} icon={cat.icon}>
-            <div className="space-y-0.5">
-              {cat.channels.map((ch) => (
-                <ChannelItem
-                  key={ch.id}
-                  label={ch.label}
-                  icon={ch.icon}
-                  iconFallback={ch.name}
-                  href={`/community?channel=${encodeURIComponent(ch.name)}`}
-                  active={!isDiscover && activeChannel === ch.name}
-                  onNavigate={onNavigate}
-                />
-              ))}
-            </div>
-          </CollapsibleSection>
+          <div key={cat.id} className="mt-2">
+            <CollapsibleSection label={cat.label} icon={cat.icon}>
+              <div className="space-y-0.5">
+                {cat.channels.map((ch) => (
+                  <ChannelItem
+                    key={ch.id}
+                    label={ch.label}
+                    icon={ch.icon}
+                    iconFallback={ch.name}
+                    href={`/community?channel=${encodeURIComponent(ch.name)}`}
+                    active={!isDiscover && activeChannel === ch.name}
+                    colorKey={ch.name}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            </CollapsibleSection>
+          </div>
         ))}
 
         {/* 未分组频道 */}
         {filteredUncategorized.length > 0 && (
-          <div className="mt-2 space-y-0.5">
+          <div className="mt-3 space-y-0.5">
             {filteredUncategorized.map((ch) => (
               <ChannelItem
                 key={ch.id}
@@ -298,6 +310,7 @@ function SidebarContent({
                 iconFallback={ch.name}
                 href={`/community?channel=${encodeURIComponent(ch.name)}`}
                 active={!isDiscover && activeChannel === ch.name}
+                colorKey={ch.name}
                 onNavigate={onNavigate}
               />
             ))}
@@ -315,7 +328,10 @@ function SidebarContent({
       </nav>
 
       {/* 底部：个人入口 */}
-      <div className="border-t border-border p-2">
+      <div className="border-t border-border/70 p-2.5">
+        <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+          我的空间
+        </p>
         <ChannelItem
           label="我的草稿"
           icon="file-text"
@@ -360,7 +376,7 @@ export function Sidebar({
   return (
     <>
       {/* 桌面端固定侧边栏 */}
-      <aside className="hidden w-60 shrink-0 md:block">
+      <aside className="hidden w-64 shrink-0 md:block">
         <SidebarContent activeChannel={activeChannel} isDiscover={isDiscover} />
       </aside>
 

@@ -41,7 +41,7 @@ export function SearchBar({ value }: { value?: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <input
         ref={inputRef}
         type="text"
@@ -49,9 +49,9 @@ export function SearchBar({ value }: { value?: string }) {
         onChange={(e) => setInput(e.target.value)}
         placeholder="搜索帖子、评论、用户…"
         className={cn(
-          'h-9 w-full rounded-lg border border-input bg-background pl-9 pr-9 text-sm',
-          'placeholder:text-muted-foreground',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0',
+          'h-10 w-full rounded-full border border-input bg-card pl-10 pr-9 text-sm shadow-sm',
+          'placeholder:text-muted-foreground/70',
+          'transition-all focus:border-primary/50 focus:shadow-[0_0_0_4px_hsl(var(--primary)/0.1)] focus:outline-none',
         )}
       />
       {input && (

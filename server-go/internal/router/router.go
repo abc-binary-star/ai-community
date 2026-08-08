@@ -80,6 +80,10 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.PATCH("/api/annotation-replies/:id", middleware.Auth(), handler.UpdateAnnotationReply)
 	h.DELETE("/api/annotation-replies/:id", middleware.Auth(), handler.DeleteAnnotationReply)
 
+	// --- 想法流（跨帖分发）路由 ---
+	h.GET("/api/ideas", middleware.OptionalAuth(), handler.ListIdeaFeed)
+	h.GET("/api/ideas/:id", middleware.OptionalAuth(), handler.GetIdea)
+
 	// --- 官方公告路由 ---
 	h.GET("/api/announcements", middleware.OptionalAuth(), handler.ListAnnouncements)
 	h.POST("/api/announcements", middleware.Auth(), middleware.RequireRole("admin"), handler.CreateAnnouncement)

@@ -1,10 +1,10 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-// 白底卡片 + 轻阴影，清爽层次
+// 白底卡片 + 暖色轻阴影，清爽层次（Fresh Editorial）
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('rounded-xl border border-border bg-card text-card-foreground shadow-card', className)} {...props} />
+    <div ref={ref} className={cn('rounded-2xl border border-border/80 bg-card text-card-foreground shadow-card', className)} {...props} />
   ),
 )
 Card.displayName = 'Card'

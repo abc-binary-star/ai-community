@@ -300,6 +300,49 @@ export interface AnnotationList {
   total: number
 }
 
+// --- 想法流（跨帖分发）---
+
+/** 想法卡携带的来源帖子。任何形态的卡都必须带上它，不存在无来源的卡 */
+export interface IdeaCardPost {
+  id: string
+  title: string
+  author: PublicUser
+  channel: string
+  coverUrl?: string
+}
+
+/**
+ * 想法流中的一张卡。
+ * type 为 idea 时是真实的公开段落想法，body/author/互动计数有效；
+ * 为 excerpt 时是系统抽取的关键句，无人声、不可互动。
+ */
+export interface IdeaCard {
+  type: 'idea' | 'excerpt'
+  id: string
+  excerpt: string
+  anchor: string
+  post: IdeaCardPost
+  body?: string
+  author?: PublicUser
+  scope?: 'selection' | 'paragraph'
+  replyCount: number
+  likeCount: number
+  liked: boolean
+  createdAt?: string
+}
+
+export interface IdeaFeed {
+  items: IdeaCard[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+  /** 本页想法卡数量 */
+  ideaCount: number
+  /** 本页摘录卡数量，用于观察人声替换进度 */
+  filledCount: number
+}
+
 // --- 官方公告 ---
 
 export type AnnouncementCategory = 'moderation' | 'rule' | 'feature' | 'maintenance' | 'activity'
