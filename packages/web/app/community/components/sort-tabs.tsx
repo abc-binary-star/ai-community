@@ -31,9 +31,9 @@ export function SortTabs({ current, basePath = '/community' }: { current: string
             type="button"
             onClick={() => handleChange(tab.key)}
             className={cn(
-              'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200',
+              'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-150',
               active
-                ? 'bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-[0_2px_8px_rgba(230,90,40,0.35)]'
+                ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >

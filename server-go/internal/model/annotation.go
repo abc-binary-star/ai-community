@@ -18,7 +18,14 @@ import (
 const (
 	AnnotationScopeSelection = "selection" // 精确选区
 	AnnotationScopeParagraph = "paragraph" // 整段
+	AnnotationScopeWhole     = "whole"     // 整篇（承接原帖底部评论）
 )
+
+// AnnotationWholeAnchor 是「整篇」想法的固定锚点值。
+// 整篇想法不绑定任何具体段落——它承接的是原本的帖子底部评论，讨论对象是整篇文章。
+// 用固定哨兵值让同一帖子的所有整篇想法天然共位到同一个锚点分组，
+// 三个讨论场域（选区 / 整段 / 整篇）因此收敛成同一个模型的三种锚定粒度。
+const AnnotationWholeAnchor = "__whole__"
 
 // 可见范围
 const (
@@ -46,7 +53,11 @@ type Annotation struct {
 	Post   Post   `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
 	UserID string `gorm:"index;not null" json:"userId"`
 	User   User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
-	// Scope: selection / paragraph
+	// ParentAnnotationID 引用边：本条想法回应/引用的另一条想法。
+	// 这是「想法链」的纵向来源——一条想法在另一条想法之上生长，形成可追溯的路径。
+	// 为空表示这是链的起点。指向已删除想法时链视图按缺失处理，不阻断展示。
+	ParentAnnotationID *string `gorm:"index" json:"parentAnnotationId,omitempty"`
+	// Scope: selection / paragraph / whole
 	Scope string `gorm:"size:20;not null" json:"scope"`
 	// Anchor 段落锚点（前端 data-block-anchor，段落首部文本指纹）
 	Anchor string `gorm:"size:200;not null" json:"anchor"`

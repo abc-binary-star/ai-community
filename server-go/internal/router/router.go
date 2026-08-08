@@ -83,6 +83,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	// --- 想法流（跨帖分发）路由 ---
 	h.GET("/api/ideas", middleware.OptionalAuth(), handler.ListIdeaFeed)
 	h.GET("/api/ideas/:id", middleware.OptionalAuth(), handler.GetIdea)
+	h.GET("/api/ideas/:id/chain", middleware.OptionalAuth(), handler.GetIdeaChain)
 
 	// --- 官方公告路由 ---
 	h.GET("/api/announcements", middleware.OptionalAuth(), handler.ListAnnouncements)

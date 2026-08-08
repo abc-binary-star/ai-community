@@ -2,6 +2,7 @@ package dal
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -73,6 +74,7 @@ func Init(cfg *conf.Config) {
 		&model.Annotation{},
 		&model.AnnotationReply{},
 		&model.AnnotationLike{},
+		&model.AnnotationEmbedding{},
 		&model.Announcement{},
 		&model.AnnouncementRead{},
 		// 活动「无限循环读书地狱」，表统一带 activity_ 前缀与社区业务解耦
@@ -173,6 +175,58 @@ func runActivityMigrate(stmt, desc string) {
 	if err := DB.Exec(stmt).Error; err != nil {
 		log.Printf("Warning: %s失败（可忽略，不影响功能）: %v", desc, err)
 	}
+}
+
+// vectorReady 标记 pgvector 是否可用（扩展与向量列均就绪）。
+// 想法近邻查询前必须检查它：pgvector 未安装或建列失败时应降级为「无近邻」，
+// 而不是让查询报错。
+var vectorReady bool
+
+// VectorReady 返回 pgvector 向量检索是否可用。
+func VectorReady() bool { return vectorReady }
+
+// InitVectorSupport 尝试启用 pgvector：创建扩展、给 annotation_embeddings 补一列
+// vector(dim) 向量列、建近邻索引。任一步失败都不阻断启动，只把 vectorReady 置为
+// false——语义邻居是可选增量，缺它不影响想法本身。dim 为向量维度。
+//
+// 换模型导致维度变化时，旧列宽度与新维度不一致会让写入报错；这里检测到维度不符
+// 会重建列（丢弃旧向量，需重新生成），保证列宽度与当前模型一致。
+func InitVectorSupport(dim int) {
+	if dim <= 0 {
+		dim = 1536
+	}
+	if err := DB.Exec("CREATE EXTENSION IF NOT EXISTS vector").Error; err != nil {
+		log.Printf("[vector] pgvector 扩展不可用，语义邻居功能关闭（可忽略）: %v", err)
+		vectorReady = false
+		return
+	}
+
+	// 若已存在 embedding 列但维度不符，先删列再重建，避免维度冲突写入失败。
+	var curDim int
+	DB.Raw(`
+		SELECT COALESCE(atttypmod, 0)
+		FROM pg_attribute
+		WHERE attrelid = 'annotation_embeddings'::regclass
+		  AND attname = 'embedding' AND NOT attisdropped
+	`).Scan(&curDim)
+	if curDim > 0 && curDim != dim {
+		log.Printf("[vector] 向量维度由 %d 变为 %d，重建 embedding 列（旧向量将失效需重算）", curDim, dim)
+		DB.Exec("ALTER TABLE annotation_embeddings DROP COLUMN IF EXISTS embedding")
+	}
+
+	stmts := []string{
+		fmt.Sprintf("ALTER TABLE annotation_embeddings ADD COLUMN IF NOT EXISTS embedding vector(%d)", dim),
+		// IVFFlat 需要数据量支撑，冷启动阶段用 HNSW 更稳；失败仅告警，顺序扫描也能工作。
+		"CREATE INDEX IF NOT EXISTS idx_annotation_embeddings_vec ON annotation_embeddings USING hnsw (embedding vector_cosine_ops)",
+	}
+	for _, s := range stmts {
+		if err := DB.Exec(s).Error; err != nil {
+			// 建索引失败不致命：没有索引也能做精确顺序扫描，只是慢一些。
+			log.Printf("[vector] 初始化向量列/索引失败（可忽略，降级顺序扫描）: %v", err)
+		}
+	}
+	vectorReady = true
+	log.Printf("[vector] pgvector 就绪，向量维度=%d", dim)
 }
 
 // initSearchIndexes 创建全文搜索相关扩展与索引

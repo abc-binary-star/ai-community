@@ -6,7 +6,7 @@ import { Loader2, MessageSquarePlus, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { annotationsKey } from '@/lib/use-annotations'
-import type { AnnotationList } from 'shared'
+import { WHOLE_ANNOTATION_ANCHOR, type AnnotationList } from 'shared'
 import { AnnotationItem } from './annotation-item'
 import { AnnotationEditor, type AnnotationDraft } from './annotation-editor'
 
@@ -37,8 +37,19 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
 
   const items = query.data?.items ?? []
   const count = query.data?.anchorCounts.find((c) => c.anchor === anchor)?.count ?? 0
+  const isWhole = anchor === WHOLE_ANNOTATION_ANCHOR
 
   const startParagraphDraft = () => {
+    if (isWhole) {
+      setDraft({
+        scope: 'whole',
+        anchor: WHOLE_ANNOTATION_ANCHOR,
+        startOffset: 0,
+        endOffset: 0,
+        selectedText: '',
+      })
+      return
+    }
     const snapshot = quote
     setDraft({
       scope: 'paragraph',
@@ -60,9 +71,13 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
     >
       <div className="flex items-start gap-2 border-b border-border p-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground">段落想法 · {count || items.length || 0} 条</p>
-          {quote && (
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{quote}</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {isWhole ? '整篇想法' : '段落想法'} · {count || items.length || 0} 条
+          </p>
+          {isWhole ? (
+            <p className="mt-1 text-xs text-muted-foreground">对整篇文章的评论都在这里</p>
+          ) : (
+            quote && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{quote}</p>
           )}
         </div>
         <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="关闭">
@@ -105,7 +120,7 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
             className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
           >
             <MessageSquarePlus className="size-4" />
-            对这一段写想法
+            {isWhole ? '对整篇文章写想法' : '对这一段写想法'}
           </button>
         )}
 
@@ -117,7 +132,13 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
 
         {!query.isLoading && items.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            {mine ? '你还没有在这一段写下想法' : '这一段还没有想法，来写第一条吧'}
+            {isWhole
+              ? mine
+                ? '你还没有对整篇写下想法'
+                : '还没有对整篇的想法，来写第一条吧'
+              : mine
+                ? '你还没有在这一段写下想法'
+                : '这一段还没有想法，来写第一条吧'}
           </p>
         )}
 

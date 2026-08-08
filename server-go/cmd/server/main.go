@@ -8,6 +8,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ai"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/ailimit"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/embedding"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/storage"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/stt"
@@ -108,13 +109,20 @@ func main() {
 	// 初始化语音转文字客户端（未配置 API Key 时语音功能降级）
 	stt.Init(cfg.VolcASRKey, cfg.VolcASRResID)
 
+	// 初始化向量化客户端与 pgvector 支持（想法语义邻居，可选增量）。
+	// 未配置 EMBEDDING_API_KEY 或 pgvector 不可用时功能关闭，不影响想法基础能力。
+	embedding.Init(cfg.EmbeddingKey, cfg.EmbeddingURL, cfg.EmbeddingModel, cfg.EmbeddingDim)
+	if embedding.Enabled() {
+		dal.InitVectorSupport(embedding.Dim())
+	}
+
 	// 初始化存储服务
 	storage.Init(cfg)
 
 	// 创建 Hertz 服务器（请求体限制 35MB，支持 30MB 以内图片上传，预留 multipart 表单开销）
 	h := server.Default(
 		server.WithHostPorts(":"+cfg.Port),
-		server.WithMaxRequestBodySize(35 << 20),
+		server.WithMaxRequestBodySize(35<<20),
 	)
 
 	// 注册路由

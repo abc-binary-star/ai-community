@@ -29,15 +29,15 @@ export function IdeaCard({ card }: { card: IdeaCardData }) {
 
   return (
     <Card
-      className="channel-stripe group cursor-pointer overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover"
+      className="channel-stripe group cursor-pointer overflow-hidden border-border/70 transition-colors duration-200 hover:border-primary/30 hover:shadow-card-hover"
       style={{ ['--stripe-color' as string]: color.stripe }}
       onClick={() => router.push(target)}
     >
       <div className="flex flex-col gap-3 p-5 pl-6">
-        {/* 摘录：卡片的视觉主体 */}
-        <blockquote className="relative rounded-xl border-l-2 border-primary/40 bg-muted/40 py-3 pl-4 pr-3">
+        {/* 摘录：卡片的视觉主体，衬线体强化"读物"气质 */}
+        <blockquote className="relative rounded-lg border-l-2 border-primary/40 bg-muted/40 py-3 pl-4 pr-3">
           <Quote className="absolute -left-px -top-1 size-3.5 text-primary/40" aria-hidden />
-          <p className="text-[15px] leading-relaxed text-foreground/90">{card.excerpt}</p>
+          <p className="font-serifcn text-base leading-relaxed text-foreground/90">{card.excerpt}</p>
         </blockquote>
 
         {/* 人的判断：仅想法卡有 */}

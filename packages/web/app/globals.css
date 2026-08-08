@@ -3,55 +3,108 @@
 @tailwind utilities;
 
 /* ============================================================
-   Commons · Fresh Editorial 主题
-   暖纸底色 + 墨色文字 + 珊瑚橙主色 + 多彩频道系统
-   概念：一块被阳光照亮的社区公告板，每个频道是一枚彩色贴纸
+   Commons · Marginalia 主题
+   中性纸底 + 克制墨色 + 单一珊瑚强调 + 低饱和同色系频道序列
+   概念：一份留白充裕的数字读物，想法生长在页边。
+   区别于旧论坛：内容优先、平面化、克制、亮暗双主题。
    ============================================================ */
 
 @layer base {
   :root {
-    /* 底色：暖纸（奶油白，带一点暖意，不刺眼） */
-    --background: 42 40% 97%;
-    /* 文字：暖墨（带一点绿色调的深灰，比纯黑更柔和） */
-    --foreground: 150 9% 13%;
-    /* 卡片：纯白，与纸色形成清爽层次 */
+    /* 底色：近中性的暖白，几乎不带色偏，不刺眼也不发黄 */
+    --background: 40 18% 98%;
+    /* 文字：近黑的中性墨色 */
+    --foreground: 220 14% 11%;
+    /* 卡片：纯白，与纸底形成极轻层次 */
     --card: 0 0% 100%;
-    --card-foreground: 150 9% 13%;
+    --card-foreground: 220 14% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 150 9% 13%;
+    --popover-foreground: 220 14% 11%;
 
-    /* 主色：活力珊瑚橙（清新有能量，告别老式天蓝） */
-    --primary: 15 90% 55%;
+    /* 主色：珊瑚橙，收一点饱和，平面使用（不再渐变） */
+    --primary: 14 82% 55%;
     --primary-foreground: 0 0% 100%;
 
-    /* 次要：暖米色 */
-    --secondary: 38 32% 94%;
-    --secondary-foreground: 24 40% 26%;
-    --muted: 40 26% 94%;
-    --muted-foreground: 32 10% 44%;
+    /* 次要：极浅中性灰 */
+    --secondary: 40 12% 95%;
+    --secondary-foreground: 220 12% 24%;
+    --muted: 40 12% 95%;
+    --muted-foreground: 220 8% 46%;
 
-    /* accent：杏色底，用于 hover 与高亮 */
-    --accent: 36 85% 93%;
-    --accent-foreground: 15 78% 42%;
+    /* accent：极浅珊瑚，用于 hover 与高亮 */
+    --accent: 20 60% 96%;
+    --accent-foreground: 14 78% 44%;
 
-    /* 危险：清爽红 */
-    --destructive: 358 72% 52%;
+    /* 危险 */
+    --destructive: 358 68% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    /* 分隔线：暖灰 */
-    --border: 38 20% 87%;
-    --input: 38 20% 84%;
-    --ring: 15 90% 55%;
+    /* 语义色：成功 / 警告 / 信息（补齐 badge 变体用） */
+    --success: 158 64% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 34 92% 48%;
+    --warning-foreground: 0 0% 100%;
+    --info: 214 70% 52%;
+    --info-foreground: 0 0% 100%;
 
-    /* 圆角：0.75rem，温和不生硬 */
+    /* 分隔线：中性浅灰 */
+    --border: 40 10% 90%;
+    --input: 40 10% 87%;
+    --ring: 14 82% 55%;
+
+    /* 圆角 */
     --radius: 0.75rem;
 
-    /* ---- 频道色彩系统：每个频道一枚专属颜色 ---- */
-    --ch-general: 199 95% 46%;   /* 综合讨论 · 天蓝 */
-    --ch-tech: 243 80% 60%;      /* 技术前沿 · 靛蓝 */
-    --ch-design: 340 82% 57%;    /* 设计美学 · 玫红 */
-    --ch-gaming: 38 92% 50%;     /* 游戏天地 · 琥珀 */
-    --ch-life: 160 72% 38%;      /* 生活方式 · 翠绿 */
+    /* ---- 频道色：同色系低饱和序列，可区分但不喧宾夺主 ---- */
+    --ch-general: 215 42% 52%;   /* 综合讨论 · 石青 */
+    --ch-tech: 244 38% 58%;      /* 技术前沿 · 雾靛 */
+    --ch-design: 330 40% 56%;    /* 设计美学 · 陶粉 */
+    --ch-gaming: 28 52% 52%;     /* 游戏天地 · 赭黄 */
+    --ch-life: 158 34% 42%;      /* 生活方式 · 苔绿 */
+  }
+
+  .dark {
+    /* 底色：深板岩，带极轻冷调，不是纯黑（纯黑对比过硬） */
+    --background: 220 16% 9%;
+    --foreground: 40 12% 92%;
+    /* 卡片：比底色略亮一档，靠明度而非边框拉层次 */
+    --card: 220 14% 12%;
+    --card-foreground: 40 12% 92%;
+    --popover: 220 14% 12%;
+    --popover-foreground: 40 12% 92%;
+
+    /* 主色：暗色下略提亮提饱和，保持珊瑚识别度 */
+    --primary: 14 84% 60%;
+    --primary-foreground: 220 20% 8%;
+
+    --secondary: 220 12% 17%;
+    --secondary-foreground: 40 10% 82%;
+    --muted: 220 12% 16%;
+    --muted-foreground: 220 8% 60%;
+
+    --accent: 16 40% 18%;
+    --accent-foreground: 20 80% 72%;
+
+    --destructive: 358 62% 54%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 158 52% 46%;
+    --success-foreground: 220 20% 8%;
+    --warning: 34 80% 56%;
+    --warning-foreground: 220 20% 8%;
+    --info: 214 66% 60%;
+    --info-foreground: 220 20% 8%;
+
+    --border: 220 10% 20%;
+    --input: 220 10% 22%;
+    --ring: 14 84% 60%;
+
+    /* 频道色：暗色下同序列略提亮 */
+    --ch-general: 215 48% 64%;
+    --ch-tech: 244 44% 70%;
+    --ch-design: 330 46% 68%;
+    --ch-gaming: 28 58% 62%;
+    --ch-life: 158 40% 56%;
   }
 }
 
@@ -66,16 +119,10 @@
     @apply bg-background text-foreground;
     font-feature-settings: 'kern' 1, 'liga' 1, 'cv11' 1;
     -webkit-font-smoothing: antialiased;
-    /* 暖纸氛围：两团极淡的暖光，模拟阳光落在纸面上 */
-    background-image:
-      radial-gradient(60rem 34rem at 12% -8%, hsl(40 85% 92% / 0.65), transparent 60%),
-      radial-gradient(48rem 30rem at 96% -6%, hsl(15 90% 90% / 0.5), transparent 60%),
-      radial-gradient(36rem 26rem at 88% 108%, hsl(160 40% 90% / 0.5), transparent 62%);
-    background-attachment: fixed;
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.18);
+    background: hsl(var(--primary) / 0.16);
     color: hsl(var(--foreground));
   }
 }
@@ -93,7 +140,7 @@
     background: transparent;
   }
 
-  /* 卡片顶部频道色条：发帖卡片左侧的彩色小标记 */
+  /* 卡片左侧频道色条：读物页边的一道细标记 */
   .channel-stripe {
     position: relative;
   }
@@ -106,14 +153,11 @@
     width: 3px;
     border-radius: 9999px;
     background: hsl(var(--stripe-color, var(--ch-general)));
-    opacity: 0.9;
+    opacity: 0.85;
   }
 
   /* ------------------------------------------------------------
      读书地狱棋盘：手机竖屏 4×8 环 / md 及以上 7×5 环。
-     grid-column 无法用 Tailwind 断点表达（值来自 JS 计算的内联变量），
-     故由组件内联两套坐标变量，这里按断点切换消费哪一套，
-     避免 useMediaQuery 带来的 SSR 水合闪烁。
      ------------------------------------------------------------ */
   .board-ring {
     display: grid;
@@ -146,9 +190,6 @@
     }
   }
 
-  /* xl 起棋盘与右栏并排：右栏高度被钉为 calc(100dvh-6rem)，
-     棋盘若只按内容高度排版会比右栏短，卡片下沿对不齐。
-     这里让棋盘整体撑满同一高度，行高按比例分摊（格子随之略微拉长）。 */
   @media (min-width: 1280px) {
     .board-ring {
       height: 100%;
@@ -159,7 +200,7 @@
 
 /* ============================================================
    Prism 代码高亮主题（配合 rehype-prism-plus 使用）
-   暖纸风格配色，与主题统一
+   跟随主题变量，亮暗自适应
    ============================================================ */
 pre[class*="language-"],
 code[class*="language-"] {
@@ -182,7 +223,6 @@ pre[class*="language-"] {
   background: hsl(var(--muted));
 }
 
-/* Token 样式 */
 .token.comment,
 .token.prolog,
 .token.doctype,
@@ -201,7 +241,7 @@ pre[class*="language-"] {
 .token.number,
 .token.constant,
 .token.symbol {
-  color: hsl(16 90% 45%);
+  color: hsl(var(--ch-gaming));
 }
 
 .token.selector,
@@ -209,7 +249,7 @@ pre[class*="language-"] {
 .token.string,
 .token.char,
 .token.builtin {
-  color: hsl(158 55% 33%);
+  color: hsl(var(--ch-life));
 }
 
 .token.operator,
@@ -217,23 +257,23 @@ pre[class*="language-"] {
 .token.url,
 .language-css .token.string,
 .style .token.string {
-  color: hsl(243 70% 55%);
+  color: hsl(var(--ch-tech));
 }
 
 .token.atrule,
 .token.attr-value,
 .token.keyword {
-  color: hsl(243 80% 60%);
+  color: hsl(var(--ch-tech));
 }
 
 .token.function,
 .token.class-name {
-  color: hsl(15 90% 50%);
+  color: hsl(var(--primary));
   font-weight: 600;
 }
 
 .token.regex,
 .token.important,
 .token.variable {
-  color: hsl(38 92% 42%);
+  color: hsl(var(--ch-gaming));
 }

@@ -68,11 +68,14 @@ func (s *IdeaFeedService) ListFeed(ctx context.Context, currentUserID, sortParam
 	blocked := blockedIDList(ctx, currentUserID)
 
 	// 只取可进流的想法：公开、活跃、锚点已附着，且来源帖子已发布。
+	// 整篇想法（scope=whole）承接的是帖子底部评论，没有具体段落摘录，点击也无法
+	// 定位到某一段，因此不进流——流里要的是「别人读到某一段时说了什么」。
 	base := dal.DB.WithContext(ctx).Model(&model.Annotation{}).
 		Joins("JOIN posts ON posts.id = annotations.post_id").
 		Where("annotations.status = ?", model.AnnotationStatusActive).
 		Where("annotations.visibility = ?", model.AnnotationVisibilityPublic).
 		Where("annotations.anchor_status = ?", model.AnnotationAnchorAttached).
+		Where("annotations.scope <> ?", model.AnnotationScopeWhole).
 		Where("posts.status = ?", "published")
 	if len(blocked) > 0 {
 		base = base.Where("annotations.user_id NOT IN ?", blocked)
@@ -227,6 +230,168 @@ func (s *IdeaFeedService) GetIdea(ctx context.Context, currentUserID, ideaID str
 	}, nil
 }
 
+// chainSiblingCap 同段落其他声音的上限，避免热门段落把链视图撑爆。
+const chainSiblingCap = 20
+
+// GetChain 返回一条想法的纵向链视图。
+//
+// 一次只呈现一条路径：上方是它回应的想法（parent，引用边），中间是它自己，
+// 下方是由它引出的想法（children，引用边）与同段落的其他公开想法（siblings，
+// 共位边）。链只连公开、活跃、锚点已附着的想法——一条无法确认讨论对象的想法
+// 不该出现在任何人的链上。整篇想法（whole）不参与链：它承接的是帖子底部评论，
+// 没有段落语境，硬连进链只会制造噪音。
+func (s *IdeaFeedService) GetChain(ctx context.Context, currentUserID, ideaID string) (*types.IdeaChain, error) {
+	current, err := s.loadChainAnnotation(ctx, ideaID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Scope == model.AnnotationScopeWhole {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	postMap := loadIdeaCardPosts(ctx, []string{current.PostID})
+	p, ok := postMap[current.PostID]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	blocked := blockedIDList(ctx, currentUserID)
+
+	chain := &types.IdeaChain{
+		Post:      p,
+		Current:   chainNode(current),
+		Children:  []types.IdeaChainNode{},
+		Siblings:  []types.IdeaChainNode{},
+		Neighbors: []types.IdeaChainNode{},
+	}
+
+	// 上游：它回应的那条想法
+	if current.ParentAnnotationID != nil && *current.ParentAnnotationID != "" {
+		if parent, err := s.loadChainAnnotation(ctx, *current.ParentAnnotationID); err == nil {
+			if !containsID(blocked, parent.UserID) {
+				node := chainNode(parent)
+				chain.Parent = &node
+			}
+		}
+	}
+
+	// 下游：由它引出的想法（引用边）
+	children := s.loadChainChildren(ctx, ideaID, blocked)
+	chain.Children = children
+
+	// 同段落的其他声音（共位边），排除自己与已作为 children 出现的
+	seen := map[string]bool{current.ID: true}
+	if chain.Parent != nil {
+		seen[chain.Parent.ID] = true
+	}
+	for i := range children {
+		seen[children[i].ID] = true
+	}
+	chain.Siblings = s.loadChainSiblings(ctx, current, seen, blocked)
+	for i := range chain.Siblings {
+		seen[chain.Siblings[i].ID] = true
+	}
+
+	// 近邻边（语义相近），排除已在链上出现过的，避免重复展示同一条想法。
+	// 未启用向量化或 pgvector 不可用时返回空，链视图照常工作。
+	neighbors, _ := s.FindNeighbors(ctx, currentUserID, ideaID, 8)
+	for i := range neighbors {
+		if seen[neighbors[i].ID] {
+			continue
+		}
+		chain.Neighbors = append(chain.Neighbors, neighbors[i])
+	}
+
+	return chain, nil
+}
+
+// loadChainAnnotation 加载一条可进链的想法（公开、活跃、锚点已附着）。
+func (s *IdeaFeedService) loadChainAnnotation(ctx context.Context, id string) (*model.Annotation, error) {
+	var a model.Annotation
+	if err := dal.DB.WithContext(ctx).
+		Preload("User").
+		Where("id = ?", id).
+		Where("status = ?", model.AnnotationStatusActive).
+		Where("visibility = ?", model.AnnotationVisibilityPublic).
+		Where("anchor_status = ?", model.AnnotationAnchorAttached).
+		First(&a).Error; err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// loadChainChildren 加载引用了 parentID 的想法（引用边下游）。
+func (s *IdeaFeedService) loadChainChildren(ctx context.Context, parentID string, blocked []string) []types.IdeaChainNode {
+	q := dal.DB.WithContext(ctx).
+		Preload("User").
+		Where("parent_annotation_id = ?", parentID).
+		Where("status = ?", model.AnnotationStatusActive).
+		Where("visibility = ?", model.AnnotationVisibilityPublic).
+		Where("anchor_status = ?", model.AnnotationAnchorAttached)
+	if len(blocked) > 0 {
+		q = q.Where("user_id NOT IN ?", blocked)
+	}
+	var rows []model.Annotation
+	q.Order("reply_count DESC, like_count DESC, created_at ASC").Limit(chainSiblingCap).Find(&rows)
+	out := make([]types.IdeaChainNode, 0, len(rows))
+	for i := range rows {
+		out = append(out, chainNode(&rows[i]))
+	}
+	return out
+}
+
+// loadChainSiblings 加载同段落（同帖同锚点）的其他公开想法（共位边）。
+func (s *IdeaFeedService) loadChainSiblings(ctx context.Context, current *model.Annotation, seen map[string]bool, blocked []string) []types.IdeaChainNode {
+	q := dal.DB.WithContext(ctx).
+		Preload("User").
+		Where("post_id = ? AND anchor = ?", current.PostID, current.Anchor).
+		Where("status = ?", model.AnnotationStatusActive).
+		Where("visibility = ?", model.AnnotationVisibilityPublic).
+		Where("anchor_status = ?", model.AnnotationAnchorAttached)
+	if len(blocked) > 0 {
+		q = q.Where("user_id NOT IN ?", blocked)
+	}
+	var rows []model.Annotation
+	q.Order("reply_count DESC, like_count DESC, created_at DESC").Limit(chainSiblingCap * 2).Find(&rows)
+	out := make([]types.IdeaChainNode, 0)
+	for i := range rows {
+		if seen[rows[i].ID] {
+			continue
+		}
+		out = append(out, chainNode(&rows[i]))
+		if len(out) >= chainSiblingCap {
+			break
+		}
+	}
+	return out
+}
+
+// chainNode 把想法 model 转为链节点 DTO。
+func chainNode(a *model.Annotation) types.IdeaChainNode {
+	author := mapper.AuthorToDTO(&a.User)
+	return types.IdeaChainNode{
+		ID:         a.ID,
+		Excerpt:    a.SelectedText,
+		Anchor:     a.Anchor,
+		Body:       a.Body,
+		Author:     &author,
+		Scope:      a.Scope,
+		ReplyCount: a.ReplyCount,
+		LikeCount:  a.LikeCount,
+		CreatedAt:  a.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+// containsID 判断 id 是否在切片中。
+func containsID(ids []string, id string) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
+}
+
 // loadIdeaCardPosts 批量加载来源帖子信息，避免逐条查询。
 func loadIdeaCardPosts(ctx context.Context, postIDs []string) map[string]types.IdeaCardPost {
 	out := make(map[string]types.IdeaCardPost, len(postIDs))
@@ -265,11 +430,14 @@ func (s *IdeaFeedService) buildExcerptCards(ctx context.Context, need, offset in
 		return nil
 	}
 
-	// 已有公开想法的帖子集合，这些帖子不需要摘录卡替补。
+	// 已有段落级公开想法的帖子集合，这些帖子不需要摘录卡替补。
+	// 只统计能进流的想法（排除整篇想法）：一篇帖子若只有整篇想法，它在流里
+	// 仍无人声，应当继续用摘录卡替补，否则会既进不了流也拿不到摘录卡而消失。
 	var coveredIDs []string
 	dal.DB.WithContext(ctx).Model(&model.Annotation{}).
 		Distinct("post_id").
-		Where("status = ? AND visibility = ?", model.AnnotationStatusActive, model.AnnotationVisibilityPublic).
+		Where("status = ? AND visibility = ? AND scope <> ?",
+			model.AnnotationStatusActive, model.AnnotationVisibilityPublic, model.AnnotationScopeWhole).
 		Pluck("post_id", &coveredIDs)
 
 	query := dal.DB.WithContext(ctx).Model(&model.Post{}).

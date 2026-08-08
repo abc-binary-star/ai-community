@@ -22,14 +22,14 @@ import { api } from '@/lib/api'
 import type { PublicUser } from 'shared'
 import { NotificationBell } from './notification-bell'
 import { SearchBar } from './search-bar'
+import { ThemeToggle } from './theme-toggle'
 
-// 品牌标识：珊瑚渐变圆角方块 + 快乐体字标 + 一枚暖色小圆点
+// 品牌标识：平面珊瑚方块 + 快乐体字标（去渐变去重投影，克制现代）
 function BrandLogo() {
   return (
     <Link href="/community/discover" className="group flex items-center gap-2.5" aria-label="Commons 首页">
-      <span className="relative flex size-9 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-primary to-rose-500 shadow-[0_3px_10px_rgba(230,90,40,0.35)] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
-        <span className="font-display text-xl leading-none text-white drop-shadow-sm">C</span>
-        <span className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-background bg-emerald-400" />
+      <span className="relative flex size-9 items-center justify-center rounded-xl bg-primary transition-colors duration-200 group-hover:bg-primary/90">
+        <span className="font-display text-xl leading-none text-primary-foreground">C</span>
       </span>
       <span className="font-display text-2xl leading-none tracking-wide text-foreground">
         Commons
@@ -134,6 +134,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <Bookmark />
                 </Link>
               </Button>
+              <ThemeToggle />
               <MessageEntry />
               <NotificationBell />
               <DropdownMenu>
@@ -238,6 +239,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
             </>
           ) : (
             <>
+              <ThemeToggle />
               <Button asChild variant="ghost" size="sm" className="hidden rounded-full sm:inline-flex">
                 <Link href="/login">登录</Link>
               </Button>

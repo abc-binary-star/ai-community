@@ -13,6 +13,7 @@ import { cn, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
 import { useIdeaQuery } from '@/lib/use-idea-feed'
 import { getChannelLabel } from 'shared'
+import { IdeaChainView } from './idea-chain'
 
 /**
  * 想法详情页：给单条想法一个可分享的独立地址。
@@ -49,6 +50,11 @@ export function IdeaDetailView({ id }: { id: string }) {
   const color = channelColor(idea.post.channel)
   const channelLabel = getChannelLabel(channels, idea.post.channel)
   const readTarget = `/community/post/${idea.post.id}?anchor=${encodeURIComponent(idea.anchor)}`
+  // 回应这条想法：跳回原文对应段落，预填一条指向本想法的引用边草稿
+  const replyTarget =
+    `/community/post/${idea.post.id}?anchor=${encodeURIComponent(idea.anchor)}` +
+    `&replyToIdea=${encodeURIComponent(idea.id)}` +
+    `&replyToPreview=${encodeURIComponent((idea.body || '').slice(0, 60))}`
 
   const copyLink = async () => {
     try {
@@ -139,9 +145,20 @@ export function IdeaDetailView({ id }: { id: string }) {
           </Link>
           <span className="text-sm text-muted-foreground">by {idea.post.author.username}</span>
         </div>
-        <Button asChild className="mt-4 w-full rounded-full sm:w-auto">
-          <Link href={readTarget}>读原文这一段</Link>
-        </Button>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <Button asChild className="w-full rounded-full sm:w-auto">
+            <Link href={readTarget}>读原文这一段</Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full rounded-full sm:w-auto">
+            <Link href={replyTarget}>回应这条想法</Link>
+          </Button>
+        </div>
+      </Card>
+
+      {/* 想法链：一次只呈现一条纵向路径，向上是它回应了谁，向下是它引出了什么 */}
+      <Card className="p-5">
+        <p className="mb-3 text-xs text-muted-foreground">想法链</p>
+        <IdeaChainView id={id} />
       </Card>
     </div>
   )

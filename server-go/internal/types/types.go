@@ -477,17 +477,23 @@ type UpdateHighlightReq struct {
 // --- 批注（段落想法） ---
 
 // CreateAnnotationReq 创建段落想法
+//
+// SelectedText 对 selection/paragraph 是引用原文，必填；对 whole（整篇想法）
+// 没有具体引用段落，允许为空，服务端会用帖子标题回填，保证卡片仍有来源可展示。
 type CreateAnnotationReq struct {
-	Scope             string `json:"scope" vd:"in($, 'selection', 'paragraph')"`
+	Scope             string `json:"scope" vd:"in($, 'selection', 'paragraph', 'whole')"`
 	Anchor            string `json:"anchor" vd:"len($)>=1 && len($)<=200"`
 	StartOffset       int    `json:"startOffset" vd:"$>=0"`
 	EndOffset         int    `json:"endOffset" vd:"$>=0"`
-	SelectedText      string `json:"selectedText" vd:"len($)>=1 && len($)<=2000"`
+	SelectedText      string `json:"selectedText" vd:"len($)<=2000"`
 	Prefix            string `json:"prefix" vd:"len($)<=200"`
 	Suffix            string `json:"suffix" vd:"len($)<=200"`
 	ParagraphSnapshot string `json:"paragraphSnapshot" vd:"len($)<=2000"`
 	Body              string `json:"body" vd:"len($)>=1 && len($)<=3000"` // 1000 中文字符
 	Visibility        string `json:"visibility" vd:"in($, 'public', 'private')"`
+	// ParentAnnotationID 引用边：本条想法回应的另一条想法（可选）。填写后想法链
+	// 会把它挂在被引用想法之下，形成纵向路径。
+	ParentAnnotationID *string `json:"parentAnnotationId"`
 }
 
 // UpdateAnnotationReq 编辑想法正文或可见范围
@@ -504,30 +510,31 @@ type CreateAnnotationReplyReq struct {
 
 // Annotation 段落想法 DTO
 type Annotation struct {
-	ID                string            `json:"id"`
-	PostID            string            `json:"postId"`
-	AuthorID          string            `json:"authorId"`
-	Author            PublicUser        `json:"author"`
-	Scope             string            `json:"scope"`
-	Anchor            string            `json:"anchor"`
-	StartOffset       int               `json:"startOffset"`
-	EndOffset         int               `json:"endOffset"`
-	SelectedText      string            `json:"selectedText"`
-	Prefix            string            `json:"prefix"`
-	Suffix            string            `json:"suffix"`
-	ParagraphSnapshot string            `json:"paragraphSnapshot"`
-	Body              string            `json:"body"`
-	Visibility        string            `json:"visibility"`
-	AnchorStatus      string            `json:"anchorStatus"`
-	Status            string            `json:"status"`
-	Edited            bool              `json:"edited"`
-	ReplyCount        int               `json:"replyCount"`
-	LikeCount         int               `json:"likeCount"`
-	Liked             bool              `json:"liked"`
-	Folded            bool              `json:"folded"`
-	Replies           []AnnotationReply `json:"replies"`
-	CreatedAt         string            `json:"createdAt"`
-	UpdatedAt         string            `json:"updatedAt"`
+	ID                 string            `json:"id"`
+	PostID             string            `json:"postId"`
+	AuthorID           string            `json:"authorId"`
+	Author             PublicUser        `json:"author"`
+	ParentAnnotationID *string           `json:"parentAnnotationId,omitempty"`
+	Scope              string            `json:"scope"`
+	Anchor             string            `json:"anchor"`
+	StartOffset        int               `json:"startOffset"`
+	EndOffset          int               `json:"endOffset"`
+	SelectedText       string            `json:"selectedText"`
+	Prefix             string            `json:"prefix"`
+	Suffix             string            `json:"suffix"`
+	ParagraphSnapshot  string            `json:"paragraphSnapshot"`
+	Body               string            `json:"body"`
+	Visibility         string            `json:"visibility"`
+	AnchorStatus       string            `json:"anchorStatus"`
+	Status             string            `json:"status"`
+	Edited             bool              `json:"edited"`
+	ReplyCount         int               `json:"replyCount"`
+	LikeCount          int               `json:"likeCount"`
+	Liked              bool              `json:"liked"`
+	Folded             bool              `json:"folded"`
+	Replies            []AnnotationReply `json:"replies"`
+	CreatedAt          string            `json:"createdAt"`
+	UpdatedAt          string            `json:"updatedAt"`
 }
 
 // AnnotationReply 想法回复 DTO
@@ -599,6 +606,37 @@ type IdeaFeed struct {
 	TotalPages  int        `json:"totalPages"`
 	IdeaCount   int        `json:"ideaCount"`   // 本页想法卡数量
 	FilledCount int        `json:"filledCount"` // 本页摘录卡数量，用于观察人声替换进度
+}
+
+// --- 想法链（纵向链视图）---
+
+// IdeaChainNode 想法链上的一个节点。
+// 比 IdeaCard 更轻：链视图一次只呈现一条纵向路径，节点只需要展示想法本身与
+// 少量互动信号，不重复携带来源帖子（来源由链视图顶部统一展示）。
+type IdeaChainNode struct {
+	ID         string      `json:"id"`
+	Excerpt    string      `json:"excerpt"`
+	Anchor     string      `json:"anchor"`
+	Body       string      `json:"body"`
+	Author     *PublicUser `json:"author,omitempty"`
+	Scope      string      `json:"scope"`
+	ReplyCount int         `json:"replyCount"`
+	LikeCount  int         `json:"likeCount"`
+	CreatedAt  string      `json:"createdAt"`
+}
+
+// IdeaChain 想法链视图响应。
+//
+// 呈现形态是链而不是网：一次只看一条纵向路径——上方是它回应的想法（parent），
+// 中间是它自己（current），下方是由它引出的想法（children）以及同段落的其他
+// 声音（siblings）。一次只呈现一条路径，用户可以沿任意一条继续走下去。
+type IdeaChain struct {
+	Post      IdeaCardPost    `json:"post"`
+	Parent    *IdeaChainNode  `json:"parent,omitempty"`
+	Current   IdeaChainNode   `json:"current"`
+	Children  []IdeaChainNode `json:"children"`  // 由 current 引出的想法（引用边）
+	Siblings  []IdeaChainNode `json:"siblings"`  // 同段落的其他公开想法（共位边）
+	Neighbors []IdeaChainNode `json:"neighbors"` // 语义相近的想法（近邻边，向量检索；未启用时为空）
 }
 
 // --- 官方公告 ---

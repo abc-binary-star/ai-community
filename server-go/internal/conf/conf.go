@@ -19,6 +19,11 @@ type Config struct {
 	DeepSeekModel string
 	VolcASRKey    string
 	VolcASRResID  string
+	// 向量化配置（想法语义邻居，可选；未配置 EmbeddingKey 时功能关闭）
+	EmbeddingKey   string
+	EmbeddingURL   string
+	EmbeddingModel string
+	EmbeddingDim   int
 	// AI 限流配置
 	AIConcurrentLimit       int
 	AIDailyTokenLimit       int
@@ -76,6 +81,10 @@ func Load() *Config {
 		DeepSeekModel:           getEnvOrDefault("DEEPSEEK_MODEL", "deepseek-chat"),
 		VolcASRKey:              os.Getenv("VOLC_ASR_API_KEY"),
 		VolcASRResID:            getEnvOrDefault("VOLC_ASR_RESOURCE_ID", "volc.bigasr.sauc.duration"),
+		EmbeddingKey:            os.Getenv("EMBEDDING_API_KEY"),
+		EmbeddingURL:            getEnvOrDefault("EMBEDDING_BASE_URL", "https://api.openai.com"),
+		EmbeddingModel:          getEnvOrDefault("EMBEDDING_MODEL", "text-embedding-3-small"),
+		EmbeddingDim:            getEnvIntOrDefault("EMBEDDING_DIM", 1536),
 		AIConcurrentLimit:       getEnvIntOrDefault("AI_CONCURRENT_LIMIT", 5),
 		AIDailyTokenLimit:       getEnvIntOrDefault("AI_DAILY_TOKEN_LIMIT", 2000000),
 		AIFreeDailyTokenLimit:   getEnvIntOrDefault("AI_FREE_DAILY_TOKEN_LIMIT", 100000),

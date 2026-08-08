@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ChevronDown, ChevronUp, Eye, Loader2, Notebook, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, Eye, Notebook, Pencil, Pin, Sparkles, Star, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,17 +20,14 @@ import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { HighlightableContent } from './highlightable-content'
 import { NotesPanel } from './notes-panel'
 import { fontFamily } from '@/lib/font-options'
-import { getChannelLabel, type Comment, type Paginated, type Post, type ThreadSummary } from 'shared'
-import { CommentTree } from './comment-tree'
-import { CommentForm } from './comment-form'
+import { getChannelLabel, type Post, type ThreadSummary } from 'shared'
+import { WholeDiscussion } from './whole-discussion'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { ShareButton } from './share-button'
 import { TagBadge } from './tag-badge'
 import { ReportButton } from './report-button'
 import { toast } from 'sonner'
-
-const COMMENT_PAGE_SIZE = 10
 
 export function PostDetailView({ id }: { id: string }) {
   const router = useRouter()
@@ -39,8 +36,6 @@ export function PostDetailView({ id }: { id: string }) {
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
   const hydrated = useHydrated()
-  const [replyTo, setReplyTo] = useState<Comment | null>(null)
-  const [commentPage, setCommentPage] = useState(1)
   // 带 ?anchor= 从想法流跳转进来时必须展开全文：折叠态渲染的是截断正文，
   // 段落锚点不存在，落点会停在折叠页上，等于跳转失败。
   const [contentExpanded, setContentExpanded] = useState(() => !!searchParams.get('anchor'))
@@ -51,13 +46,6 @@ export function PostDetailView({ id }: { id: string }) {
   const postQuery = useQuery({
     queryKey: ['post', id],
     queryFn: () => api.get<Post>(`/posts/${id}`),
-  })
-  const commentsQuery = useQuery({
-    queryKey: ['comments', id, commentPage],
-    queryFn: () =>
-      api.get<Paginated<Comment>>(
-        `/posts/${id}/comments?page=${commentPage}&pageSize=${COMMENT_PAGE_SIZE}`
-      ),
   })
 
   // AI 讨论摘要 v2（按需生成：用户点击按钮才触发，不自动请求）
@@ -103,11 +91,6 @@ export function PostDetailView({ id }: { id: string }) {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : '删除失败')
     }
-  }
-
-  const refreshComments = () => {
-    queryClient.invalidateQueries({ queryKey: ['comments', id] })
-    queryClient.invalidateQueries({ queryKey: ['post', id] })
   }
 
   const refreshPostLists = () => {
@@ -206,17 +189,6 @@ export function PostDetailView({ id }: { id: string }) {
       toast.error(e instanceof ApiError ? e.message : '操作失败')
     }
   }
-
-  // 合并已加载的所有评论页
-  const allComments: Comment[] = []
-  for (let p = 1; p <= commentPage; p++) {
-    const pageData = queryClient.getQueryData<Paginated<Comment>>(['comments', id, p])
-    if (pageData) {
-      allComments.push(...pageData.items)
-    }
-  }
-  const commentsData = commentsQuery.data
-  const hasMoreComments = commentsData ? commentPage < commentsData.totalPages : false
 
   // 长文折叠：超过 2000 字默认折叠（对齐 v2 规格）
   const isLongContent = post.content.length > 2000
@@ -321,7 +293,7 @@ export function PostDetailView({ id }: { id: string }) {
                   基于 {summaryQuery.data.commentCount} 条评论
                 </span>
                 {summaryQuery.data.stale && (
-                  <span className="text-xs font-normal text-amber-600">
+                  <span className="text-xs font-normal text-warning">
                     · 摘要可能不完整
                   </span>
                 )}
@@ -452,68 +424,7 @@ export function PostDetailView({ id }: { id: string }) {
         </div>
       </Card>
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">评论 {post.commentCount > 0 ? `· ${post.commentCount}` : ''}</h2>
-
-        {hydrated && token ? (
-          <CommentForm
-            postId={id}
-            replyTo={replyTo}
-            onDone={() => {
-              setReplyTo(null)
-              refreshComments()
-            }}
-            onCancelReply={() => setReplyTo(null)}
-          />
-        ) : (
-          <Card className="border-dashed">
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              <Link href="/login" className="font-medium text-primary hover:underline">
-                登录
-              </Link>
-              后即可参与评论与点赞
-            </div>
-          </Card>
-        )}
-
-        {commentsQuery.isLoading && commentPage === 1 ? (
-          <div className="space-y-3">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        ) : commentsQuery.isError ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">评论加载失败，请稍后重试</p>
-        ) : allComments.length > 0 ? (
-          <>
-            <CommentTree
-              comments={allComments}
-              currentUserId={user?.id}
-              onReply={setReplyTo}
-              onDeleted={refreshComments}
-            />
-            {hasMoreComments && (
-              <div className="flex justify-center pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCommentPage((p) => p + 1)}
-                  disabled={commentsQuery.isFetching}
-                >
-                  {commentsQuery.isFetching ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <ChevronDown className="size-4" />
-                  )}
-                  加载更多评论
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="py-6 text-center text-sm text-muted-foreground">还没有评论，来说点什么吧</p>
-        )}
-      </div>
+      <WholeDiscussion postId={id} />
 
       {notesOpen && (
         <NotesPanel

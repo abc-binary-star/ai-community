@@ -17,40 +17,25 @@ import { PostCard } from '../components/post-card'
 import { SortTabs } from '../components/sort-tabs'
 import { TagBadge } from '../components/tag-badge'
 
-// 发现页 hero：欢迎语 + 快捷发帖 + 彩色频道装饰
+// 发现页 hero：编辑式版面。去渐变去装饰圆点，靠字号层级与留白建立气场。
 function DiscoverHero() {
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-orange-500 to-amber-400 p-6 text-white shadow-[0_12px_32px_-8px_rgba(230,90,40,0.4)] sm:p-8">
-      {/* 漂浮的彩色圆点装饰 */}
-      <div className="pointer-events-none absolute -right-6 -top-8 size-32 rounded-full bg-white/15 blur-xl" aria-hidden />
-      <div className="pointer-events-none absolute right-24 top-4 size-3 rounded-full bg-emerald-300/80" aria-hidden />
-      <div className="pointer-events-none absolute right-40 bottom-6 size-2.5 rounded-full bg-amber-200/90" aria-hidden />
-      <div className="pointer-events-none absolute right-10 bottom-16 size-4 rounded-full bg-rose-200/70" aria-hidden />
-
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2.5">
-          <p className="flex items-center gap-2 text-sm font-medium text-white/85">
-            <Sparkles className="size-4" />
-            欢迎来到 Commons
-          </p>
-          <h1 className="font-display text-3xl leading-tight tracking-wide sm:text-4xl">
-            发现新鲜有趣的想法
-          </h1>
-          <p className="max-w-md text-sm leading-relaxed text-white/85">
-            在技术、设计、游戏与生活方式里，找到同好，聊聊热爱。每一条分享都是一枚彩色贴纸。
-          </p>
-        </div>
-        <Button
-          asChild
-          size="lg"
-          className="shrink-0 self-start rounded-full border border-white/40 bg-white/95 text-primary shadow-lg transition-transform hover:scale-105 sm:self-center"
-        >
-          <Link href="/community/post/new">
-            <PenLine />
-            分享一个想法
-          </Link>
-        </Button>
+    <section className="flex flex-col gap-5 border-b border-border pb-8 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Commons</p>
+        <h1 className="max-w-xl font-display text-4xl leading-[1.1] tracking-tight text-foreground sm:text-5xl">
+          发现新鲜有趣的想法
+        </h1>
+        <p className="max-w-md text-[15px] leading-relaxed text-muted-foreground">
+          在技术、设计、游戏与生活方式里找到同好，读到某一段时，把想法留在页边。
+        </p>
       </div>
+      <Button asChild size="lg" className="shrink-0 self-start rounded-full sm:self-auto">
+        <Link href="/community/post/new">
+          <PenLine />
+          分享一个想法
+        </Link>
+      </Button>
     </section>
   )
 }
@@ -158,7 +143,7 @@ function DiscoverPageInner() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight">
-          <Sparkles className="size-5 text-primary" />
+          <TrendingUp className="size-5 text-primary" />
           社区新鲜事
           <span className="hidden text-sm font-normal text-muted-foreground sm:inline">
             · 热门内容与趋势
@@ -210,7 +195,7 @@ function DiscoverPageInner() {
         {/* 侧栏：趋势话题 + 推荐用户 */}
         <div className="space-y-5">
           <Card className="overflow-hidden">
-            <div className="border-b border-border/60 bg-gradient-to-r from-primary/5 to-amber-400/10 px-4 py-3">
+            <div className="border-b border-border/60 px-4 py-3">
               <h2 className="flex items-center gap-2 font-semibold">
                 <TrendingUp className="size-4 text-primary" />
                 趋势话题
@@ -232,7 +217,7 @@ function DiscoverPageInner() {
           </Card>
 
           <Card className="overflow-hidden">
-            <div className="border-b border-border/60 bg-gradient-to-r from-primary/5 to-amber-400/10 px-4 py-3">
+            <div className="border-b border-border/60 px-4 py-3">
               <h2 className="flex items-center gap-2 font-semibold">
                 <Users className="size-4 text-primary" />
                 推荐关注

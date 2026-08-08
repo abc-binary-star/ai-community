@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { api } from './api'
-import type { IdeaCard as IdeaCardData, IdeaFeed } from 'shared'
+import type { IdeaCard as IdeaCardData, IdeaChain, IdeaFeed } from 'shared'
 
 export type IdeaFeedSort = 'hot' | 'latest'
 
@@ -32,6 +32,18 @@ export function useIdeaQuery(id: string) {
   return useQuery({
     queryKey: ['idea', id],
     queryFn: () => api.get<IdeaCardData>(`/ideas/${id}`),
+    enabled: !!id,
+  })
+}
+
+/**
+ * 想法链：单条想法的纵向路径（上游回应、下游引出、同段落其他声音）。
+ * 供想法详情页的链视图使用。
+ */
+export function useIdeaChainQuery(id: string) {
+  return useQuery({
+    queryKey: ['idea-chain', id],
+    queryFn: () => api.get<IdeaChain>(`/ideas/${id}/chain`),
     enabled: !!id,
   })
 }

@@ -147,7 +147,22 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
     if (!block) return
 
     jumpedRef.current = true
-    setPanel({ anchor: target, quote: getBlockText(block).trim() })
+    const snapshot = getBlockText(block).trim()
+    setPanel({ anchor: target, quote: snapshot })
+    // 从想法链「回应这条想法」跳转进来时，带着被回应想法预填一条引用边草稿
+    const replyToIdea = searchParams.get('replyToIdea')
+    if (replyToIdea && isLoggedIn && annotationsEnabled) {
+      setDraft({
+        scope: 'paragraph',
+        anchor: target,
+        startOffset: 0,
+        endOffset: 0,
+        selectedText: snapshot,
+        paragraphSnapshot: snapshot,
+        parentAnnotationId: replyToIdea,
+        parentPreview: searchParams.get('replyToPreview') ?? undefined,
+      })
+    }
     block.classList.add('ring-2', 'ring-primary/40', 'rounded-md')
 
     // 正文滚动发生在最近的可滚动祖先（布局里的 main）里，不是 window；

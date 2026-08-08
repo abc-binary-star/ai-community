@@ -155,10 +155,10 @@ function ChannelItem({
       href={href}
       onClick={onNavigate}
       className={cn(
-        'group flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+        'group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150',
         active
-          ? cn('font-medium shadow-sm', color.soft, color.text)
-          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+          ? cn('font-medium', color.soft, color.text)
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       )}
     >
       {colorKey ? (

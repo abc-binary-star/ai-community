@@ -96,10 +96,48 @@ func (s *AnnotationService) CreateAnnotation(ctx context.Context, postID, userID
 	if body == "" {
 		return nil, ErrAnnotationInvalidInput
 	}
+	// selection/paragraph 必须带引用原文；whole（整篇想法）允许为空，稍后用标题回填
+	if req.Scope != model.AnnotationScopeWhole && strings.TrimSpace(req.SelectedText) == "" {
+		return nil, ErrAnnotationInvalidInput
+	}
 
 	post, err := loadPostForAnnotation(ctx, postID, userID)
 	if err != nil {
 		return nil, err
+	}
+
+	// 整篇想法承接原帖底部评论：锚点固定、偏移归零、引用文字回填为帖子标题，
+	// 保证一条整篇想法即便脱离任何段落也仍带着可展示的来源。
+	if req.Scope == model.AnnotationScopeWhole {
+		req.Anchor = model.AnnotationWholeAnchor
+		req.StartOffset = 0
+		req.EndOffset = 0
+		req.Prefix = ""
+		req.Suffix = ""
+		req.ParagraphSnapshot = ""
+		if strings.TrimSpace(req.SelectedText) == "" {
+			var titleRow model.Post
+			if err := dal.DB.WithContext(ctx).Select("title").First(&titleRow, "id = ?", postID).Error; err == nil {
+				req.SelectedText = titleRow.Title
+			}
+		}
+	}
+
+	// 校验引用边：父想法必须存在、同帖、公开且活跃，否则忽略这条边而非报错，
+	// 保证链坏掉时想法本身仍能正常发布。
+	if req.ParentAnnotationID != nil && *req.ParentAnnotationID != "" {
+		var parent model.Annotation
+		if err := dal.DB.WithContext(ctx).
+			Select("id", "post_id", "visibility", "status").
+			First(&parent, "id = ?", *req.ParentAnnotationID).Error; err != nil {
+			req.ParentAnnotationID = nil
+		} else if parent.PostID != postID ||
+			parent.Visibility != model.AnnotationVisibilityPublic ||
+			parent.Status != model.AnnotationStatusActive {
+			req.ParentAnnotationID = nil
+		}
+	} else {
+		req.ParentAnnotationID = nil
 	}
 
 	bd := bodyDigest(body)
@@ -120,22 +158,23 @@ func (s *AnnotationService) CreateAnnotation(ctx context.Context, postID, userID
 	}
 
 	created := &model.Annotation{
-		PostID:            postID,
-		UserID:            userID,
-		Scope:             req.Scope,
-		Anchor:            req.Anchor,
-		StartOffset:       req.StartOffset,
-		EndOffset:         req.EndOffset,
-		SelectedText:      req.SelectedText,
-		Prefix:            req.Prefix,
-		Suffix:            req.Suffix,
-		ParagraphSnapshot: req.ParagraphSnapshot,
-		ContentDigest:     postContentDigest(post),
-		Body:              body,
-		BodyDigest:        bd,
-		Visibility:        req.Visibility,
-		AnchorStatus:      model.AnnotationAnchorAttached,
-		Status:            model.AnnotationStatusActive,
+		PostID:             postID,
+		UserID:             userID,
+		ParentAnnotationID: req.ParentAnnotationID,
+		Scope:              req.Scope,
+		Anchor:             req.Anchor,
+		StartOffset:        req.StartOffset,
+		EndOffset:          req.EndOffset,
+		SelectedText:       req.SelectedText,
+		Prefix:             req.Prefix,
+		Suffix:             req.Suffix,
+		ParagraphSnapshot:  req.ParagraphSnapshot,
+		ContentDigest:      postContentDigest(post),
+		Body:               body,
+		BodyDigest:         bd,
+		Visibility:         req.Visibility,
+		AnchorStatus:       model.AnnotationAnchorAttached,
+		Status:             model.AnnotationStatusActive,
 	}
 	if err := dal.DB.WithContext(ctx).Create(created).Error; err != nil {
 		log.Printf("[Annotation/Create] 创建失败, postID=%s, userID=%s, err=%v", postID, userID, err)
@@ -147,6 +186,12 @@ func (s *AnnotationService) CreateAnnotation(ctx context.Context, postID, userID
 
 	// 想法正文中的 @提及通知
 	notification.CreateAnnotationMentionNotifications(ctx, body, userID, postID, created.ID)
+
+	// 异步生成语义向量（近邻边）。仅对能进流的公开、段落级想法做——整篇想法
+	// 没有段落语境不参与近邻。失败不影响创建，语义邻居是可选增量。
+	if created.Visibility == model.AnnotationVisibilityPublic && created.Scope != model.AnnotationScopeWhole {
+		GenerateAnnotationEmbeddingAsync(created.ID, created.PostID, created.SelectedText, created.Body)
+	}
 
 	dto := mapper.AnnotationToDTO(created, false, false, []types.AnnotationReply{})
 	return &dto, nil
@@ -629,6 +674,10 @@ func (s *AnnotationService) ReconcileAnchors(ctx context.Context, postID, newCon
 
 	for i := range anns {
 		a := &anns[i]
+		// 整篇想法不绑定具体段落，编辑正文不会让它失去讨论对象，始终保持附着。
+		if a.Scope == model.AnnotationScopeWhole {
+			continue
+		}
 		sel := anchor.Selector{Exact: a.SelectedText, Prefix: a.Prefix, Suffix: a.Suffix}
 		_, lvl := anchor.Locate(paras, sel, a.ParagraphSnapshot)
 		want := model.AnnotationAnchorAttached

@@ -12,7 +12,7 @@ import { useCreateAnnotation, type CreateAnnotationInput } from '@/lib/use-annot
 const BODY_LIMIT = 1000
 
 export interface AnnotationDraft {
-  scope: 'selection' | 'paragraph'
+  scope: 'selection' | 'paragraph' | 'whole'
   anchor: string
   startOffset: number
   endOffset: number
@@ -20,6 +20,10 @@ export interface AnnotationDraft {
   prefix?: string
   suffix?: string
   paragraphSnapshot?: string
+  /** 引用边：本条想法回应的另一条想法 */
+  parentAnnotationId?: string
+  /** 被回应想法的正文预览，仅用于编辑器提示，不提交 */
+  parentPreview?: string
 }
 
 interface Props {
@@ -35,8 +39,10 @@ export function AnnotationEditor({ postId, draft, onClose }: Props) {
   const [body, setBody] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'private'>('public')
 
-  const quote =
-    draft.scope === 'paragraph'
+  const isWhole = draft.scope === 'whole'
+  const quote = isWhole
+    ? ''
+    : draft.scope === 'paragraph'
       ? draft.paragraphSnapshot || draft.selectedText
       : draft.selectedText
 
@@ -55,6 +61,7 @@ export function AnnotationEditor({ postId, draft, onClose }: Props) {
       paragraphSnapshot: draft.paragraphSnapshot,
       body: body.trim(),
       visibility,
+      parentAnnotationId: draft.parentAnnotationId,
     }
     try {
       await create.mutateAsync(input)
@@ -67,6 +74,11 @@ export function AnnotationEditor({ postId, draft, onClose }: Props) {
 
   return (
     <div className="space-y-2 rounded-lg border border-border bg-card p-3">
+      {draft.parentAnnotationId && draft.parentPreview && (
+        <p className="line-clamp-2 rounded-md bg-primary/5 px-3 py-1.5 text-xs text-muted-foreground">
+          回应：{draft.parentPreview}
+        </p>
+      )}
       {quote && (
         <blockquote className="line-clamp-2 border-l-2 border-primary/40 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
           {quote}
@@ -76,7 +88,7 @@ export function AnnotationEditor({ postId, draft, onClose }: Props) {
         autoFocus
         value={body}
         onChange={(e) => setBody(e.target.value.slice(0, BODY_LIMIT))}
-        placeholder="写下你的想法…"
+        placeholder={isWhole ? '对整篇文章说点什么…' : '写下你的想法…'}
         className="min-h-[72px] resize-none text-sm"
       />
       <div className="flex items-center justify-between">

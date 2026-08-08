@@ -19,7 +19,7 @@ export function useAnnotationsQuery(postId: string, anchor?: string) {
 }
 
 export interface CreateAnnotationInput {
-  scope: 'selection' | 'paragraph'
+  scope: 'selection' | 'paragraph' | 'whole'
   anchor: string
   startOffset: number
   endOffset: number
@@ -29,6 +29,7 @@ export interface CreateAnnotationInput {
   paragraphSnapshot?: string
   body: string
   visibility: 'public' | 'private'
+  parentAnnotationId?: string
 }
 
 export function useCreateAnnotation(postId: string) {

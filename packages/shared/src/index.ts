@@ -247,13 +247,19 @@ export interface Highlight {
   createdAt: string
 }
 
+/**
+ * 整篇想法的固定锚点值，必须与后端 model.AnnotationWholeAnchor 保持一致。
+ * 整篇想法承接原帖底部评论，不绑定任何具体段落。
+ */
+export const WHOLE_ANNOTATION_ANCHOR = '__whole__'
+
 // 段落想法（批注）
 export interface Annotation {
   id: string
   postId: string
   authorId: string
   author: PublicUser
-  scope: 'selection' | 'paragraph'
+  scope: 'selection' | 'paragraph' | 'whole'
   anchor: string
   startOffset: number
   endOffset: number
@@ -341,6 +347,36 @@ export interface IdeaFeed {
   ideaCount: number
   /** 本页摘录卡数量，用于观察人声替换进度 */
   filledCount: number
+}
+
+// --- 想法链（纵向链视图）---
+
+/** 想法链上的一个节点 */
+export interface IdeaChainNode {
+  id: string
+  excerpt: string
+  anchor: string
+  body: string
+  author?: PublicUser
+  scope: 'selection' | 'paragraph' | 'whole'
+  replyCount: number
+  likeCount: number
+  createdAt: string
+}
+
+/**
+ * 想法链视图：一次只呈现一条纵向路径。
+ * parent 是它回应的想法（上方），current 是它自己（中间），
+ * children 是由它引出的想法（下方，引用边），siblings 是同段落的其他声音（共位边）。
+ */
+export interface IdeaChain {
+  post: IdeaCardPost
+  parent?: IdeaChainNode
+  current: IdeaChainNode
+  children: IdeaChainNode[]
+  siblings: IdeaChainNode[]
+  /** 语义相近的想法（近邻边，向量检索；未启用时为空数组） */
+  neighbors: IdeaChainNode[]
 }
 
 // --- 官方公告 ---

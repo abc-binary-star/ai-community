@@ -23,7 +23,7 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
 
   return (
     <Card
-      className="channel-stripe group cursor-pointer overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover"
+      className="channel-stripe group cursor-pointer overflow-hidden border-border/70 transition-colors duration-200 hover:border-primary/30 hover:shadow-card-hover"
       style={{ ['--stripe-color' as string]: color.stripe }}
       onClick={() => router.push(`/community/post/${post.id}`)}
     >
@@ -36,13 +36,13 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
               {channelLabel}
             </span>
             {post.isPinned && (
-              <Badge className="border-transparent bg-amber-500/10 text-amber-600">
+              <Badge variant="warning">
                 <Pin className="size-3" />
                 置顶
               </Badge>
             )}
             {post.isFeatured && (
-              <Badge className="border-transparent bg-purple-500/10 text-purple-600">
+              <Badge variant="default">
                 <Star className="size-3" />
                 精华
               </Badge>
@@ -67,7 +67,7 @@ export function PostCard({ post, onChanged }: { post: Post; onChanged?: (...args
         )}
 
         {post.aiSummary ? (
-          <div className="flex items-start gap-2 rounded-xl border border-primary/15 bg-gradient-to-r from-primary/5 to-amber-400/10 px-3.5 py-2.5">
+          <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-accent/40 px-3.5 py-2.5">
             <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
             <p className="line-clamp-2 text-sm leading-relaxed text-foreground/80">
               <span className="mr-1 font-medium text-primary">AI 摘要</span>

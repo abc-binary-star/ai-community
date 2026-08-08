@@ -50,3 +50,22 @@ func GetIdea(ctx context.Context, c *app.RequestContext) {
 	}
 	response.JSON(c, result)
 }
+
+// GetIdeaChain 想法纵向链视图
+// GET /api/ideas/:id/chain
+func GetIdeaChain(ctx context.Context, c *app.RequestContext) {
+	currentUserID := middleware.GetCurrentUserID(c)
+	ideaID := c.Param("id")
+
+	result, err := ideaFeedService.GetChain(ctx, currentUserID, ideaID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.Error(c, consts.StatusNotFound, "想法不存在或已不可见")
+			return
+		}
+		log.Printf("[IdeaFeed] 获取想法链失败: %v", err)
+		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.JSON(c, result)
+}

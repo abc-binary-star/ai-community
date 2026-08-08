@@ -201,7 +201,7 @@ export function PostListPage({
 
       {/* 侧边栏 */}
       <aside className="hidden w-72 shrink-0 space-y-6 xl:block">
-        <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/8 via-card to-card">
+        <Card className="overflow-hidden">
           <div className="space-y-3 p-5">
             <p className="flex items-center gap-2 text-sm font-semibold">
               <ScrollText className="size-4 text-primary" />
