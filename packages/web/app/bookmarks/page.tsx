@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bookmark, BookOpen, Folder, FolderPlus, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { Bookmark, BookOpen, Folder, FolderPlus, Highlighter, Loader2, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
@@ -12,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { CommunityShell } from '@/app/community/components/community-shell'
 import { PostCard } from '@/app/community/components/post-card'
 import { toast } from 'sonner'
-import { type BookmarkFolder, type Paginated, type Post } from 'shared'
+import { type BookmarkFolder, type HighlightBookmark, type Paginated, type Post } from 'shared'
 
 type FolderFilter = 'all' | 'uncategorized' | string
 
@@ -21,7 +23,19 @@ export default function BookmarksPage() {
   const token = useAuthStore((s) => s.token)
   const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const [mode, setMode] = useState<'content' | 'highlights'>('content')
   const [selected, setSelected] = useState<FolderFilter>('all')
+
+  useEffect(() => {
+    setMode(searchParams.get('type') === 'highlights' ? 'highlights' : 'content')
+  }, [searchParams])
+
+  const highlightsQuery = useQuery({
+    queryKey: ['all-highlights'],
+    queryFn: () => api.get<Paginated<HighlightBookmark>>('/highlights?page=1&pageSize=50'),
+    enabled: !!token && mode === 'highlights',
+  })
 
   const foldersQuery = useQuery({
     queryKey: ['bookmark-folders'],
@@ -169,10 +183,48 @@ export default function BookmarksPage() {
     <CommunityShell>
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center gap-2">
-          <BookOpen className="size-6 text-primary" />
-          <h1 className="text-2xl font-semibold">我的收藏</h1>
+          {mode === 'content' ? <BookOpen className="size-6 text-primary" /> : <Highlighter className="size-6 text-primary" />}
+          <h1 className="text-2xl font-semibold">{mode === 'content' ? '内容收藏' : '我的划线'}</h1>
+        </div>
+        <div className="flex gap-1 rounded-xl border border-border/70 bg-muted/40 p-1">
+          <Link
+            href="/bookmarks?type=content"
+            onClick={() => setMode('content')}
+            className={cn('flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors', mode === 'content' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+          >
+            <Bookmark className="size-4" />
+            帖子 / 想法
+          </Link>
+          <Link
+            href="/bookmarks?type=highlights"
+            onClick={() => setMode('highlights')}
+            className={cn('flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors', mode === 'highlights' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+          >
+            <Highlighter className="size-4" />
+            个人划线
+          </Link>
         </div>
 
+        {mode === 'highlights' ? (
+          <div className="space-y-3">
+            {highlightsQuery.isLoading ? (
+              <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground"><Loader2 className="animate-spin" />加载中…</div>
+            ) : highlightsQuery.data?.items.length ? (
+              highlightsQuery.data.items.map((highlight) => (
+                <Link key={highlight.id} href={`/community/post/${highlight.postId}?anchor=${encodeURIComponent(highlight.anchor)}`} className="block rounded-xl border border-border/70 p-4 transition-colors hover:border-primary/40 hover:bg-accent/40">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Highlighter className="size-3.5 text-primary" />
+                    <span className="truncate">{highlight.postTitle}</span>
+                    <span className="ml-auto shrink-0">{new Date(highlight.createdAt).toLocaleDateString('zh-CN')}</span>
+                  </div>
+                  <p className="mt-2 rounded-md border-l-2 border-primary/50 bg-primary/[0.04] px-3 py-2 text-sm leading-relaxed">{highlight.selectedText}</p>
+                </Link>
+              ))
+            ) : (
+              <Card className="border-dashed"><div className="p-12 text-center"><Highlighter className="mx-auto mb-4 size-10 text-muted-foreground opacity-50" /><p className="text-muted-foreground">还没有个人划线</p><Button asChild className="mt-4"><Link href="/community/discover">去社区阅读</Link></Button></div></Card>
+            )}
+          </div>
+        ) : (
           <div className="flex flex-col gap-4 md:flex-row">
             {/* 收藏夹侧边栏 / 标签 */}
             <aside className="md:w-52 md:shrink-0">
@@ -237,6 +289,7 @@ export default function BookmarksPage() {
               )}
             </div>
           </div>
+        )}
       </div>
     </CommunityShell>
   )

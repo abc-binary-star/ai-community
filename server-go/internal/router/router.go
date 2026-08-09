@@ -64,6 +64,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 
 	// --- 划线高亮路由 ---
 	h.GET("/api/posts/:id/highlights", middleware.OptionalAuth(), handler.ListHighlights)
+	h.GET("/api/highlights", middleware.Auth(), handler.ListAllHighlights)
 	h.POST("/api/posts/:id/highlights", middleware.Auth(), handler.CreateHighlight)
 	h.DELETE("/api/posts/:id/highlights/:highlightId", middleware.Auth(), handler.DeleteHighlight)
 	h.PUT("/api/posts/:id/highlights/:highlightId", middleware.Auth(), handler.UpdateHighlight)

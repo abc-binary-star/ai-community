@@ -6,6 +6,7 @@ import (
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"gorm.io/gorm"
 )
@@ -77,7 +78,35 @@ func (s *HighlightService) ListHighlights(ctx context.Context, postID, userID st
 	return items, nil
 }
 
-// DeleteHighlight 删除自己的划线
+func (s *HighlightService) ListAllHighlights(ctx context.Context, userID string, page, pageSize int) (*types.Paginated[types.HighlightBookmark], error) {
+	var total int64
+	if err := dal.DB.WithContext(ctx).Model(&model.Highlight{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	var highlights []model.Highlight
+	if err := dal.DB.WithContext(ctx).
+		Preload("Post", func(db *gorm.DB) *gorm.DB { return db.Select("id, title") }).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Offset((page - 1) * pageSize).Limit(pageSize).
+		Find(&highlights).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]types.HighlightBookmark, 0, len(highlights))
+	for _, h := range highlights {
+		items = append(items, types.HighlightBookmark{
+			ID: h.ID, PostID: h.PostID, PostTitle: h.Post.Title, Anchor: h.Anchor,
+			SelectedText: h.SelectedText, Color: h.Color, CreatedAt: h.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+	return &types.Paginated[types.HighlightBookmark]{
+		Items: items, Total: int(total), Page: page, PageSize: pageSize,
+		TotalPages: pagination.TotalPages(int(total), pageSize),
+	}, nil
+}
+
 func (s *HighlightService) DeleteHighlight(ctx context.Context, highlightID, userID string) error {
 	result := dal.DB.WithContext(ctx).
 		Where("id = ? AND user_id = ?", highlightID, userID).

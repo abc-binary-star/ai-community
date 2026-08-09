@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/service"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
@@ -45,7 +46,18 @@ func ListHighlights(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]interface{}{"items": items})
 }
 
-// DeleteHighlight 删除划线
+// ListAllHighlights 获取当前用户的全部划线收藏
+func ListAllHighlights(ctx context.Context, c *app.RequestContext) {
+	page, pageSize := pagination.Parse(c)
+	userID := middleware.GetCurrentUserID(c)
+	result, err := highlightService.ListAllHighlights(ctx, userID, page, pageSize)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // DELETE /api/posts/:id/highlights/:highlightId
 func DeleteHighlight(ctx context.Context, c *app.RequestContext) {
 	highlightID := c.Param("highlightId")

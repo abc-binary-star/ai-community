@@ -469,6 +469,16 @@ type Highlight struct {
 	CreatedAt    string `json:"createdAt"`
 }
 
+type HighlightBookmark struct {
+	ID           string `json:"id"`
+	PostID       string `json:"postId"`
+	PostTitle    string `json:"postTitle"`
+	Anchor       string `json:"anchor"`
+	SelectedText string `json:"selectedText"`
+	Color        string `json:"color"`
+	CreatedAt    string `json:"createdAt"`
+}
+
 // UpdateHighlightReq 更新划线颜色
 type UpdateHighlightReq struct {
 	Color string `json:"color"`

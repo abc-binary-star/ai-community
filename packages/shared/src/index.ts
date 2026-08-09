@@ -247,6 +247,16 @@ export interface Highlight {
   createdAt: string
 }
 
+export interface HighlightBookmark {
+  id: string
+  postId: string
+  postTitle: string
+  anchor: string
+  selectedText: string
+  color: string
+  createdAt: string
+}
+
 /**
  * 整篇想法的固定锚点值，必须与后端 model.AnnotationWholeAnchor 保持一致。
  * 整篇想法承接原帖底部评论，不绑定任何具体段落。
