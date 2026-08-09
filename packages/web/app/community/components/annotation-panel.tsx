@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, Flame, Loader2, MessageSquarePlus, User, X } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -19,14 +19,32 @@ interface Props {
   initialDraft: AnnotationDraft | null
   currentUserId?: string
   onClose: () => void
+  panelRef?: React.RefObject<HTMLDivElement>
 }
 
 // 段落想法面板：桌面固定右侧栏 / 移动端底部抽屉。
 // 列表按 anchor 过滤，支持热门/最新/只看我的；编辑器置顶。
-export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUserId, onClose }: Props) {
+export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUserId, onClose, panelRef }: Props) {
   const [sort, setSort] = useState<Sort>('hot')
   const [mine, setMine] = useState(false)
   const [draft, setDraft] = useState<AnnotationDraft | null>(initialDraft)
+  const [width, setWidth] = useState(380)
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = { startX: event.clientX, startWidth: width }
+  }
+
+  const resize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return
+    const next = Math.min(Math.max(dragRef.current.startWidth - (event.clientX - dragRef.current.startX), 320), Math.min(560, window.innerWidth * 0.65))
+    setWidth(next)
+  }
+
+  const endResize = () => {
+    dragRef.current = null
+  }
 
   const params = new URLSearchParams({ anchor, sort })
   if (mine) params.set('mine', '1')
@@ -63,13 +81,25 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
 
   return (
     <div
+      ref={panelRef}
       className={cn(
         'fixed z-50 flex flex-col border-border bg-background shadow-xl',
         'max-md:inset-x-0 max-md:bottom-0 max-md:top-auto max-md:max-h-[85dvh] max-md:rounded-t-xl max-md:border-t max-md:pb-[env(safe-area-inset-bottom)]',
-        'md:right-0 md:top-0 md:h-full md:w-[380px] md:border-l',
+        'md:right-0 md:top-0 md:h-full md:w-[var(--panel-width)] md:border-l',
       )}
+      style={{ ['--panel-width' as string]: `${width}px` }}
     >
-      <div className="flex items-start gap-2 border-b border-border p-4">
+        <div
+          className="absolute inset-y-0 left-0 z-10 hidden w-2 -translate-x-1/2 cursor-col-resize touch-none md:block"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整想法面板宽度"
+          onPointerDown={startResize}
+          onPointerMove={resize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+        />
+        <div className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
             {isWhole ? '整篇想法' : '页边想法'}

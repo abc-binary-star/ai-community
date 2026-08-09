@@ -24,13 +24,10 @@ import {
   UserCircle,
   X,
 } from 'lucide-react'
-import { useChannelTree } from '@/lib/use-channel-tree'
 import { useCollapsedState } from '@/lib/use-collapsed-state'
-import { useAnnouncementUnread } from '@/lib/use-announcements'
-import { channelColor } from '@/lib/channel-colors'
+import { useChannelTree } from '@/lib/use-channel-tree'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/lib/store'
 import { useTheme } from '@/lib/use-theme'
 
 // ---- 图标映射：将数据库中的图标名称字符串映射为 lucide 组件 ----
@@ -72,11 +69,13 @@ function MobileSidebar({
   onClose,
   activeChannel,
   isDiscover,
+  pathname,
 }: {
   open: boolean
   onClose: () => void
-  activeChannel: string
-  isDiscover: boolean
+  readonly activeChannel: string
+  readonly isDiscover: boolean
+  readonly pathname: string
 }) {
   if (!open) return null
 
@@ -89,6 +88,7 @@ function MobileSidebar({
         <SidebarContent
           activeChannel={activeChannel}
           isDiscover={isDiscover}
+          pathname={pathname}
           onNavigate={onClose}
           showCloseButton
           onClose={onClose}
@@ -155,8 +155,6 @@ function ChannelItem({
   onNavigate?: () => void
 }) {
   const Icon = getIcon(icon, iconFallback)
-  const color = channelColor(colorKey)
-
   return (
     <Link
       href={href}
@@ -173,7 +171,9 @@ function ChannelItem({
         <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden />
       )}
       {colorKey ? (
-        <span className={cn('size-2 shrink-0 rounded-full transition-transform duration-150 group-hover:scale-125', color.dot)} />
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-muted/70 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary" aria-hidden="true">
+          <Icon className="size-3.5" />
+        </span>
       ) : (
         <Icon className="size-4 shrink-0" />
       )}
@@ -192,19 +192,19 @@ function ChannelItem({
 function SidebarContent({
   activeChannel,
   isDiscover,
+  pathname,
   onNavigate,
   showCloseButton,
   onClose,
 }: {
   activeChannel: string
   isDiscover: boolean
+  pathname: string
   onNavigate?: () => void
   showCloseButton?: boolean
   onClose?: () => void
 }) {
   const { data: tree } = useChannelTree()
-  const { data: announcementUnread } = useAnnouncementUnread()
-  const user = useAuthStore((s) => s.user)
   const { theme, toggle: toggleTheme } = useTheme()
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -267,9 +267,12 @@ function SidebarContent({
           />
         </div>
         <button
-          type="button"
-          onClick={toggleTheme}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            type="button"
+            onClick={toggleTheme}
+            className={cn(
+              'flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+              !showCloseButton && 'hidden',
+            )}
           aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
         >
           {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
@@ -294,29 +297,9 @@ function SidebarContent({
           icon="compass"
           href="/community/discover"
           active={isDiscover}
-          colorKey="general"
           onNavigate={onNavigate}
         />
 
-        <div className="my-3 border-t border-border/50" />
-        <ChannelItem
-          label="社区公约"
-          icon="scroll-text"
-          href="/community/guidelines"
-          active={false}
-          onNavigate={onNavigate}
-        />
-        {user && (
-          <ChannelItem
-            label="我的草稿"
-            icon="file-text"
-            href="/community/drafts"
-            active={false}
-            onNavigate={onNavigate}
-          />
-        )}
-
-        {/* 分组频道 */}
         {filteredCategories.map((cat) => (
           <div key={cat.id} className="mt-2">
             <CollapsibleSection label={cat.label} icon={cat.icon}>
@@ -340,7 +323,7 @@ function SidebarContent({
 
         {/* 未分组频道 */}
         {filteredUncategorized.length > 0 && (
-          <div className="mt-3 space-y-0.5">
+          <div className="mt-2 space-y-0.5">
             {filteredUncategorized.map((ch) => (
               <ChannelItem
                 key={ch.id}
@@ -366,36 +349,21 @@ function SidebarContent({
           )}
       </nav>
 
-      {/* 底部：个人入口 */}
-      <div className="shrink-0 border-t border-border/70 p-2.5">
-        <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-          <UserCircle className="size-3.5" />
-          我的空间
-        </p>
-        {user && (
-          <ChannelItem
-            label="私信"
-            icon="message-circle"
-            href="/messages"
-            active={false}
-            onNavigate={onNavigate}
-          />
-        )}
-        <ChannelItem
-          label="我的收藏"
-          icon="bookmark"
-          href="/bookmarks"
-          active={false}
-          onNavigate={onNavigate}
-        />
-        <ChannelItem
-          label="公告中心"
-          icon="megaphone"
-          href="/community/announcements"
-          active={false}
-          badge={announcementUnread?.count ?? 0}
-          onNavigate={onNavigate}
-        />
+      {/* 底部辅助链接：低频信息不占频道层级 */}
+      <div className="shrink-0 border-t border-border/70 px-3 py-3">
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <Link href="/community/guidelines" onClick={onNavigate} className="transition-colors hover:text-foreground">
+            社区公约
+          </Link>
+          <span aria-hidden>·</span>
+          <Link href="/community/announcements" onClick={onNavigate} className="transition-colors hover:text-foreground">
+            公告
+          </Link>
+          <span aria-hidden>·</span>
+          <Link href="/community/post/new" onClick={onNavigate} className="transition-colors hover:text-foreground">
+            反馈
+          </Link>
+        </div>
       </div>
     </div>
   )
@@ -419,7 +387,11 @@ export function Sidebar({
     <>
       {/* 桌面端固定侧边栏 */}
       <aside className="hidden w-64 shrink-0 md:block">
-        <SidebarContent activeChannel={activeChannel} isDiscover={isDiscover} />
+        <SidebarContent
+          activeChannel={activeChannel}
+          isDiscover={isDiscover}
+          pathname={pathname}
+        />
       </aside>
 
       {/* 移动端抽屉 */}
@@ -428,6 +400,7 @@ export function Sidebar({
         onClose={onMobileClose}
         activeChannel={activeChannel}
         isDiscover={isDiscover}
+        pathname={pathname}
       />
     </>
   )

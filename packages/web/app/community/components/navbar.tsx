@@ -4,7 +4,21 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, ChevronRight, Gauge, LogOut, Menu, MessageCircle, PenLine, Settings, ShieldCheck, UserRound } from 'lucide-react'
+import {
+  Bookmark,
+  ChevronDown,
+  ChevronRight,
+  Gauge,
+  Highlighter,
+  LogOut,
+  Menu,
+  MessageCircle,
+  PenLine,
+  Search,
+  Settings,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,8 +45,8 @@ import { ThemeToggle } from './theme-toggle'
 function BrandLogo() {
   return (
     <Link href="/community/discover" className="group flex min-w-0 items-center gap-2" aria-label="Commons 首页">
-      <span className="relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/50 bg-primary/10 transition-colors duration-200 group-hover:border-primary sm:size-9 sm:rounded-xl">
-        <span className="font-display text-lg font-black leading-none text-primary sm:text-xl">Co</span>
+      <span className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/50 bg-[#485CEF] transition-colors duration-200 group-hover:border-primary sm:size-9 sm:rounded-xl">
+        <img src="/icon.svg" alt="" className="size-full object-cover invert" />
       </span>
       <span className="hidden truncate font-display text-xl font-bold leading-none tracking-tight text-foreground sm:inline">
         Commons
@@ -132,18 +146,32 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <PenLine />
                 </Link>
               </Button>
-              <Button asChild variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="收藏">
-                <Link href="/bookmarks">
-                  <Bookmark />
+              <Button asChild variant="ghost" size="icon" className="relative hidden md:inline-flex" aria-label="收藏内容">
+                <Link href="/bookmarks?type=content">
+                  <Bookmark className="size-5" />
                 </Link>
               </Button>
-              <div className="hidden sm:block">
+              <div className="hidden md:block">
                 <ThemeToggle />
               </div>
-              <div className="hidden sm:block">
+              <div className="hidden md:block">
                 <MessageEntry />
               </div>
-              <NotificationBell />
+              <div className="hidden md:block">
+                <NotificationBell />
+              </div>
+              <div className="flex items-center md:hidden">
+                <Button variant="ghost" size="icon" aria-label="搜索" onClick={() => router.push('/community/search')}>
+                  <Search className="size-5" />
+                </Button>
+                <Button asChild variant="ghost" size="icon" aria-label="收藏内容">
+                  <Link href="/bookmarks?type=content">
+                    <Bookmark className="size-5" />
+                  </Link>
+                </Button>
+                <NotificationBell />
+                <MessageEntry />
+              </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -189,7 +217,25 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <DropdownMenuItem asChild>
                     <Link href={`/u/${encodeURIComponent(user.username)}`}>
                       <UserRound />
-                      我的主页
+                      创作中心
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/community/drafts">
+                      <PenLine />
+                      我的草稿
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/bookmarks?type=content">
+                      <Bookmark />
+                      内容收藏
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/bookmarks?type=highlights">
+                      <Highlighter />
+                      我的划线
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -209,7 +255,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                         <DropdownMenuItem asChild>
                           <Link href="/community/moderation">
                             <ShieldCheck />
-                            内容审核
+                              内容审核
                           </Link>
                         </DropdownMenuItem>
                         {user.role === 'admin' && (

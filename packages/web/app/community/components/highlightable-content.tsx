@@ -66,6 +66,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const currentUserId = useAuthStore((s) => s.user?.id)
@@ -322,11 +323,27 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
     setDraft(null)
   }
 
-  const dismissPanelFromContent = (event: React.MouseEvent) => {
-    if (panel && !(event.target as HTMLElement).closest('a, button, [data-highlight]')) {
+  useEffect(() => {
+    if (!panel) return
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (panelRef.current?.contains(target)) return
+      if (containerRef.current?.contains(target)) {
+        const element = target as HTMLElement
+        if (element.closest('a, button, [data-highlight]')) return
+      }
       closePanel()
     }
-  }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closePanel()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [panel])
 
   const createHighlight = async (color: string) => {
     if (!pending) return
@@ -423,7 +440,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
   }, [isLoggedIn, postId])
 
   return (
-    <div className="relative" onClick={dismissPanelFromContent}>
+    <div className="relative">
       <MarkdownRenderer ref={containerRef} content={content} fontFamily={fontFamily} enableBlocks />
 
       {/* 页边批注记号（marginalia）：想法长在页边。
@@ -534,6 +551,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
           quote={panel.quote}
           initialDraft={draft}
           currentUserId={currentUserId}
+          panelRef={panelRef}
           onClose={closePanel}
         />
       )}
