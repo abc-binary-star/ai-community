@@ -9,6 +9,13 @@ import { useIsCaptain } from '../lib/store'
 import type { VotePoolItem } from '../lib/types'
 import { ReviewBadge } from './review-badge'
 
+const AI_STATUS_LABEL: Record<string, string> = {
+  passed: 'AI 通过',
+  unsure: 'AI 存疑',
+  rejected: 'AI 驳回',
+  skipped: 'AI 未审',
+}
+
 /**
  * 队长投票池（审核池）：全员可见（只读），仅队长可投票。
  * 情况三封面格直接进入；情况一/二 AI 未过进入。赞成票过半（队长数的一半以上，
@@ -157,6 +164,16 @@ export function VotePoolPanel() {
                   <p className="mt-1.5 rounded bg-stone-50 px-1.5 py-1 text-[10px] leading-relaxed text-stone-500">
                     {book.memberName} · 第 {book.tileIndex} 格「{tile.title}」
                   </p>
+
+                  {(book.aiStatus || book.aiReason) && (
+                    <p className="mt-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-stone-600">
+                      <span className="font-bold text-amber-700">
+                        {book.aiStatus ? AI_STATUS_LABEL[book.aiStatus] ?? 'AI 初审' : 'AI 初审'}
+                        {book.aiConfidence ? `（置信度 ${(book.aiConfidence * 100).toFixed(0)}%）` : ''}
+                      </span>
+                      {book.aiReason && <span>：{book.aiReason}</span>}
+                    </p>
+                  )}
 
                   {/* 票数进度：赞成绿 / 反对红，过半线 = 队长数一半 + 1 */}
                   <div className="mt-2">
