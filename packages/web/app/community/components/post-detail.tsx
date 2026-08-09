@@ -211,13 +211,13 @@ export function PostDetailView({ id }: { id: string }) {
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
               {post.isPinned && (
-                <Badge className="border-transparent bg-amber-500/10 text-amber-600">
+                <Badge variant="warning">
                   <Pin className="size-3" />
                   置顶
                 </Badge>
               )}
               {post.isFeatured && (
-                <Badge className="border-transparent bg-purple-500/10 text-purple-600">
+                <Badge variant="default">
                   <Star className="size-3" />
                   精华
                 </Badge>

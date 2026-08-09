@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
-import { Plus_Jakarta_Sans, Noto_Serif_SC, ZCOOL_KuaiLe } from 'next/font/google'
+import { Plus_Jakarta_Sans, Noto_Serif_SC, ZCOOL_KuaiLe, Sora } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/sonner'
@@ -35,6 +35,14 @@ const zcool = ZCOOL_KuaiLe({
   preload: false,
 })
 
+// Sora：几何科技无衬线，用作品牌与标题展示字体（AI 产品气质）
+const sora = Sora({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  display: 'swap',
+  variable: '--font-display',
+})
+
 export const metadata: Metadata = {
   title: 'Commons · 兴趣社区',
   description: '一个新鲜有趣的兴趣社区 — 在这里分享想法、创作与灵感',
@@ -45,7 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="zh-CN"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${notoSerif.variable} ${smiley.variable} ${zcool.variable}`}
+      className={`${jakarta.variable} ${sora.variable} ${notoSerif.variable} ${smiley.variable} ${zcool.variable}`}
     >
       <head>
         {/* 主题防闪烁：水合前根据 localStorage / 系统偏好同步 .dark 类 */}

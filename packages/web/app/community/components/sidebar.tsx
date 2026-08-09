@@ -155,12 +155,16 @@ function ChannelItem({
       href={href}
       onClick={onNavigate}
       className={cn(
-        'group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150',
+        'group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150',
         active
-          ? cn('font-medium', color.soft, color.text)
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          ? 'bg-primary/10 font-medium text-foreground'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
       )}
     >
+      {/* 选中态左侧主色指示条（现代应用导航常见手法） */}
+      {active && (
+        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden />
+      )}
       {colorKey ? (
         <span className={cn('size-2 shrink-0 rounded-full transition-transform duration-150 group-hover:scale-125', color.dot)} />
       ) : (
@@ -240,7 +244,7 @@ function SidebarContent({
   }, [uncategorized, searchQuery])
 
   return (
-    <div className="flex h-full flex-col border-r border-border/70 bg-card/50 backdrop-blur-sm">
+    <div className="flex h-full flex-col bg-transparent">
       {/* 顶部：搜索栏 + 关闭按钮 */}
       <div className="flex items-center gap-2 p-3">
         <div className="relative flex-1">
@@ -250,7 +254,7 @@ function SidebarContent({
             placeholder="搜索频道..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="h-9 w-full rounded-lg border border-transparent bg-muted/60 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary/40 focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           />
         </div>
         {showCloseButton && (

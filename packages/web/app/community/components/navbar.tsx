@@ -31,7 +31,7 @@ function BrandLogo() {
       <span className="relative flex size-9 items-center justify-center rounded-xl bg-primary transition-colors duration-200 group-hover:bg-primary/90">
         <span className="font-display text-xl leading-none text-primary-foreground">C</span>
       </span>
-      <span className="font-display text-2xl leading-none tracking-wide text-foreground">
+      <span className="font-display text-xl font-bold leading-none tracking-tight text-foreground">
         Commons
       </span>
     </Link>

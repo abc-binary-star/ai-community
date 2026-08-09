@@ -47,8 +47,8 @@ const config: Config = {
       fontFamily: {
         // 正文与界面：Plus Jakarta Sans，几何人文无衬线，清爽现代
         sans: ['var(--font-sans)', 'PingFang SC', 'Hiragino Sans GB', 'system-ui', 'sans-serif'],
-        // 展示/品牌标题：站酷快乐体（自托管）
-        display: ['var(--font-zcool)', 'PingFang SC', 'Hiragino Sans GB', 'sans-serif'],
+        // 展示/品牌标题：Sora 几何科技无衬线（AI 产品气质）
+        display: ['var(--font-display)', 'var(--font-sans)', 'PingFang SC', 'Hiragino Sans GB', 'sans-serif'],
         // 衬线：思源宋体，用于引文/摘录的编辑气质
         serifcn: ['var(--font-noto-serif)', 'Noto Serif SC', 'serif'],
       },

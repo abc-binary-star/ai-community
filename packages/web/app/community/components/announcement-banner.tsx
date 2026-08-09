@@ -41,7 +41,7 @@ export function AnnouncementBanner() {
       className={
         urgent
           ? 'flex items-center gap-2 border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm'
-          : 'flex items-center gap-2 border-b border-amber-400/30 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-4 py-2 text-sm'
+          : 'flex items-center gap-2 border-b border-primary/20 bg-primary/[0.06] px-4 py-2 text-sm'
       }
     >
       {urgent ? (

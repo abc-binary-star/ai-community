@@ -11,100 +11,101 @@
 
 @layer base {
   :root {
-    /* 底色：近中性的暖白，几乎不带色偏，不刺眼也不发黄 */
-    --background: 40 18% 98%;
-    /* 文字：近黑的中性墨色 */
-    --foreground: 220 14% 11%;
-    /* 卡片：纯白，与纸底形成极轻层次 */
+    /* 底色：冷中性近白，带极轻蓝灰，科技感的干净底 */
+    --background: 220 24% 98%;
+    /* 文字：近黑的冷墨色 */
+    --foreground: 224 20% 10%;
+    /* 卡片：纯白，与冷底形成极轻层次 */
     --card: 0 0% 100%;
-    --card-foreground: 220 14% 11%;
+    --card-foreground: 224 20% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 14% 11%;
+    --popover-foreground: 224 20% 10%;
 
-    /* 主色：珊瑚橙，收一点饱和，平面使用（不再渐变） */
-    --primary: 14 82% 55%;
+    /* 主色：电光靛蓝，平面使用（不做渐变），科技/AI 气质 */
+    --primary: 233 84% 61%;
     --primary-foreground: 0 0% 100%;
 
-    /* 次要：极浅中性灰 */
-    --secondary: 40 12% 95%;
-    --secondary-foreground: 220 12% 24%;
-    --muted: 40 12% 95%;
-    --muted-foreground: 220 8% 46%;
+    /* 次要：冷调极浅灰 */
+    --secondary: 220 16% 95%;
+    --secondary-foreground: 224 16% 24%;
+    --muted: 220 16% 95.5%;
+    --muted-foreground: 220 10% 44%;
 
-    /* accent：极浅珊瑚，用于 hover 与高亮 */
-    --accent: 20 60% 96%;
-    --accent-foreground: 14 78% 44%;
+    /* accent：极浅靛蓝，用于 hover 与高亮 */
+    --accent: 233 60% 96%;
+    --accent-foreground: 233 72% 52%;
 
     /* 危险 */
-    --destructive: 358 68% 52%;
+    --destructive: 358 68% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    /* 语义色：成功 / 警告 / 信息（补齐 badge 变体用） */
-    --success: 158 64% 38%;
+    /* 语义色：成功 / 警告 / 信息 */
+    --success: 162 68% 40%;
     --success-foreground: 0 0% 100%;
-    --warning: 34 92% 48%;
+    --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --info: 214 70% 52%;
+    --info: 233 84% 61%;
     --info-foreground: 0 0% 100%;
 
-    /* 分隔线：中性浅灰 */
-    --border: 40 10% 90%;
-    --input: 40 10% 87%;
-    --ring: 14 82% 55%;
+    /* 分隔线：冷中性浅灰 */
+    --border: 220 16% 90%;
+    --input: 220 16% 86%;
+    --ring: 233 84% 61%;
 
     /* 圆角 */
     --radius: 0.75rem;
 
-    /* ---- 频道色：同色系低饱和序列，可区分但不喧宾夺主 ---- */
-    --ch-general: 215 42% 52%;   /* 综合讨论 · 石青 */
-    --ch-tech: 244 38% 58%;      /* 技术前沿 · 雾靛 */
-    --ch-design: 330 40% 56%;    /* 设计美学 · 陶粉 */
-    --ch-gaming: 28 52% 52%;     /* 游戏天地 · 赭黄 */
-    --ch-life: 158 34% 42%;      /* 生活方式 · 苔绿 */
+    /* ---- 频道色：冷色低饱和序列，与靛蓝主色同一冷域 ---- */
+    --ch-general: 233 60% 60%;   /* 综合讨论 · 靛蓝 */
+    --ch-tech: 199 74% 48%;      /* 技术前沿 · 青蓝 */
+    --ch-design: 268 52% 62%;    /* 设计美学 · 蓝紫 */
+    --ch-gaming: 218 70% 56%;    /* 游戏天地 · 钴蓝 */
+    --ch-life: 172 58% 42%;      /* 生活方式 · 青绿 */
   }
 
   .dark {
     /* 底色：深板岩，带极轻冷调，不是纯黑（纯黑对比过硬） */
-    --background: 220 16% 9%;
-    --foreground: 40 12% 92%;
+    /* 底色：深蓝板岩，带明确冷调，AI 产品那种深空感（非纯黑） */
+    --background: 226 28% 7%;
+    --foreground: 220 24% 94%;
     /* 卡片：比底色略亮一档，靠明度而非边框拉层次 */
-    --card: 220 14% 12%;
-    --card-foreground: 40 12% 92%;
-    --popover: 220 14% 12%;
-    --popover-foreground: 40 12% 92%;
+    --card: 225 22% 11%;
+    --card-foreground: 220 24% 94%;
+    --popover: 225 22% 11%;
+    --popover-foreground: 220 24% 94%;
 
-    /* 主色：暗色下略提亮提饱和，保持珊瑚识别度 */
-    --primary: 14 84% 60%;
-    --primary-foreground: 220 20% 8%;
+    /* 主色：暗色下靛蓝提亮，霓虹科技感 */
+    --primary: 234 90% 68%;
+    --primary-foreground: 226 40% 6%;
 
-    --secondary: 220 12% 17%;
-    --secondary-foreground: 40 10% 82%;
-    --muted: 220 12% 16%;
-    --muted-foreground: 220 8% 60%;
+    --secondary: 225 18% 16%;
+    --secondary-foreground: 220 18% 84%;
+    --muted: 225 18% 15%;
+    --muted-foreground: 220 12% 60%;
 
-    --accent: 16 40% 18%;
-    --accent-foreground: 20 80% 72%;
+    --accent: 233 40% 22%;
+    --accent-foreground: 233 90% 82%;
 
-    --destructive: 358 62% 54%;
+    --destructive: 358 66% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 158 52% 46%;
-    --success-foreground: 220 20% 8%;
-    --warning: 34 80% 56%;
-    --warning-foreground: 220 20% 8%;
-    --info: 214 66% 60%;
-    --info-foreground: 220 20% 8%;
+    --success: 162 58% 48%;
+    --success-foreground: 226 40% 6%;
+    --warning: 38 84% 58%;
+    --warning-foreground: 226 40% 6%;
+    --info: 234 90% 68%;
+    --info-foreground: 226 40% 6%;
 
-    --border: 220 10% 20%;
-    --input: 220 10% 22%;
-    --ring: 14 84% 60%;
+    --border: 225 16% 20%;
+    --input: 225 16% 22%;
+    --ring: 234 90% 68%;
 
-    /* 频道色：暗色下同序列略提亮 */
-    --ch-general: 215 48% 64%;
-    --ch-tech: 244 44% 70%;
-    --ch-design: 330 46% 68%;
-    --ch-gaming: 28 58% 62%;
-    --ch-life: 158 40% 56%;
+    /* 频道色：暗色下冷色序列略提亮 */
+    --ch-general: 233 78% 74%;
+    --ch-tech: 199 80% 60%;
+    --ch-design: 268 66% 74%;
+    --ch-gaming: 218 82% 70%;
+    --ch-life: 172 62% 54%;
   }
 }
 
