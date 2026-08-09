@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, MessageSquarePlus, Share2, Trash2 } from 'lucide-react'
+import { Copy, MessageCircle, MessageSquarePlus, Share2, Trash2 } from 'lucide-react'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
@@ -457,10 +457,8 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
           style={{ top: b.top + 14 }}
           aria-label="查看段落想法"
         >
-          <span className="relative flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary" aria-hidden>
-            <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-2 -translate-x-1/2 rounded-b border-b-2 border-primary" />
-            <span className="absolute left-[7px] top-1 size-2 rounded-full border border-primary" />
-            <span className="absolute left-[11px] top-1 size-2 rounded-full border border-primary" />
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary" aria-hidden>
+            <MessageCircle className="size-3.5" />
           </span>
           <span className="font-mono text-xs font-bold tabular-nums text-primary/80 transition-colors group-hover:text-primary">
             {b.count > 99 ? '99+' : b.count}
