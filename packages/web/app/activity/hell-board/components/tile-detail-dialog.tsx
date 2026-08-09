@@ -329,7 +329,7 @@ export function TileDetailDialog({
           ) : records.length === 0 ? (
             <p className="mt-2 text-xs font-bold text-emerald-700">暂无小组在该格打卡。</p>
           ) : (
-            <ul className="mt-2 space-y-1.5">
+            <ul className="mt-2 grid grid-cols-1 items-start gap-1.5 sm:grid-cols-2">
               {teamRecords.map((teamRows) => {
                 const first = teamRows[0]
                 const isMyTeam = first.isMyTeam
@@ -449,14 +449,14 @@ export function TileDetailDialog({
                       {record.isMyTeam && <span className="text-[10px] font-black text-sky-600">本组</span>}
                       <span>· 第 {record.lap} 轮</span>
                     </p>
-                    <ul className="mt-1.5 space-y-1">
+                    <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
                       {(record.books ?? []).map((book) => (
                         <li
                           key={book.id}
                           className="flex items-baseline gap-2 rounded-lg bg-stone-50 px-3 py-1.5 text-xs"
                         >
                           <span className="min-w-0 truncate text-stone-900">{book.title}</span>
-                          {book.author && <span className="shrink-0 text-stone-400">{book.author}</span>}
+                          {book.author && <span className="shrink-0 truncate text-stone-400">{book.author}</span>}
                         </li>
                       ))}
                     </ul>

@@ -39,14 +39,14 @@ export function AllTeamsPanel() {
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 xl:overflow-hidden">
         {teams.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
             <Users className="size-7 text-stone-300" />
             <p className="text-xs text-stone-500">活动还没有配置小组</p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:h-full xl:grid-cols-5 xl:grid-rows-2 xl:gap-4">
             {teams.map((team: Team) => {
               const isMine = myTeam?.id === team.id
               const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
@@ -54,19 +54,19 @@ export function AllTeamsPanel() {
                 <section
                   key={team.id}
                   className={cn(
-                    'flex flex-col rounded-lg border-2 bg-gradient-to-b from-[#fffdf4] to-[#f7f0dc] p-2.5 shadow-[2px_2px_0_#292524]',
+                    'flex min-h-0 flex-col rounded-lg border-2 bg-gradient-to-b from-[#fffdf4] to-[#f7f0dc] p-2.5 shadow-[2px_2px_0_#292524] xl:p-3.5',
                     isMine ? 'border-[#d9a441] ring-1 ring-[#d9a441]/35' : 'border-stone-800',
                   )}
                 >
                   {/* 队头：徽章 + 队名 + 当前位置 */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 xl:gap-2.5">
                     <TeamEmblem
                       emblem={team.emblem}
                       size={28}
-                      className="shrink-0 drop-shadow-[2px_2px_0_rgba(41,37,36,0.3)]"
+                      className="shrink-0 drop-shadow-[2px_2px_0_rgba(41,37,36,0.3)] xl:size-9"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 text-[11px] font-black text-stone-900">
+                      <p className="flex items-center gap-1.5 text-[11px] font-black text-stone-900 xl:text-sm">
                         <span className="truncate">{team.name}</span>
                         {isMine && (
                           <span className="shrink-0 rounded bg-[#ffd166] px-1 py-px text-[9px] font-black text-[#5c430d]">
@@ -74,7 +74,7 @@ export function AllTeamsPanel() {
                           </span>
                         )}
                       </p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-[10px] font-medium text-stone-500">
+                      <p className="mt-0.5 flex items-center gap-1.5 text-[10px] font-medium text-stone-500 xl:text-[11px]">
                         <span
                           aria-hidden
                           className="size-2 shrink-0 rounded-full border border-stone-500/50"
@@ -86,22 +86,22 @@ export function AllTeamsPanel() {
                   </div>
 
                   {/* 成员名单：与队伍卡同款虚线分隔与条目样式 */}
-                  <div className="mt-2 border-t border-dashed border-[#dccfa8] pt-2">
-                    <p className="flex items-center gap-1.5 text-[10px] font-black tracking-wide text-[#6b4e15]">
+                  <div className="mt-2 flex min-h-0 flex-col border-t border-dashed border-[#dccfa8] pt-2 xl:mt-3 xl:flex-1 xl:pt-3">
+                    <p className="flex items-center gap-1.5 text-[10px] font-black tracking-wide text-[#6b4e15] xl:text-[11px]">
                       <span aria-hidden className="size-1.5 rotate-45 bg-[#d9a441]" />
                       成员
                       <span className="ml-auto font-medium text-stone-400">
                         {team.members.length} / {TEAM_SIZE}
                       </span>
                     </p>
-                    <ul className="mt-1.5 space-y-1">
+                    <ul className="mt-1.5 flex flex-col gap-1 xl:mt-2 xl:flex-1 xl:justify-between">
                       {slots.map((m, i) =>
                         m ? (
-                          <li key={m.id}>
+                          <li key={m.id} className="xl:flex-1">
                             <button
                               type="button"
                               onClick={() => setSelected({ member: m, teamName: team.name })}
-                              className="flex w-full items-center gap-1.5 rounded-md border border-[#dccfa8] bg-white/80 px-1.5 py-1 text-left text-[10px] shadow-[1px_1px_0_#e0d6ba] transition-colors hover:bg-[#fdf9ec]"
+                              className="flex h-full w-full items-center gap-1.5 rounded-md border border-[#dccfa8] bg-white/80 px-1.5 py-1 text-left text-[10px] shadow-[1px_1px_0_#e0d6ba] transition-colors hover:bg-[#fdf9ec] xl:px-2 xl:py-1.5 xl:text-[11px]"
                             >
                               <span className="flex min-w-0 flex-1 items-center gap-1 font-bold text-stone-800">
                                 <span className="truncate">{m.name}</span>
@@ -109,7 +109,7 @@ export function AllTeamsPanel() {
                                   <Crown aria-label="队长" className="size-3 shrink-0 text-amber-600" />
                                 )}
                               </span>
-                              <span className="shrink-0 tabular-nums text-[10px] text-[#7a5c1e]">
+                              <span className="shrink-0 tabular-nums text-[10px] text-[#7a5c1e] xl:text-[11px]">
                                 <span className="inline-flex items-center gap-0.5">
                                   <Star aria-hidden className="size-2.5" />
                                   {m.bookCount}
@@ -122,7 +122,7 @@ export function AllTeamsPanel() {
                           <li
                             key={`empty-${i}`}
                             aria-hidden
-                            className="flex items-center gap-1.5 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-1.5 py-1 text-[10px] text-stone-400"
+                            className="flex items-center gap-1.5 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-1.5 py-1 text-[10px] text-stone-400 xl:flex-1 xl:px-2 xl:py-1.5 xl:text-[11px]"
                           >
                             <UserRoundPlus className="size-3" />
                             空位
