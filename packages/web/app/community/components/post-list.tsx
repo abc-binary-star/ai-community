@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Loader2, PenLine, ScrollText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Hash, LayoutGrid, Loader2, MessagesSquare, PenLine, ScrollText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
@@ -109,24 +109,26 @@ export function PostListPage({
             type="button"
             onClick={() => setView('posts')}
             className={cn(
-              'flex-1 rounded-full border px-4 py-1.5 text-sm transition-colors',
+              'flex flex-1 items-center justify-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors',
               view === 'posts'
                 ? 'border-primary/60 font-medium text-primary'
                 : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
+            <LayoutGrid className="size-3.5" />
             按帖子浏览
           </button>
           <button
             type="button"
             onClick={() => setView('ideas')}
             className={cn(
-              'flex-1 rounded-full border px-4 py-1.5 text-sm transition-colors',
+              'flex flex-1 items-center justify-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors',
               view === 'ideas'
                 ? 'border-primary/60 font-medium text-primary'
                 : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
+            <MessagesSquare className="size-3.5" />
             想法流
           </button>
         </div>
@@ -145,7 +147,10 @@ export function PostListPage({
 
         {/* 移动端：热门标签横向滚动 */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:hidden">
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">热门标签</span>
+          <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
+            <Hash className="size-3.5" />
+            热门标签
+          </span>
           <div className="flex gap-1.5">
             {hotTags.map((t) => (
               <TagBadge key={t} name={t} selected={tag === t} size="sm" channel={channel} />
@@ -214,7 +219,10 @@ export function PostListPage({
 
         <Card>
           <div className="space-y-3 p-5">
-            <h3 className="text-sm font-semibold">热门标签</h3>
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Hash className="size-4 text-muted-foreground" />
+              热门标签
+            </h3>
             <div className="flex flex-wrap gap-2">
               {hotTags.map((t) => (
                 <TagBadge key={t} name={t} selected={tag === t} size="sm" channel={channel} />

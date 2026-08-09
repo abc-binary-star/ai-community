@@ -1,15 +1,15 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Clock, Flame, Loader2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useIdeaFeedQuery, type IdeaFeedSort } from '@/lib/use-idea-feed'
 import { IdeaCard } from './idea-card'
 
-const SORTS: { key: IdeaFeedSort; label: string }[] = [
-  { key: 'hot', label: '被讨论最多' },
-  { key: 'latest', label: '最新' },
+const SORTS: { key: IdeaFeedSort; label: string; icon: LucideIcon }[] = [
+  { key: 'hot', label: '被讨论最多', icon: Flame },
+  { key: 'latest', label: '最新', icon: Clock },
 ]
 
 /**
@@ -54,12 +54,13 @@ export function IdeaFeed({
             type="button"
             onClick={() => onSortChange(s.key)}
             className={cn(
-              'rounded-full border px-3 py-1.5 text-sm transition-colors',
+              'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
               sort === s.key
                 ? 'border-primary/60 font-medium text-primary'
                 : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
+            <s.icon className="size-3.5" />
             {s.label}
           </button>
         ))}

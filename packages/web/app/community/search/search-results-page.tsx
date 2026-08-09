@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock, FileText, LayoutGrid, Loader2, MessageCircle, Search, Target, Users, type LucideIcon } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,17 +27,17 @@ interface AllSearchResult {
 
 type SearchResult = AllSearchResult | Paginated<Post> | Paginated<CommentSearchItem> | Paginated<PublicUser>
 
-const SCOPES = [
-  { key: 'all', label: '全部' },
-  { key: 'posts', label: '帖子' },
-  { key: 'comments', label: '评论' },
-  { key: 'users', label: '用户' },
-] as const
+const SCOPES: { key: string; label: string; icon: LucideIcon }[] = [
+  { key: 'all', label: '全部', icon: LayoutGrid },
+  { key: 'posts', label: '帖子', icon: FileText },
+  { key: 'comments', label: '评论', icon: MessageCircle },
+  { key: 'users', label: '用户', icon: Users },
+]
 
-const SORTS = [
-  { key: 'relevance', label: '相关度' },
-  { key: 'latest', label: '最新' },
-] as const
+const SORTS: { key: string; label: string; icon: LucideIcon }[] = [
+  { key: 'relevance', label: '相关度', icon: Target },
+  { key: 'latest', label: '最新', icon: Clock },
+]
 
 // 关键词高亮：将命中关键词用 <mark> 标签包裹
 function highlightText(text: string, keyword: string): ReactNode {
@@ -302,10 +302,11 @@ export default function SearchResultsPage({
                 type="button"
                 onClick={() => updateParam('scope', tab.key)}
                 className={cn(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                   active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
+                <tab.icon className="size-3.5" />
                 {tab.label}
               </button>
             )
@@ -362,10 +363,11 @@ export default function SearchResultsPage({
                   type="button"
                   onClick={() => updateParam('sort', tab.key)}
                   className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                     active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
+                  <tab.icon className="size-3.5" />
                   {tab.label}
                 </button>
               )

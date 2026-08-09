@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, MessageSquarePlus, X } from 'lucide-react'
+import { Clock, Flame, Loader2, MessageSquarePlus, User, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { annotationsKey } from '@/lib/use-annotations'
@@ -96,20 +96,22 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
             key={s}
             onClick={() => setSort(s)}
             className={cn(
-              'rounded-md px-2 py-1 text-xs transition-colors',
-              sort === s && !mine ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              'flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
+              sort === s && !mine ? 'font-medium text-primary' : 'text-muted-foreground hover:text-foreground',
             )}
           >
+            {s === 'hot' ? <Flame className="size-3.5" /> : <Clock className="size-3.5" />}
             {s === 'hot' ? '热门' : '最新'}
           </button>
         ))}
         <button
           onClick={() => setMine((v) => !v)}
           className={cn(
-            'ml-auto rounded-md px-2 py-1 text-xs transition-colors',
-            mine ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+            'ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
+            mine ? 'font-medium text-primary' : 'text-muted-foreground hover:text-foreground',
           )}
         >
+          <User className="size-3.5" />
           只看我的
         </button>
       </div>

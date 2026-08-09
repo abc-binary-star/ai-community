@@ -125,7 +125,10 @@ export function IdeaDetailView({ id }: { id: string }) {
 
       {/* 来源：落回原文是主行动，不是次要链接 */}
       <Card className="p-5">
-        <p className="mb-2 text-xs text-muted-foreground">这条想法来自</p>
+        <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Quote className="size-3.5" />
+          这条想法来自
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={cn(
@@ -157,7 +160,10 @@ export function IdeaDetailView({ id }: { id: string }) {
 
       {/* 想法链：一次只呈现一条纵向路径，向上是它回应了谁，向下是它引出了什么 */}
       <Card className="p-5">
-        <p className="mb-3 text-xs text-muted-foreground">想法链</p>
+        <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Link2 className="size-3.5" />
+          想法链
+        </p>
         <IdeaChainView id={id} />
       </Card>
     </div>

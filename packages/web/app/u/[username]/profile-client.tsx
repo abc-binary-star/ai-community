@@ -237,7 +237,8 @@ export function ProfileClient({ username }: { username: string }) {
       </Card>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <FileText className="size-4 text-muted-foreground" />
           {isSelf ? '我的帖子' : `${user.displayName || user.username} 的帖子`}
         </h2>
 

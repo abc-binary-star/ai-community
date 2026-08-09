@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, FolderTree, Loader2, Pencil, Plus, Trash2, UserCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -112,7 +112,10 @@ function FollowGroupManager() {
   return (
     <Card>
       <div className="flex items-center justify-between px-4 py-3">
-        <h2 className="text-sm font-medium">关注分组</h2>
+        <h2 className="flex items-center gap-1.5 text-sm font-medium">
+          <FolderTree className="size-4 text-muted-foreground" />
+          关注分组
+        </h2>
         <Button
           variant="outline"
           size="sm"
@@ -208,7 +211,10 @@ export default function FollowingPage() {
           返回主页
         </Link>
       </Button>
-      <h1 className="text-xl font-semibold">{username} 的关注</h1>
+      <h1 className="flex items-center gap-2 text-xl font-semibold">
+        <UserCheck className="size-5 text-muted-foreground" />
+        {username} 的关注
+      </h1>
 
       {isOwn && <FollowGroupManager />}
 

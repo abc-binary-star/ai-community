@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -88,7 +88,10 @@ export default function FollowersPage() {
           返回主页
         </Link>
       </Button>
-      <h1 className="text-xl font-semibold">{username} 的粉丝</h1>
+      <h1 className="flex items-center gap-2 text-xl font-semibold">
+        <Users className="size-5 text-muted-foreground" />
+        {username} 的粉丝
+      </h1>
 
       {query.data.items.length === 0 ? (
         <Card className="border-dashed">

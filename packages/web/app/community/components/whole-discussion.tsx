@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { ChevronDown, Loader2, MessageSquarePlus } from 'lucide-react'
+import { ChevronDown, History, Loader2, MessageSquare, MessageSquarePlus } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -71,7 +71,10 @@ export function WholeDiscussion({ postId }: Props) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">讨论 {ideaCount > 0 ? `· ${ideaCount}` : ''}</h2>
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <MessageSquare className="size-4 text-muted-foreground" />
+        讨论 {ideaCount > 0 ? `· ${ideaCount}` : ''}
+      </h2>
 
       {isLoggedIn ? (
         draft ? (
@@ -139,7 +142,10 @@ function HistorySection({
   if (loading || comments.length === 0) return null
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <p className="text-xs font-medium text-muted-foreground">历史评论（只读）</p>
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <History className="size-3.5" />
+        历史评论（只读）
+      </p>
       {comments.map((c) => (
         <HistoryComment key={c.id} comment={c} />
       ))}

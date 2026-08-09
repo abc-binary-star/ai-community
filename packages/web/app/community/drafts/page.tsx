@@ -56,7 +56,10 @@ export default function DraftsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">我的草稿</h1>
+        <h1 className="flex items-center gap-2 text-xl font-semibold">
+          <FileText className="size-5 text-muted-foreground" />
+          我的草稿
+        </h1>
         <Button asChild size="sm">
           <Link href="/community/post/new">
             <PenLine />

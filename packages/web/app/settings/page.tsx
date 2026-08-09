@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Bell, Check, Loader2, Save, ShieldOff, Sparkles, Upload, X } from 'lucide-react'
+import { ArrowLeft, Ban, Bell, Check, Image as ImageIcon, Loader2, Save, ShieldOff, Sparkles, Upload, User, X } from 'lucide-react'
 import Cropper from 'react-easy-crop'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -252,7 +252,10 @@ export default function SettingsPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>头像</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <ImageIcon className="size-4 text-muted-foreground" />
+                  头像
+                </CardTitle>
                 <CardDescription>上传本地图片作为头像，支持 JPG/PNG/WebP/GIF，最大 5MB</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -301,7 +304,10 @@ export default function SettingsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>基本信息</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="size-4 text-muted-foreground" />
+                  基本信息
+                </CardTitle>
                 <CardDescription>更新你的昵称和个人简介</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
