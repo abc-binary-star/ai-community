@@ -91,7 +91,7 @@ export function AnnotationEditor({ postId, draft, onClose }: Props) {
         placeholder={isWhole ? '对整篇文章说点什么…' : '写下你的想法…'}
         className="min-h-[72px] resize-none text-sm"
       />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center gap-1">
           <button
             type="button"

@@ -118,7 +118,7 @@ export function PostDetailView({ id }: { id: string }) {
       <div className="mx-auto max-w-4xl space-y-6">
         <Skeleton className="h-9 w-24" />
         <Card>
-          <div className="space-y-4 p-6">
+          <div className="space-y-4 p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Skeleton className="h-5 w-16" />
@@ -129,7 +129,7 @@ export function PostDetailView({ id }: { id: string }) {
             <Skeleton className="h-8 w-3/4" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-5/6" />
-            <div className="flex items-center gap-2 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
               <Skeleton className="size-8 rounded-full" />
               <Skeleton className="h-4 w-28" />
             </div>
@@ -247,7 +247,7 @@ export function PostDetailView({ id }: { id: string }) {
           )}
 
           {post.aiSummary && (
-            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+            <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
               <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-primary">
                 <Sparkles className="size-4" />
                 AI 摘要
@@ -270,7 +270,7 @@ export function PostDetailView({ id }: { id: string }) {
           )}
 
           {(isGenerating || summaryQuery.data?.status === 'generating') && (
-            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+            <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
               <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
                 <Sparkles className="size-4" />
                 AI 讨论摘要
@@ -285,7 +285,7 @@ export function PostDetailView({ id }: { id: string }) {
           )}
 
           {summaryQuery.data && summaryQuery.data.status === 'done' && (
-            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+            <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
               <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-primary">
                 <Sparkles className="size-4" />
                 AI 讨论摘要
@@ -315,8 +315,8 @@ export function PostDetailView({ id }: { id: string }) {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
               <Avatar className="size-8">
                 <AvatarFallback className="bg-primary/10 text-xs text-primary">{getInitials(post.author.username)}</AvatarFallback>
               </Avatar>
@@ -328,7 +328,7 @@ export function PostDetailView({ id }: { id: string }) {
                 <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-transparent">版主</Badge>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               {hydrated && token && (
                 <Button variant="ghost" size="sm" onClick={openNotes}>
                   <Notebook />

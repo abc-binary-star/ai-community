@@ -136,21 +136,21 @@ function ChainNodeCard({
       )}
     >
       {node.excerpt && (
-        <blockquote className="mb-2 line-clamp-2 border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
+        <blockquote className="mb-2 line-clamp-2 border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground sm:text-sm">
           {node.excerpt}
         </blockquote>
       )}
       <p className={cn('whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground', current && 'font-medium')}>
         {node.body}
       </p>
-      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {node.author && (
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
             <Avatar className="size-4">
               <AvatarImage src={node.author.avatar ?? undefined} alt={node.author.username} />
-              <AvatarFallback className="text-[8px]">{getInitials(node.author.username)}</AvatarFallback>
+              <AvatarFallback className="text-[10px]">{getInitials(node.author.username)}</AvatarFallback>
             </Avatar>
-            {node.author.username}
+            <span className="truncate">{node.author.username}</span>
           </span>
         )}
         <span className="inline-flex items-center gap-1">

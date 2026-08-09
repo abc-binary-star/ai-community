@@ -224,7 +224,7 @@ function MessagesInner() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="flex h-[calc(100dvh-4rem)] overflow-hidden">
       {/* 会话列表 */}
       <aside
         className={cn(
@@ -367,8 +367,8 @@ function MessagesInner() {
                           <p className="whitespace-pre-wrap break-words">{m.content}</p>
                           <div
                             className={cn(
-                              'mt-1 flex items-center justify-end gap-1 text-[10px]',
-                              isSelf ? 'text-primary-foreground/70' : 'text-muted-foreground',
+                              'mt-1 flex items-center justify-end gap-1 text-[11px]',
+                              isSelf ? 'text-primary-foreground/85' : 'text-muted-foreground',
                             )}
                           >
                             <span>{formatEditedTime(m.createdAt)}</span>
@@ -383,7 +383,7 @@ function MessagesInner() {
             </div>
 
             {/* 输入区 */}
-            <div className="border-t border-border bg-background p-3">
+            <div className="border-t border-border bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
               <div className="flex items-end gap-2">
                 <Textarea
                   value={input}

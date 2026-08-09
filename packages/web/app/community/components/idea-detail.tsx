@@ -76,9 +76,9 @@ export function IdeaDetailView({ id }: { id: string }) {
         className="channel-stripe overflow-hidden"
         style={{ ['--stripe-color' as string]: color.stripe }}
       >
-        <div className="space-y-4 p-6 pl-7">
+        <div className="space-y-4 p-4 pl-5 sm:p-6 sm:pl-7">
           {/* 原文摘录：常驻顶部，视觉主体 */}
-          <blockquote className="relative rounded-xl border-l-2 border-primary/40 bg-muted/40 py-3.5 pl-4 pr-3">
+          <blockquote className="relative rounded-xl border-l-2 border-primary/40 bg-muted/50 py-3.5 pl-4 pr-3">
             <Quote className="absolute -left-px -top-1 size-3.5 text-primary/40" aria-hidden />
             <p className="text-base leading-relaxed text-foreground/90">{idea.excerpt}</p>
           </blockquote>

@@ -184,7 +184,7 @@ export function PostListPage({
       )}
 
       {view === 'posts' && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <Button variant="outline" size="sm" className="rounded-full" disabled={page <= 1} onClick={() => goPage(page - 1)}>
             <ChevronLeft />
             上一页

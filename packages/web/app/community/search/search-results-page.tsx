@@ -293,7 +293,7 @@ export default function SearchResultsPage({
       {/* 筛选面板 */}
       <div className="space-y-3">
         {/* 搜索范围 tabs */}
-        <div className="inline-flex items-center rounded-lg bg-muted p-0.5">
+        <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
           {SCOPES.map((tab) => {
             const active = scope === tab.key
             return (
@@ -302,7 +302,7 @@ export default function SearchResultsPage({
                 type="button"
                 onClick={() => updateParam('scope', tab.key)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-3',
                   active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -336,13 +336,13 @@ export default function SearchResultsPage({
             className="h-9 w-36 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:flex-row sm:items-center">
             <input
               type="date"
               value={fromInput}
               onChange={(e) => handleFromChange(e.target.value)}
               title="开始日期"
-              className="h-9 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-auto"
             />
             <span className="text-xs text-muted-foreground">至</span>
             <input
@@ -350,7 +350,7 @@ export default function SearchResultsPage({
               value={toInput}
               onChange={(e) => handleToChange(e.target.value)}
               title="结束日期"
-              className="h-9 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-auto"
             />
           </div>
 

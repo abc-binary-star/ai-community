@@ -75,7 +75,7 @@ export default function GuidelinesPage() {
                 <ScrollText className="size-7 text-primary" />
               </div>
             </div>
-            <h1 className="text-3xl font-semibold">Commons 社区公约</h1>
+            <h1 className="text-2xl font-semibold sm:text-3xl">Commons 社区公约</h1>
             <p className="mt-2 text-muted-foreground">
               我们致力于打造一个友善、开放、有价值的兴趣社区。请遵守以下规范。
             </p>

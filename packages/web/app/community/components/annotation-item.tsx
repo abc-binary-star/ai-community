@@ -239,21 +239,21 @@ export function AnnotationItem({
 
   return (
     <div className="space-y-2 rounded-lg border border-border bg-card p-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Avatar className="size-6">
           <AvatarImage src={annotation.author.avatar ?? undefined} />
-          <AvatarFallback className="text-[11px]">{getInitials(name)}</AvatarFallback>
+          <AvatarFallback className="text-xs">{getInitials(name)}</AvatarFallback>
         </Avatar>
         <AuthorName name={name} />
         {annotation.visibility === 'private' && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600">
+          <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-600">
             <Lock className="size-2.5" /> 仅自己可见
           </span>
         )}
-        <span className="text-[11px] text-muted-foreground">{formatRelativeTime(annotation.createdAt)}</span>
-        {annotation.edited && <span className="text-[11px] text-muted-foreground">已编辑</span>}
+        <span className="text-xs text-muted-foreground">{formatRelativeTime(annotation.createdAt)}</span>
+        {annotation.edited && <span className="text-xs text-muted-foreground">已编辑</span>}
         {annotation.anchorStatus === 'orphaned' && (
-          <span className="text-[11px] text-amber-600">原文已变更</span>
+          <span className="text-xs text-amber-600">原文已变更</span>
         )}
       </div>
 
@@ -283,7 +283,7 @@ export function AnnotationItem({
         <p className="whitespace-pre-wrap text-sm">{annotation.body}</p>
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <button
           onClick={handleLike}
           disabled={like.isPending}

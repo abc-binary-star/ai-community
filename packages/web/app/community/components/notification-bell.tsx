@@ -70,7 +70,7 @@ export function NotificationBell() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0" sideOffset={8}>
+      <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-1.5rem)] p-0" sideOffset={8}>
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>通知</span>
           <Button

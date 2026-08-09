@@ -33,9 +33,9 @@ export function IdeaCard({ card }: { card: IdeaCardData }) {
       style={{ ['--stripe-color' as string]: color.stripe }}
       onClick={() => router.push(target)}
     >
-      <div className="flex flex-col gap-3 p-5 pl-6">
+      <div className="flex flex-col gap-3 p-4 pl-5 sm:p-5 sm:pl-6">
         {/* 摘录：卡片的视觉主体，衬线体强化"读物"气质 */}
-        <blockquote className="relative rounded-lg border-l-2 border-primary/40 bg-muted/40 py-3 pl-4 pr-3">
+        <blockquote className="relative rounded-lg border-l-2 border-primary/40 bg-muted/50 py-3 pl-4 pr-3">
           <Quote className="absolute -left-px -top-1 size-3.5 text-primary/40" aria-hidden />
           <p className="font-serifcn text-base leading-relaxed text-foreground/90">{card.excerpt}</p>
         </blockquote>

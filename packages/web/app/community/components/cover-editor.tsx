@@ -37,14 +37,14 @@ export function CoverEditor({ coverUrl, onChange }: CoverEditorProps) {
   return (
     <div className="flex items-end gap-3">
       {coverUrl ? (
-        <div className="group relative w-48 shrink-0 overflow-hidden rounded-lg border bg-muted shadow-sm">
+        <div className="group relative w-40 shrink-0 overflow-hidden rounded-lg border bg-muted shadow-sm sm:w-48">
           <img src={coverUrl} alt="封面预览" className="aspect-video w-full object-cover" />
         </div>
       ) : (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex aspect-video w-48 shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed bg-muted/30 text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
+          className="flex aspect-video w-40 shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed bg-muted/30 text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary sm:w-48"
         >
           <ImagePlus className="size-5" />
           <span className="text-xs">添加封面</span>

@@ -82,7 +82,7 @@ function NotificationsContent() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Bell className="size-6 text-primary" />
           <h1 className="text-2xl font-semibold">通知</h1>

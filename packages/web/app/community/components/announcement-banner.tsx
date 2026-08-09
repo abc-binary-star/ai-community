@@ -40,8 +40,8 @@ export function AnnouncementBanner() {
     <div
       className={
         urgent
-          ? 'flex items-center gap-2 border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm'
-          : 'flex items-center gap-2 border-b border-primary/20 bg-primary/[0.06] px-4 py-2 text-sm'
+          ? 'flex items-center gap-2 border-b border-destructive/25 bg-destructive/15 px-4 py-2 text-sm'
+          : 'flex items-center gap-2 border-b border-primary/25 bg-primary/10 px-4 py-2 text-sm'
       }
     >
       {urgent ? (

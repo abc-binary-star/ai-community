@@ -19,7 +19,7 @@ export function TagBadge({ name, selected = false, onClick, size = 'sm', asLink 
   const color = channelColor(channel)
 
   const sizeClasses = size === 'sm'
-    ? 'text-[11px] px-2.5 py-0.5'
+    ? 'text-xs px-2.5 py-1'
     : 'text-xs px-3 py-1'
 
   const variantClasses = selected

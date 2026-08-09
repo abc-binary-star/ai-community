@@ -47,7 +47,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 const selectClass =
-  'h-9 w-28 rounded-lg border border-input bg-card px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+  'h-9 rounded-lg border border-input bg-card px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
 
 export default function UserRoleAdminPage() {
   const router = useRouter()
@@ -200,7 +200,7 @@ export default function UserRoleAdminPage() {
           const draft = drafts[u.username] ?? u.role
           const dirty = draft !== u.role
           return (
-            <Card key={u.id} className="flex items-center gap-3 p-3">
+            <Card key={u.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-3">
               <Avatar className="size-9">
                 {u.avatar ? <AvatarImage src={u.avatar} alt={u.username} /> : null}
                 <AvatarFallback className="bg-primary/10 text-xs text-primary">
@@ -222,7 +222,7 @@ export default function UserRoleAdminPage() {
               {isSelf ? (
                 <span className="shrink-0 text-xs text-muted-foreground">不能修改自己的角色</span>
               ) : (
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -233,7 +233,7 @@ export default function UserRoleAdminPage() {
                     重置密码
                   </Button>
                   <select
-                    className={selectClass}
+                    className={`${selectClass} w-full sm:w-28`}
                     value={draft}
                     disabled={saving === u.username}
                     onChange={(e) =>

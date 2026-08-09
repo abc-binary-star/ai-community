@@ -44,8 +44,8 @@ export function CommentForm({
   return (
     <div className="space-y-2">
       {replyTo && (
-        <div className="flex items-center justify-between rounded-lg bg-accent px-3 py-2 text-sm">
-          <span className="text-accent-foreground">回复 @{replyTo.author.username}</span>
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-accent px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1 truncate text-accent-foreground">回复 @{replyTo.author.username}</span>
           <button
             type="button"
             onClick={onCancelReply}

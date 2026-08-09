@@ -481,7 +481,8 @@ export default function AnnouncementsAdminPage() {
           </div>
         </Card>
       ) : (
-        <Card>
+          <>
+        <Card className="hidden sm:block">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -574,7 +575,86 @@ export default function AnnouncementsAdminPage() {
             </table>
           </div>
         </Card>
-      )}
-    </div>
+
+        {/* 移动端：卡片式列表 */}
+        <div className="space-y-3 sm:hidden">
+          {items.map((item) => (
+            <Card key={item.id} className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
+                {item.isPinned && <Badge variant="secondary">置顶</Badge>}
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>{ANNOUNCEMENT_CATEGORY_LABELS[item.category]}</span>
+                <span>{ANNOUNCEMENT_LEVEL_LABELS[item.level]}</span>
+                <span>
+                  {new Date(item.publishAt).toLocaleString('zh-CN', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+                {item.edited && <span>已编辑</span>}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/60 pt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => { setEditingId(item.id); setFormOpen(true) }}
+                >
+                  <Pencil />
+                  编辑
+                </Button>
+                {item.status === 'draft' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-primary"
+                    onClick={() => changeStatus(item.id, 'published')}
+                  >
+                    <Send />
+                    发布
+                  </Button>
+                )}
+                {item.status === 'published' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-amber-600"
+                    onClick={() => changeStatus(item.id, 'offline')}
+                  >
+                    <Archive />
+                    下线
+                  </Button>
+                )}
+                {item.status === 'offline' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-primary"
+                    onClick={() => changeStatus(item.id, 'published')}
+                  >
+                    <RotateCcw />
+                    重新发布
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                  onClick={() => remove(item.id)}
+                >
+                  <Trash2 />
+                  删除
+                </Button>
+              </div>
+            </Card>
+          ))}
+         </div>
+          </>
+       )}
+     </div>
   )
 }

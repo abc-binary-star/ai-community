@@ -71,7 +71,7 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
     >
       <div className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
             {isWhole ? '整篇想法' : '页边想法'}
             <span className="text-primary">· {count || items.length || 0}</span>
           </p>

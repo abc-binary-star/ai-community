@@ -56,7 +56,7 @@ export function PostCard({ post, variant = 'standard', onChanged }: PostCardProp
 
       <div
         className={cn(
-          'flex min-w-0 flex-1 flex-col gap-3 p-5 pl-6',
+          'flex min-w-0 flex-1 flex-col gap-3 p-4 pl-5 sm:p-5 sm:pl-6',
           variant === 'hero' && 'sm:justify-center sm:p-7',
         )}
       >
@@ -152,7 +152,7 @@ function CardBody({ post, variant }: { post: Post; variant: PostCardVariant }) {
       )}
 
       {post.aiSummary ? (
-        <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-accent/40 px-3.5 py-2.5">
+        <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-accent/60 px-3.5 py-2.5">
           <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className={cn('text-sm leading-relaxed text-foreground/80', variant === 'hero' ? 'line-clamp-3' : 'line-clamp-2')}>
             <span className="mr-1 font-medium text-primary">AI 摘要</span>
@@ -171,7 +171,7 @@ function CardBody({ post, variant }: { post: Post; variant: PostCardVariant }) {
 // 页脚：作者 + 浏览/收藏/点赞/分享/评论
 function CardFooter({ post, onChanged }: { post: Post; onChanged?: (...args: unknown[]) => void }) {
   return (
-    <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-3">
+    <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border/60 pt-3">
       <div className="flex min-w-0 items-center gap-2">
         <Avatar className="size-6 ring-1 ring-border/50">
           {post.author.avatar && <AvatarImage src={post.author.avatar} alt={post.author.username} />}
@@ -179,7 +179,7 @@ function CardFooter({ post, onChanged }: { post: Post; onChanged?: (...args: unk
         </Avatar>
         <span className="truncate text-xs font-medium text-muted-foreground">{post.author.username}</span>
       </div>
-      <div className="flex shrink-0 items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-wrap items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           <Eye className="size-3.5" />
           {post.viewCount}

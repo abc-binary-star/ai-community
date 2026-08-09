@@ -449,7 +449,7 @@ export default function SettingsPage() {
                   </div>
 
                   {prefsQuery.data.doNotDisturb && (
-                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2.5">
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 px-3 py-2.5">
                       <span className="text-sm text-muted-foreground">时段</span>
                       <Input
                         type="number"
@@ -457,7 +457,7 @@ export default function SettingsPage() {
                         max={23}
                         value={prefsQuery.data.quietStartHour}
                         onChange={(e) => updatePref({ quietStartHour: Number(e.target.value) })}
-                        className="h-8 w-20"
+                        className="h-8 w-16 sm:w-20"
                       />
                       <span className="text-sm text-muted-foreground">至</span>
                       <Input
@@ -466,7 +466,7 @@ export default function SettingsPage() {
                         max={23}
                         value={prefsQuery.data.quietEndHour}
                         onChange={(e) => updatePref({ quietEndHour: Number(e.target.value) })}
-                        className="h-8 w-20"
+                        className="h-8 w-16 sm:w-20"
                       />
                       <span className="text-xs text-muted-foreground">时（24 小时制）</span>
                     </div>
@@ -500,7 +500,7 @@ export default function SettingsPage() {
                 </div>
               ) : aiUsageQuery.data ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium">
                         当前套餐：

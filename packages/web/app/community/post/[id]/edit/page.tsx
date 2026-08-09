@@ -68,7 +68,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   }, [token, params.id, router])
 
   useEffect(() => {
-    const updateHeight = () => setEditorHeight(window.innerHeight - 270)
+    const updateHeight = () => setEditorHeight(window.innerHeight - (window.innerWidth < 768 ? 200 : 270))
     updateHeight()
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
@@ -211,7 +211,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-3">
+    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-6xl flex-col px-4 pt-3">
       {/* 顶栏：返回 + 标题 */}
       <div className="mb-3 flex items-center gap-2">
         <Button
@@ -367,7 +367,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
           onClick={() => !submitting && setDialogOpen(false)}
         >
           <div
-            className="w-full max-w-md space-y-4 rounded-xl border bg-card p-6 shadow-xl"
+            className="max-h-[90dvh] w-full max-w-md space-y-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

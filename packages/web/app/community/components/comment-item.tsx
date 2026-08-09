@@ -65,15 +65,15 @@ export function CommentItem({
     <div className="space-y-2">
       <Card
         className={`border-l-2 ${depth > 0 ? 'border-l-primary/40' : 'border-l-primary'}`}
-        style={{ marginLeft: depth > 0 ? Math.min(depth, 5) * 16 : 0 }}
+        style={{ marginLeft: depth > 0 ? `calc(clamp(8px, 3vw, 16px) * ${Math.min(depth, 5)})` : 0 }}
       >
         <div className="p-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Avatar className="size-7">
               {comment.author.avatar && <AvatarImage src={comment.author.avatar} alt={comment.author.username} />}
               <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(comment.author.username)}</AvatarFallback>
             </Avatar>
-            <span className="text-sm font-medium">{comment.author.username}</span>
+            <span className="min-w-0 truncate text-sm font-medium">{comment.author.username}</span>
             <span className="text-xs text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
             {depth > 0 && <span className="text-xs text-muted-foreground">· 回复</span>}
           </div>

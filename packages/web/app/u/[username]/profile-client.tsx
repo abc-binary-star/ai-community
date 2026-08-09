@@ -193,7 +193,7 @@ export function ProfileClient({ username }: { username: string }) {
           </div>
 
           <div className="mt-6 rounded-2xl border border-border/60 bg-muted/30 p-2">
-            <div className="grid grid-cols-4 divide-x divide-border/60">
+            <div className="grid grid-cols-2 divide-x divide-border/60 sm:grid-cols-4">
               <div className="group flex flex-col items-center gap-1.5 rounded-xl py-3 transition-colors hover:bg-accent/50">
                 <span className="text-xl font-bold tabular-nums leading-none text-foreground">{user.postCount}</span>
                 <FileText className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />

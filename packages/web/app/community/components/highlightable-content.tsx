@@ -227,7 +227,11 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
       }
       const rect = sel.getRangeAt(0).getBoundingClientRect()
       setPending(info)
-      setToolbar({ x: rect.left + rect.width / 2, y: rect.top })
+      const TOOLBAR_MARGIN = 104
+      setToolbar({
+        x: Math.min(Math.max(rect.left + rect.width / 2, TOOLBAR_MARGIN), window.innerWidth - TOOLBAR_MARGIN),
+        y: Math.max(rect.top, 64),
+      })
     }
     document.addEventListener('selectionchange', onSelectionChange)
     return () => document.removeEventListener('selectionchange', onSelectionChange)
@@ -396,7 +400,12 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
         const id = mark.getAttribute('data-highlight-id')
         if (id) {
           const rect = mark.getBoundingClientRect()
-          setMenu({ id, x: rect.left + rect.width / 2, y: rect.bottom })
+          const MENU_MARGIN = 90
+          setMenu({
+            id,
+            x: Math.min(Math.max(rect.left + rect.width / 2, MENU_MARGIN), window.innerWidth - MENU_MARGIN),
+            y: rect.bottom,
+          })
         }
       } else {
         setMenu(null)
@@ -421,7 +430,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
             e.stopPropagation()
             openPanelView(b.anchor, '')
           }}
-          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-full items-center gap-1.5 pl-2 sm:pl-3"
+          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-1 items-center gap-1.5 pl-1.5 sm:translate-x-full sm:pl-3"
           style={{ top: b.top + 14 }}
           aria-label="查看段落想法"
         >
@@ -440,7 +449,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
             openParagraphPanel(hover.anchor, hover.snapshot)
           }}
           onMouseDown={(e) => e.preventDefault()}
-          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-full items-center gap-1.5 pl-2 text-muted-foreground transition-colors hover:text-primary sm:pl-3"
+          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-1 items-center gap-1.5 pl-1.5 text-muted-foreground transition-colors hover:text-primary sm:translate-x-full sm:pl-3"
           style={{ top: hover.top + 14 }}
           aria-label="对这一段写想法"
         >

@@ -89,12 +89,12 @@ export default function ModerationPage() {
         返回
       </Button>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <ShieldCheck className="size-5 text-primary" />
           内容审核
         </h1>
-        <div className="flex items-center gap-1 rounded-full bg-muted p-1">
+        <div className="flex flex-wrap items-center gap-1 rounded-full bg-muted p-1">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.key}

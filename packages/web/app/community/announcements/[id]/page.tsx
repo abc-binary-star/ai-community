@@ -84,7 +84,7 @@ export default function AnnouncementDetailPage({ params }: { params: { id: strin
             </Badge>
             {item.edited && <span className="text-xs text-muted-foreground">已编辑</span>}
           </div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold leading-snug">
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold leading-snug">
             <Megaphone className="size-6 shrink-0 text-primary" />
             {item.title}
           </h1>
