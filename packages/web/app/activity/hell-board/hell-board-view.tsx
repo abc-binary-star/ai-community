@@ -410,12 +410,7 @@ export function HellBoardView() {
           </aside>
         </div>
         ) : (
-          /* 大事件 / 审核池 / 全部队伍：独立整页视图。
-             宽度跟随页头与导航（同为容器满宽），避免点进来卡片突然变窄、
-             和上方通栏导航对不齐；内容量大时在面板内部滚动。
-             lg 起限制高度（1024px 以上窗口 / 平板横屏），内容不再无限撑长整页；
-             手机竖屏保持页面自然滚动 */
-          <div className="w-full lg:h-[calc(100dvh-8rem)]">
+          <div className="h-[calc(100dvh-11rem)] min-h-[420px] w-full lg:h-[calc(100dvh-8rem)]">
             {topView === 'feed' && <ActivityFeedPanel />}
             {topView === 'pool' && <VotePoolPanel />}
             {topView === 'teams' && <AllTeamsPanel />}
