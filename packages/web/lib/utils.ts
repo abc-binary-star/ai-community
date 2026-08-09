@@ -84,3 +84,18 @@ export function stripMarkdown(md: string): string {
 export function truncateMarkdown(md: string, max: number): string {
   return truncate(stripMarkdown(md), max)
 }
+
+// 提取正文里第一句有分量的话，用作引文卡的主视觉。
+// 策略：去 Markdown → 按中英文句末标点切句 → 取第一句长度足够的，
+// 太短（如"哈哈"）会继续找下一句；都太短则退回截断的开头。
+export function pullQuote(md: string, opts?: { min?: number; max?: number }): string {
+  const min = opts?.min ?? 12
+  const max = opts?.max ?? 90
+  const plain = stripMarkdown(md).replace(/\s+/g, ' ').trim()
+  if (!plain) return ''
+  const sentences = plain.split(/(?<=[。！？!?…]|\.\s)/).map((s) => s.trim()).filter(Boolean)
+  for (const s of sentences) {
+    if (s.length >= min) return truncate(s, max)
+  }
+  return truncate(plain, max)
+}

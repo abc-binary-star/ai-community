@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, MessageSquare, MessageSquarePlus, Share2, Trash2 } from 'lucide-react'
+import { Copy, MessageSquarePlus, Share2, Trash2 } from 'lucide-react'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
@@ -411,7 +411,9 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
     <div className="relative">
       <MarkdownRenderer ref={containerRef} content={content} fontFamily={fontFamily} enableBlocks />
 
-      {/* 段落公开想法数量徽章（正文外侧浮动） */}
+      {/* 页边批注记号（marginalia）：想法长在页边。
+          有想法的段落 → 一道细竖线 + 衬线数字，像手稿旁的批注计数；
+          hover 到某段 → 同一泳道浮出铅笔，邀请在这一段写想法。 */}
       {annotationsEnabled && badges.map((b) => (
         <button
           key={b.anchor}
@@ -419,32 +421,31 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
             e.stopPropagation()
             openPanelView(b.anchor, '')
           }}
-          className="absolute right-0 z-10 -translate-y-1/2 translate-x-full pl-1"
+          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-full items-center gap-1.5 pl-2 sm:pl-3"
           style={{ top: b.top + 14 }}
           aria-label="查看段落想法"
         >
-          <span className="inline-flex items-center gap-0.5 rounded-full border border-border bg-popover px-1.5 py-0.5 text-[11px] text-muted-foreground shadow-sm hover:bg-muted">
-            <MessageSquare className="size-3" />
+          <span className="h-5 w-px bg-primary/50 transition-colors group-hover:bg-primary" aria-hidden />
+          <span className="font-serifcn text-sm leading-none text-primary/80 transition-colors group-hover:text-primary">
             {b.count > 99 ? '99+' : b.count}
           </span>
         </button>
       ))}
 
-      {/* 桌面端 hover 段落写想法图标 */}
-      {annotationsEnabled && hover && (
+      {/* 桌面端 hover 段落写想法：同泳道浮出的细铅笔记号（该段已有想法时不重复出现） */}
+      {annotationsEnabled && hover && !badges.some((b) => b.anchor === hover.anchor) && (
         <button
           onClick={(e) => {
             e.stopPropagation()
             openParagraphPanel(hover.anchor, hover.snapshot)
           }}
           onMouseDown={(e) => e.preventDefault()}
-          className="absolute right-0 z-10 -translate-y-1/2 translate-x-full pl-1 text-muted-foreground transition-opacity hover:text-foreground"
+          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-full items-center gap-1.5 pl-2 text-muted-foreground transition-colors hover:text-primary sm:pl-3"
           style={{ top: hover.top + 14 }}
           aria-label="对这一段写想法"
         >
-          <span className="inline-flex size-6 items-center justify-center rounded-full border border-border bg-popover shadow-sm hover:bg-muted">
-            <MessageSquarePlus className="size-3.5" />
-          </span>
+          <span className="h-5 w-px bg-border transition-colors group-hover:bg-primary/60" aria-hidden />
+          <MessageSquarePlus className="size-3.5" />
         </button>
       )}
 

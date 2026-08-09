@@ -10,7 +10,7 @@ import { api } from '@/lib/api'
 import { channelColor } from '@/lib/channel-colors'
 import { cn } from '@/lib/utils'
 import { useChannels } from '@/lib/use-channels'
-import { PostCard } from './post-card'
+import { DiscoverFeed } from './discover-feed'
 import { SortTabs } from './sort-tabs'
 import { TagBadge } from './tag-badge'
 import { IdeaFeed } from './idea-feed'
@@ -93,13 +93,13 @@ export function PostListPage({
     <div className="flex gap-8">
       {/* 主栏：帖子列表 */}
       <div className="min-w-0 flex-1 space-y-6">
-        {/* 频道标题头：彩色圆点 + 频道名 */}
-        <div className={cn('rounded-2xl border bg-card px-5 py-4 shadow-sm', color.border)}>
-          <div className="flex items-center gap-3">
-            <span className={cn('size-3 rounded-full', color.dot)} />
-            <h1 className="text-2xl font-bold tracking-tight">{getChannelLabel(channels, channel)}</h1>
+        {/* 频道标题头：编辑式版面。频道色做一道竖线锚点，去卡片框，靠字号与留白。 */}
+        <div className="flex items-center gap-3 border-b border-border pb-5">
+          <span className={cn('h-9 w-1 rounded-full', color.dot)} />
+          <div>
+            <h1 className="font-display text-3xl leading-none tracking-tight">{getChannelLabel(channels, channel)}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">分享与讨论，找到同好</p>
           </div>
-          <p className="mt-1.5 pl-6 text-sm text-muted-foreground">分享与讨论，找到同好</p>
         </div>
 
         {/* 视图切换：想法流用于发现和闲逛，帖子列表用于带着目的找文章。
@@ -163,11 +163,7 @@ export function PostListPage({
       ) : isError ? (
         <div className="py-20 text-center text-muted-foreground">加载失败：{(error as Error).message}</div>
       ) : data && data.items.length > 0 ? (
-        <div className="grid gap-4">
-          {data.items.map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
-        </div>
+        <DiscoverFeed posts={data.items} />
       ) : (
         <div className="rounded-2xl border border-dashed bg-card/50 py-20 text-center">
           <p className="text-muted-foreground">

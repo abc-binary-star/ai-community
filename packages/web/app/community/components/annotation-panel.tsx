@@ -69,18 +69,23 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
         'md:right-0 md:top-0 md:h-full md:w-[380px] md:border-l',
       )}
     >
-      <div className="flex items-start gap-2 border-b border-border p-3">
+      <div className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground">
-            {isWhole ? '整篇想法' : '段落想法'} · {count || items.length || 0} 条
+          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+            {isWhole ? '整篇想法' : '页边想法'}
+            <span className="text-primary">· {count || items.length || 0}</span>
           </p>
           {isWhole ? (
-            <p className="mt-1 text-xs text-muted-foreground">对整篇文章的评论都在这里</p>
+            <p className="mt-2 text-sm text-muted-foreground">对整篇文章的想法都汇聚在这里</p>
           ) : (
-            quote && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{quote}</p>
+            quote && (
+              <blockquote className="mt-2 border-l-2 border-primary/40 pl-3 font-serifcn text-sm italic leading-relaxed text-foreground/75 line-clamp-3">
+                {quote}
+              </blockquote>
+            )
           )}
         </div>
-        <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="关闭">
+        <button onClick={onClose} className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="关闭">
           <X className="size-4" />
         </button>
       </div>

@@ -13,7 +13,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { getInitials } from '@/lib/utils'
 import type { DiscoverResponse, Paginated, Post, PublicUser } from 'shared'
-import { PostCard } from '../components/post-card'
+import { DiscoverFeed } from '../components/discover-feed'
 import { SortTabs } from '../components/sort-tabs'
 import { TagBadge } from '../components/tag-badge'
 
@@ -168,11 +168,10 @@ function DiscoverPageInner() {
               </div>
             </Card>
           ) : (
-            <div className="grid gap-4">
-              {posts.map((post) => (
-                <PostCard key={post.id} post={post} onChanged={() => queryClient.invalidateQueries({ queryKey: ['discover-posts'] })} />
-              ))}
-            </div>
+            <DiscoverFeed
+              posts={posts}
+              onChanged={() => queryClient.invalidateQueries({ queryKey: ['discover-posts'] })}
+            />
           )}
 
           {totalPages > 1 && (
