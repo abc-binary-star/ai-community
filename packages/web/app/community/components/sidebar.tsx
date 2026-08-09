@@ -75,11 +75,11 @@ function MobileSidebar({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="社区导航">
       {/* 背景遮罩 */}
-      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={onClose} />
       {/* 抽屉面板 */}
-      <div className="absolute left-0 top-0 h-full w-72 animate-[slide-up_0.2s_ease-out]">
+      <div className="absolute inset-y-0 left-0 w-[min(19rem,calc(100vw-3rem))] animate-[slide-up_0.2s_ease-out] border-r border-border bg-background shadow-2xl">
         <SidebarContent
           activeChannel={activeChannel}
           isDiscover={isDiscover}
@@ -156,7 +156,7 @@ function ChannelItem({
       href={href}
       onClick={onNavigate}
       className={cn(
-        'group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150',
+        'group relative flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150 md:min-h-0',
         active
           ? 'font-medium text-primary'
           : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',

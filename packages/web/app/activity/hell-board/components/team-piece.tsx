@@ -51,16 +51,24 @@ export function PieceStack({
   currentTeamId: string
 }) {
   if (teams.length === 0) return null
+  const visibleTeams = teams.slice(0, 4)
+  const hiddenCount = teams.length - visibleTeams.length
+
   return (
-    <span className="pointer-events-none absolute inset-x-0 bottom-1 flex flex-wrap items-end justify-center gap-x-0.5 gap-y-0">
-      {teams.map((team) => (
+    <span className="pointer-events-none absolute inset-x-1 bottom-1 flex h-7 items-end justify-center gap-0.5 rounded bg-white/80 px-0.5 shadow-sm backdrop-blur-[1px]">
+      {visibleTeams.map((team) => (
         <TeamPiece
           key={team.id}
           team={team}
           isSelf={team.id === currentTeamId}
-          size={teams.length > 4 ? 'sm' : 'md'}
+          size={teams.length > 3 ? 'sm' : 'md'}
         />
       ))}
+      {hiddenCount > 0 && (
+        <span className="mb-1 flex size-5 items-center justify-center rounded-full bg-stone-800 text-[11px] font-black text-white">
+          +{hiddenCount}
+        </span>
+      )}
     </span>
   )
 }

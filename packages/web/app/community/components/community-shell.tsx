@@ -10,15 +10,15 @@ export function CommunityShell({ banner, children }: { banner?: ReactNode; child
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="relative flex h-screen flex-col bg-transparent">
+    <div className="relative flex h-[100dvh] min-h-0 flex-col bg-transparent">
       <Navbar onMenuClick={() => setSidebarOpen(true)} />
       {banner}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
-        <main className="scrollbar-thin flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-4 py-6 lg:px-8">
+        <main className="scrollbar-thin min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+          <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-4 sm:py-6 lg:px-8">
             {children}
-            <footer className="mt-16 flex flex-col items-center gap-1.5 border-t border-border/70 pt-6 text-center text-sm text-muted-foreground">
+            <footer className="mt-10 flex flex-col items-center gap-1.5 border-t border-border/70 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 text-center text-sm text-muted-foreground sm:mt-16">
               <p>
                 <span className="font-display text-base font-semibold tracking-tight text-foreground/80">Commons</span>
                 {' '}· 一个新鲜有趣的兴趣社区

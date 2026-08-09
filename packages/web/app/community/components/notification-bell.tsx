@@ -61,7 +61,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="通知">
+        <Button variant="ghost" size="icon" className="relative size-9" aria-label="通知">
           <Bell className="size-5" />
           {unreadCount > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex size-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">

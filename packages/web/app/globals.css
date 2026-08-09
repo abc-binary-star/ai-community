@@ -164,7 +164,7 @@
     display: grid;
     gap: 6px;
     grid-template-columns: repeat(var(--ring-cols-sm), minmax(0, 1fr));
-    grid-template-rows: repeat(var(--ring-rows-sm), minmax(92px, auto));
+    grid-template-rows: repeat(var(--ring-rows-sm), minmax(108px, auto));
   }
   .board-ring-cell {
     grid-column: var(--cell-col-sm);

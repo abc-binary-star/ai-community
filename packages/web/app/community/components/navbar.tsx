@@ -27,11 +27,11 @@ import { ThemeToggle } from './theme-toggle'
 // 品牌标识：平面珊瑚方块 + 快乐体字标（去渐变去重投影，克制现代）
 function BrandLogo() {
   return (
-    <Link href="/community/discover" className="group flex items-center gap-2.5" aria-label="Commons 首页">
-      <span className="relative flex size-9 items-center justify-center rounded-xl border border-primary/50 transition-colors duration-200 group-hover:border-primary">
-        <span className="font-display text-xl leading-none text-primary">C</span>
+    <Link href="/community/discover" className="group flex min-w-0 items-center gap-2" aria-label="Commons 首页">
+      <span className="relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/50 transition-colors duration-200 group-hover:border-primary sm:size-9 sm:rounded-xl">
+        <span className="font-display text-lg leading-none text-primary sm:text-xl">C</span>
       </span>
-      <span className="font-display text-xl font-bold leading-none tracking-tight text-foreground">
+      <span className="hidden truncate font-display text-xl font-bold leading-none tracking-tight text-foreground sm:inline">
         Commons
       </span>
     </Link>
@@ -89,14 +89,14 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/70 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-4 lg:px-6">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="mx-auto flex h-16 min-w-0 w-full max-w-[1600px] items-center justify-between gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
+        <div className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2.5">
           {/* 移动端：汉堡菜单按钮 */}
           {onMenuClick && (
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="size-9 md:hidden"
               onClick={onMenuClick}
               aria-label="打开菜单"
             >
@@ -113,7 +113,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-1.5">
           {!hydrated ? (
             <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
           ) : user ? (
@@ -124,7 +124,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   发帖
                 </Link>
               </Button>
-              <Button asChild size="icon" className="sm:hidden" aria-label="发帖">
+              <Button asChild size="icon" className="size-9 shrink-0 sm:hidden" aria-label="发帖">
                 <Link href="/community/post/new">
                   <PenLine />
                 </Link>
@@ -134,21 +134,25 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <Bookmark />
                 </Link>
               </Button>
-              <ThemeToggle />
-              <MessageEntry />
+              <div className="hidden sm:block">
+                <ThemeToggle />
+              </div>
+              <div className="hidden sm:block">
+                <MessageEntry />
+              </div>
               <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-full border border-border/60 bg-card p-1 pl-1.5 pr-2 transition-colors hover:border-primary/40 hover:bg-accent"
+                    className="flex size-9 items-center justify-center rounded-full border border-border/60 bg-card p-1 transition-colors hover:border-primary/40 hover:bg-accent sm:size-auto sm:gap-2 sm:p-1 sm:pl-1.5 sm:pr-2"
                   >
                     <Avatar className="size-7">
                       {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
                       <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
                     </Avatar>
                     <span className="hidden max-w-24 truncate text-sm font-medium sm:inline">{user.username}</span>
-                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                    <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">

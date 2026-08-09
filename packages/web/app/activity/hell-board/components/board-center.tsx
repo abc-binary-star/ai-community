@@ -88,7 +88,7 @@ export function BoardCenter({ currentTeam }: { currentTeam: Team | null }) {
             <span className="text-[26px] font-black leading-none tabular-nums text-[#1d6a4a] md:text-[32px]">
               {currentTeam ? selfLit : '—'}
             </span>
-            <span className="mt-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-stone-400">
+            <span className="mt-0.5 text-xs font-black uppercase text-stone-500">
               / {TILE_COUNT} 格
             </span>
           </div>
@@ -100,7 +100,7 @@ export function BoardCenter({ currentTeam }: { currentTeam: Team | null }) {
             <p className="text-center text-[13px] font-black leading-none tracking-tight text-[#4a3306] md:text-base">
               无限循环读书地狱
             </p>
-            <p className="mt-1 text-center text-[8px] font-black uppercase tracking-[0.3em] text-[#8a6a1c]">
+            <p className="mt-1 hidden text-center text-xs font-black uppercase text-[#76570f] min-[380px]:block md:text-[11px]">
               Infinite Reading Hell
             </p>
           </div>

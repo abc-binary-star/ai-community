@@ -224,7 +224,7 @@ function MessagesInner() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] overflow-hidden">
+    <div className="flex h-full min-h-0 overflow-hidden">
       {/* 会话列表 */}
       <aside
         className={cn(
@@ -288,7 +288,7 @@ function MessagesInner() {
                           {conv.lastMessage || '开始聊天吧'}
                         </span>
                         {conv.unreadCount > 0 && (
-                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground">
                             {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                           </span>
                         )}

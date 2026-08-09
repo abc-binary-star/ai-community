@@ -77,7 +77,7 @@ export function BoardTile({ tile, litReason, isCurrent, onSelect }: BoardTilePro
             : formatTileTarget(tile)}
         </p>
         {litReason && (
-          <p className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-900">
+          <p className="hidden items-center gap-0.5 text-xs font-bold text-emerald-900 sm:flex">
             {litReason === 'fallback' && <Flame aria-hidden className="size-3" />}
             {litReason === 'timer' && <Lock aria-hidden className="size-3" />}
             {LIT_LABEL[litReason]}

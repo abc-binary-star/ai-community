@@ -40,8 +40,8 @@ export function AnnouncementBanner() {
     <div
       className={
         urgent
-          ? 'flex items-center gap-2 border-b border-destructive/25 bg-destructive/15 px-4 py-2 text-sm'
-          : 'flex items-center gap-2 border-b border-primary/25 bg-primary/10 px-4 py-2 text-sm'
+          ? 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 border-b border-destructive/25 bg-destructive/15 px-3 py-2 text-sm sm:flex sm:px-4'
+          : 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 border-b border-primary/25 bg-primary/10 px-3 py-2 text-sm sm:flex sm:px-4'
       }
     >
       {urgent ? (
@@ -57,7 +57,7 @@ export function AnnouncementBanner() {
       </Link>
       <Link
         href={`/community/announcements/${item.id}`}
-        className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+        className="col-start-2 text-sm font-medium text-muted-foreground hover:text-foreground sm:col-auto sm:shrink-0 sm:text-xs"
       >
         查看详情
       </Link>

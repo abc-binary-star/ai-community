@@ -482,7 +482,7 @@ export default function AnnouncementsAdminPage() {
         </Card>
       ) : (
           <>
-        <Card className="hidden sm:block">
+        <Card className="hidden lg:block">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>

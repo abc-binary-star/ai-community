@@ -216,7 +216,7 @@ export function HellBoardView() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f6ed] text-stone-900 [background-image:radial-gradient(#d6d3c5_0.8px,transparent_0.8px)] [background-size:18px_18px]">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-[#f7f6ed] text-stone-900 [background-image:radial-gradient(#d6d3c5_0.8px,transparent_0.8px)] [background-size:18px_18px]">
       <div className="mx-auto max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7 lg:py-4">
         <header className="mb-4 border-b-2 border-stone-800 pb-3 lg:mb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -245,7 +245,7 @@ export function HellBoardView() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
               {canReview && (
                 <Link
                   href="/activity/hell-board/review"

@@ -11,7 +11,7 @@ export function ThemeToggle() {
   const hydrated = useHydrated()
 
   if (!hydrated) {
-    return <div className="size-10" aria-hidden />
+    return <div className="hidden size-10 sm:block" aria-hidden />
   }
 
   return (

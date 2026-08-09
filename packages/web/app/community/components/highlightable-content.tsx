@@ -400,7 +400,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
         const id = mark.getAttribute('data-highlight-id')
         if (id) {
           const rect = mark.getBoundingClientRect()
-          const MENU_MARGIN = 90
+          const MENU_MARGIN = Math.min(90, Math.max(40, window.innerWidth / 2 - 8))
           setMenu({
             id,
             x: Math.min(Math.max(rect.left + rect.width / 2, MENU_MARGIN), window.innerWidth - MENU_MARGIN),
@@ -460,7 +460,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
 
       {toolbar && pending && (
         <div
-          className="fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-md"
+          className="fixed z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-popover p-1 shadow-md"
           style={{ left: toolbar.x, top: toolbar.y - 8 }}
           onMouseDown={(e) => e.preventDefault()}
         >

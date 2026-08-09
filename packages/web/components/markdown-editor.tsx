@@ -789,7 +789,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     <div className={cn('w-full space-y-2', className)}>
       <div className="rounded-lg border border-input bg-card overflow-hidden">
         {/* 工具栏 */}
-        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5">
+        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5 [&_button]:max-sm:size-10">
           {TOOLBAR.map((btn) => (
             <Button
               key={btn.label}
@@ -920,7 +920,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               转存中…
             </span>
           )}
-          <div className="ml-auto flex items-center gap-3 pl-2">
+          <div className="ml-auto flex w-full items-center justify-end gap-3 border-t border-border/70 pt-1.5 sm:w-auto sm:border-0 sm:pl-2 sm:pt-0">
             <span className={cn(
               'flex items-center gap-1 text-xs tabular-nums whitespace-nowrap',
               imageCount > MAX_POST_IMAGES ? 'text-destructive font-medium' : 'text-muted-foreground',

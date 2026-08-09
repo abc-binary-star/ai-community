@@ -64,8 +64,8 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
   return (
     <div
       className={cn(
-        'fixed z-40 flex flex-col border-border bg-background shadow-xl',
-        'max-md:inset-x-0 max-md:bottom-0 max-md:top-auto max-md:max-h-[85vh] max-md:rounded-t-xl max-md:border-t',
+        'fixed z-50 flex flex-col border-border bg-background shadow-xl',
+        'max-md:inset-x-0 max-md:bottom-0 max-md:top-auto max-md:max-h-[85dvh] max-md:rounded-t-xl max-md:border-t max-md:pb-[env(safe-area-inset-bottom)]',
         'md:right-0 md:top-0 md:h-full md:w-[380px] md:border-l',
       )}
     >
@@ -85,7 +85,7 @@ export function AnnotationPanel({ postId, anchor, quote, initialDraft, currentUs
             )
           )}
         </div>
-        <button onClick={onClose} className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="关闭">
+        <button onClick={onClose} className="flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted md:size-8" aria-label="关闭">
           <X className="size-4" />
         </button>
       </div>
