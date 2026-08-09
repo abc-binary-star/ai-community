@@ -5,7 +5,8 @@ import { Crown, History, Loader2, LogOut, Star, UserRoundPlus } from 'lucide-rea
 import { cn } from '@/lib/utils'
 import { formatWords } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
-import type { Team } from '../lib/types'
+import type { Team, TeamMember } from '../lib/types'
+import { MemberProfileDialog } from './member-profile-dialog'
 import { TeamEmblem } from './team-emblem'
 
 /** 队伍成员满编 5 人，不足时用空槽占位，保证布局稳定 */
@@ -33,6 +34,7 @@ export function TeamPanel({
   const [claimError, setClaimError] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
   const [leaveError, setLeaveError] = useState<string | null>(null)
+  const [profileOf, setProfileOf] = useState<{ member: TeamMember; teamName: string } | null>(null)
 
   // 队长位空缺时，本队成员可自助补选（入队时没勾队长也有补救入口）
   const hasCaptain = team.members.some((m) => m.isCaptain)
@@ -122,27 +124,31 @@ export function TeamPanel({
         <ul className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
           {slots.map((member, i) =>
             member ? (
-              <li
-                key={member.id}
-                className={cn(
-                  'flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-xs shadow-[1.5px_1.5px_0_#e0d6ba]',
-                  member.id === currentMemberId
-                    ? 'border-[#d9a441] bg-[#fff3d6] ring-1 ring-[#d9a441]/40'
-                    : 'border-[#dccfa8] bg-white/80 hover:bg-[#fdf9ec]',
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-1.5 text-stone-800">
-                  <span className="truncate">{member.name}</span>
-                  {member.isCaptain && <Crown aria-label="队长" className="size-3 shrink-0 text-amber-600" />}
-                  {member.id === currentMemberId && <span className="shrink-0 text-[10px] text-emerald-700">你</span>}
-                </span>
-                <span className="shrink-0 tabular-nums text-stone-500">
-                  <span className="inline-flex items-center gap-0.5 text-[#7a5c1e]">
-                    <Star aria-hidden className="size-3" />
-                    {member.bookCount} 本
+              <li key={member.id}>
+                <button
+                  type="button"
+                  onClick={() => setProfileOf({ member, teamName: team.name })}
+                  title={`查看 ${member.name} 的阅读详情`}
+                  className={cn(
+                    'flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left text-xs shadow-[1.5px_1.5px_0_#e0d6ba] transition-colors',
+                    member.id === currentMemberId
+                      ? 'border-[#d9a441] bg-[#fff3d6] ring-1 ring-[#d9a441]/40'
+                      : 'border-[#dccfa8] bg-white/80 hover:bg-[#fdf9ec]',
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5 text-stone-800">
+                    <span className="truncate">{member.name}</span>
+                    {member.isCaptain && <Crown aria-label="队长" className="size-3 shrink-0 text-amber-600" />}
+                    {member.id === currentMemberId && <span className="shrink-0 text-[10px] text-emerald-700">你</span>}
                   </span>
-                  <span className="ml-2">{formatWords(member.wordCount)}</span>
-                </span>
+                  <span className="shrink-0 tabular-nums text-stone-500">
+                    <span className="inline-flex items-center gap-0.5 text-[#7a5c1e]">
+                      <Star aria-hidden className="size-3" />
+                      {member.bookCount} 本
+                    </span>
+                    <span className="ml-2">{formatWords(member.wordCount)}</span>
+                  </span>
+                </button>
               </li>
             ) : (
               <li
@@ -172,6 +178,14 @@ export function TeamPanel({
           </button>
           {leaveError && <p className="mt-1 text-[11px] font-medium text-rose-600">{leaveError}</p>}
         </div>
+      )}
+
+      {profileOf && (
+        <MemberProfileDialog
+          member={profileOf.member}
+          teamName={profileOf.teamName}
+          onClose={() => setProfileOf(null)}
+        />
       )}
     </section>
   )

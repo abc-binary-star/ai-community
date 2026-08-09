@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { BookOpen, Crown, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fetchRanking } from '../lib/api'
 import { formatWords } from '../lib/rules'
 import { useActivityStore } from '../lib/store'
-import type { RankingMetric, RankingRow, RankingSubject } from '../lib/types'
+import type { RankingMetric, RankingRow, RankingSubject, Team, TeamMember } from '../lib/types'
+import { MemberProfileDialog } from './member-profile-dialog'
 import { TeamEmblem } from './team-emblem'
 
 type TabKey = 'ranking' | 'lit'
@@ -24,18 +26,28 @@ const MEDAL_STYLES: Record<number, string> = {
   4: 'border-[#6b7280] bg-gradient-to-b from-[#9ca3af] to-[#6b7280] text-white shadow-[1px_1px_0_rgba(75,85,99,0.5)]',
 }
 
-function RankRow({ row, metric, emblem }: { row: RankingRow; metric: RankingMetric | 'lit'; emblem?: string }) {
+function RankRow({
+  row,
+  metric,
+  emblem,
+  onClick,
+}: {
+  row: RankingRow
+  metric: RankingMetric | 'lit'
+  emblem?: string
+  onClick?: (row: RankingRow) => void
+}) {
   const medal = MEDAL_STYLES[row.rank]
-  return (
-    <li
-      className={cn(
-        'flex items-center gap-2.5 rounded-md border px-2.5 py-2 text-xs shadow-[1.5px_1.5px_0_#e0d6ba]',
-        // 高亮当前用户与其所属队伍的位置（PRD 第 11 节）
-        row.isSelf
-          ? 'border-[#d9a441] bg-[#fff3d6] ring-1 ring-[#d9a441]/40'
-          : 'border-[#dccfa8] bg-white/80 hover:bg-[#fdf9ec]',
-      )}
-    >
+  const cls = cn(
+    'flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-xs shadow-[1.5px_1.5px_0_#e0d6ba]',
+    onClick && 'cursor-pointer transition-colors',
+    // 高亮当前用户与其所属队伍的位置（PRD 第 11 节）
+    row.isSelf
+      ? 'border-[#d9a441] bg-[#fff3d6] ring-1 ring-[#d9a441]/40'
+      : 'border-[#dccfa8] bg-white/80 hover:bg-[#fdf9ec]',
+  )
+  const content = (
+    <>
       <span
         className={cn(
           'flex size-6 shrink-0 items-center justify-center rounded-full border-2 text-[11px] font-black',
@@ -59,7 +71,14 @@ function RankRow({ row, metric, emblem }: { row: RankingRow; metric: RankingMetr
         {metric === 'words' && formatWords(row.wordCount)}
         {metric === 'lit' && `${row.litCount} 格`}
       </span>
-    </li>
+    </>
+  )
+  return onClick ? (
+    <button type="button" title="查看详情" onClick={() => onClick(row)} className={cls}>
+      {content}
+    </button>
+  ) : (
+    <li className={cls}>{content}</li>
   )
 }
 
@@ -125,6 +144,8 @@ export function RankingPanel() {
   const [metric, setMetric] = useState<RankingMetric>('books')
   const [subject, setSubject] = useState<RankingSubject>('team')
   const [rows, setRows] = useState<RankingRow[]>([])
+  const [profileOf, setProfileOf] = useState<{ member: TeamMember; teamName: string } | null>(null)
+  const [teamDetail, setTeamDetail] = useState<Team | null>(null)
 
   // 点亮榜随棋盘轮询一起刷新，避免重复请求
   const litRows = useActivityStore((s) => s.litRanking)
@@ -146,6 +167,27 @@ export function RankingPanel() {
       alive = false
     }
   }, [metric, subject])
+
+  // 个人榜行点击 → 直接打开成员阅读档案；队伍榜 / 点亮榜行点击 → 先看队伍成员
+  const handleRowClick = (row: RankingRow) => {
+    if (subject === 'member') {
+      const team = teams.find((t) => t.members.some((m) => m.id === row.id))
+      const tm = team?.members.find((m) => m.id === row.id)
+      setProfileOf({
+        member: {
+          id: row.id,
+          name: row.name,
+          isCaptain: tm?.isCaptain ?? false,
+          bookCount: row.bookCount,
+          wordCount: row.wordCount,
+        },
+        teamName: row.teamName ?? team?.name ?? '',
+      })
+      return
+    }
+    const team = teams.find((t) => t.id === row.id)
+    if (team) setTeamDetail(team)
+  }
 
   return (
     <section
@@ -189,17 +231,17 @@ export function RankingPanel() {
             />
           </div>
 
-          <ul className="mt-3 flex-1 space-y-1.5">
+          <ul className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {rows.slice(0, RANK_LIMIT).map((row) => (
-              <RankRow key={row.id} row={row} metric={metric} emblem={emblemOf(row)} />
+              <RankRow key={row.id} row={row} metric={metric} emblem={emblemOf(row)} onClick={handleRowClick} />
             ))}
           </ul>
         </>
       ) : (
         <>
-          <ul className="mt-3 flex-1 space-y-1.5">
+          <ul className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {litRows.slice(0, RANK_LIMIT).map((row) => (
-              <RankRow key={row.id} row={row} metric="lit" emblem={emblemOf(row)} />
+              <RankRow key={row.id} row={row} metric="lit" emblem={emblemOf(row)} onClick={handleRowClick} />
             ))}
           </ul>
           <p className="mt-2 flex items-start gap-1.5 border-t border-dashed border-[#dccfa8] pt-2 text-[11px] leading-relaxed text-stone-500">
@@ -208,6 +250,95 @@ export function RankingPanel() {
           </p>
         </>
       )}
+
+      {profileOf && (
+        <MemberProfileDialog
+          member={profileOf.member}
+          teamName={profileOf.teamName}
+          onClose={() => setProfileOf(null)}
+        />
+      )}
+      {teamDetail && (
+        <TeamMembersDialog
+          team={teamDetail}
+          onClose={() => setTeamDetail(null)}
+          onSelectMember={(m) => {
+            setProfileOf({ member: m, teamName: teamDetail.name })
+            setTeamDetail(null)
+          }}
+        />
+      )}
     </section>
+  )
+}
+
+/** 队伍成员列表弹窗（榜单 → 点击队伍行）：列出成员，点击打开该成员阅读档案 */
+function TeamMembersDialog({
+  team,
+  onSelectMember,
+  onClose,
+}: {
+  team: Team
+  onSelectMember: (member: TeamMember) => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="team-members-title"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-t-lg border-2 border-stone-800 bg-[#fffdf5] p-5 shadow-[6px_6px_0_#292524] sm:rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <TeamEmblem emblem={team.emblem} size={32} className="shrink-0 drop-shadow-[1.5px_1.5px_0_rgba(41,37,36,0.3)]" />
+            <div className="min-w-0">
+              <h2 id="team-members-title" className="truncate text-base font-black text-stone-900">
+                {team.name}
+              </h2>
+              <p className="mt-0.5 text-[11px] font-medium text-stone-500">
+                第 {team.position} 格 · 第 {team.lap} 圈 · {team.members.length} 名成员
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭"
+            className="rounded-lg p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-xs font-bold text-stone-700">点击成员查看阅读详情</p>
+        <ul className="mt-2 space-y-1.5">
+          {team.members.map((m) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                onClick={() => onSelectMember(m)}
+                className="flex w-full items-center gap-2 rounded-md border border-[#dccfa8] bg-white/80 px-2.5 py-2 text-left text-xs shadow-[1.5px_1.5px_0_#e0d6ba] transition-colors hover:bg-[#fdf9ec]"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 font-bold text-stone-800">
+                  <span className="truncate">{m.name}</span>
+                  {m.isCaptain && <Crown aria-label="队长" className="size-3 shrink-0 text-amber-600" />}
+                </span>
+                <span className="shrink-0 tabular-nums text-[#7a5c1e]">
+                  <BookOpen aria-hidden className="mr-0.5 inline size-3" />
+                  {m.bookCount} 本
+                  <span className="ml-1.5 text-stone-500">{formatWords(m.wordCount)}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   )
 }

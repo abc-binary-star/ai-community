@@ -262,7 +262,7 @@ export function ReviewConsoleView() {
                 当前筛选条件下没有待处理记录。
               </p>
             ) : (
-              <ul className="mt-4 space-y-3">
+              <ul className="mt-4 max-h-[calc(100dvh-20rem)] space-y-3 overflow-y-auto pr-1 sm:max-h-[calc(100dvh-18rem)]">
                 {items.map((item) => (
                   <li key={item.book.id}>
                     <ReviewCard

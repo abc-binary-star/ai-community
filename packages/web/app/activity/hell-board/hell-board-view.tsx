@@ -316,7 +316,7 @@ export function HellBoardView() {
               使电脑端与棋盘同屏，打卡无需滚动。高度 = 视口减去顶部页头与边距，
               超出部分由面板自身滚动 */}
           <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:h-[calc(100dvh-6rem)] xl:flex-col">
-            <div className="xl:shrink-0">
+            <div className="xl:min-h-0 xl:shrink xl:overflow-y-auto">
               {currentTeam ? (
                 <CurrentTaskPanel
                   team={currentTeam}
@@ -342,7 +342,7 @@ export function HellBoardView() {
             <div
               role="tablist"
               aria-label="侧边栏切换"
-              className="grid shrink-0 grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
+              className="sticky top-2 z-10 grid shrink-0 grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
             >
               {SIDE_TABS.map(([key, label]) => (
                 <button
@@ -368,7 +368,7 @@ export function HellBoardView() {
             {/* 面板区占满右栏剩余高度（min-h-0 允许收缩到有界高度），
                 内容超长时由各面板内部的 flex-1 + overflow-y-auto 滚动。
                 此处不设 overflow：否则会裁掉卡片 4px 硬阴影，且 overflow-x 会被迫变成 auto */}
-            <div className="xl:min-h-0 xl:flex-1">
+            <div className="min-h-[360px] h-[min(70dvh,620px)] xl:min-h-0 xl:flex-1">
               <div
                 id="side-panel-team"
                 role="tabpanel"
@@ -412,8 +412,10 @@ export function HellBoardView() {
         ) : (
           /* 大事件 / 审核池 / 全部队伍：独立整页视图。
              宽度跟随页头与导航（同为容器满宽），避免点进来卡片突然变窄、
-             和上方通栏导航对不齐；内容量大时在面板内部滚动 */
-          <div className="w-full xl:h-[calc(100dvh-8rem)]">
+             和上方通栏导航对不齐；内容量大时在面板内部滚动。
+             lg 起限制高度（1024px 以上窗口 / 平板横屏），内容不再无限撑长整页；
+             手机竖屏保持页面自然滚动 */
+          <div className="w-full lg:h-[calc(100dvh-8rem)]">
             {topView === 'feed' && <ActivityFeedPanel />}
             {topView === 'pool' && <VotePoolPanel />}
             {topView === 'teams' && <AllTeamsPanel />}
