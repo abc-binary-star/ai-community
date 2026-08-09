@@ -242,6 +242,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activityAdmin.GET("/reviews", handler.ListActivityReviewQueue)
 	activityAdmin.POST("/reviews/batch-approve", handler.BatchApproveActivityBooks)
 	activityAdmin.POST("/reviews/:bookId", handler.ReviewActivityBook)
+	// 管理员强制通过：越过队长投票直接通过审批池书目（审核池兜底）
+	activityAdmin.POST("/reviews/:bookId/force-approve", handler.ForceApproveActivityBook)
 	// 管理员代成员补打卡（审批台「补卡」入口）
 	activityAdmin.POST("/checkins", handler.AdminCreateActivityCheckIn)
 	// 反馈（bug / 需求）审批台：查看与标记已处理

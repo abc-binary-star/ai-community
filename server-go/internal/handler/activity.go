@@ -302,6 +302,18 @@ func ReviewActivityBook(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, dto)
 }
 
+// ForceApproveActivityBook 管理员强制通过：越过队长投票直接通过书目（审批池兜底）
+// POST /api/activity/hell-board/admin/reviews/:bookId/force-approve
+func ForceApproveActivityBook(ctx context.Context, c *app.RequestContext) {
+	adminID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.ForceApprove(ctx, adminID, c.Param("bookId"))
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, dto)
+}
+
 // ListActivityMyBooks 我的打卡，按状态分组
 // GET /api/activity/hell-board/my-books?status=pending|approved|rejected
 func ListActivityMyBooks(ctx context.Context, c *app.RequestContext) {

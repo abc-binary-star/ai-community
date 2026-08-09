@@ -596,9 +596,10 @@ func (s *ActivityService) UpdateCheckIn(ctx context.Context, userID, checkInID s
 			}
 
 			if old, ok := oldByKey[key]; ok {
-				// 已通过的书修改字数/时长：先回滚旧贡献，再按新值重新累加
-				if old.ReviewStatus == model.ReviewStatusApproved &&
-					(old.WordCount != b.WordCount || old.DurationMinutes != b.DurationMinutes) {
+				// 已通过的书：无论改了哪个字段（含仅改笔记/封面），都先回滚旧贡献，
+				// 再按新值重新累加。此前仅字数/时长变化才回滚、但重新累加无条件执行，
+				// 导致只改非计数字段时统计重复计入（本数与字数翻倍）。
+				if old.ReviewStatus == model.ReviewStatusApproved {
 					if err := s.rollbackApproval(tx, old); err != nil {
 						return err
 					}
@@ -610,6 +611,8 @@ func (s *ActivityService) UpdateCheckIn(ctx context.Context, userID, checkInID s
 				book.AIStatus = old.AIStatus
 				book.AIConfidence = old.AIConfidence
 				book.AIReason = old.AIReason
+				// 保留原「是否计入任务进度」口径，保证回滚与重新累加对称
+				book.CountsForTask = old.CountsForTask
 				if err := tx.Model(&model.ActivityCheckInBook{}).Where("id = ?", old.ID).Updates(map[string]any{
 					"title":            book.Title,
 					"author":           book.Author,
@@ -624,7 +627,7 @@ func (s *ActivityService) UpdateCheckIn(ctx context.Context, userID, checkInID s
 				}
 				// 已通过且内容修正：用新值重新累加进度 / 榜单 / 保底
 				if book.ReviewStatus == model.ReviewStatusApproved {
-					if err := s.applyApproval(tx, &book, true); err != nil {
+					if err := s.applyApproval(tx, &book, book.CountsForTask); err != nil {
 						return err
 					}
 				}

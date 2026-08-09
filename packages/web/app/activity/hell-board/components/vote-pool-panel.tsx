@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Loader2, RefreshCcw, Scale, ThumbsDown, ThumbsUp, Users } from 'lucide-react'
-import { castVote, fetchVotePool } from '../lib/api'
+import { Check, Loader2, RefreshCcw, Scale, ThumbsDown, ThumbsUp, Users, Zap } from 'lucide-react'
+import { useAuthStore } from '@/lib/store'
+import { castVote, fetchVotePool, forceApprove } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
 import { useIsCaptain } from '../lib/store'
 import type { VotePoolItem } from '../lib/types'
@@ -15,6 +16,8 @@ import { ReviewBadge } from './review-badge'
  */
 export function VotePoolPanel() {
   const isCaptain = useIsCaptain()
+  const role = useAuthStore((s) => s.user?.role)
+  const canForceApprove = role === 'admin' || role === 'moderator'
   const [items, setItems] = useState<VotePoolItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +61,23 @@ export function VotePoolPanel() {
     }
   }
 
+  /** 管理员强制通过：越过队长投票直接通过审批池书目 */
+  const handleForceApprove = async (bookId: string, title: string) => {
+    if (busyId) return
+    setBusyId(bookId)
+    setNotice(null)
+    setError(null)
+    try {
+      await forceApprove(bookId)
+      setNotice(`管理员已强制通过《${title}》，计入进度与榜单`)
+      setItems((prev) => prev.filter((i) => i.book.id !== bookId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '强制通过失败')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col rounded-lg border-2 border-stone-800 bg-white shadow-[4px_4px_0_#292524]">
       <div className="flex shrink-0 items-start justify-between gap-2 border-b-2 border-stone-800 p-2.5">
@@ -67,7 +87,8 @@ export function VotePoolPanel() {
             队长投票池
           </p>
           <p className="mt-0.5 text-[10px] leading-relaxed text-stone-500">
-            全员可见，仅队长可投。赞成过半即通过{isCaptain ? '，同一本书每人一票' : ''}。
+            全员可见，仅队长可投。赞成过半即通过{isCaptain ? '，同一本书每人一票' : ''}
+            {canForceApprove ? '，管理员可强制通过' : ''}。
           </p>
         </div>
         <button
@@ -197,8 +218,20 @@ export function VotePoolPanel() {
                         </button>
                       </div>
                     )
-                  ) : (
+                  ) : !canForceApprove ? (
                     <p className="mt-2 text-[10px] text-stone-400">仅队长可投票</p>
+                  ) : null}
+
+                  {canForceApprove && (
+                    <button
+                      type="button"
+                      disabled={busyId === book.id}
+                      onClick={() => void handleForceApprove(book.id, book.title)}
+                      className="mt-2 flex h-7 w-full items-center justify-center gap-1 rounded-md border-2 border-amber-700 bg-amber-400 text-[11px] font-black text-amber-950 shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:opacity-50"
+                    >
+                      <Zap className="size-3" />
+                      管理员强制通过
+                    </button>
                   )}
                 </li>
               )

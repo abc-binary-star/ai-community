@@ -330,6 +330,13 @@ export function reviewBook(
   })
 }
 
+/** 管理员强制通过：越过队长投票直接通过审批池书目（审核池兜底） */
+export function forceApprove(bookId: string): Promise<void> {
+  return apiFetch<void>(`${BASE}/admin/reviews/${bookId}/force-approve`, {
+    method: 'POST',
+  })
+}
+
 /** 批量确认 AI 通过项 */
 export function batchApprove(bookIds: string[]): Promise<{ approved: number }> {
   return apiFetch(`${BASE}/admin/reviews/batch-approve`, {

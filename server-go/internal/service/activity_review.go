@@ -197,6 +197,65 @@ func (s *ActivityService) Review(ctx context.Context, reviewerID, bookID string,
 	return out, nil
 }
 
+// ForceApprove 管理员强制通过：越过队长投票，直接从审批池（投票池）通过书目。
+//
+// 与普通 approve 的区别在于语义明确为「管理员强制通过」：审计记录与队伍时间线
+// 都会标注管理员操作，便于事后追溯。对任意未通过状态（含投票中/待初审/被驳回）生效，
+// 已通过的返回无效输入。通过后按 countsForTask=true 累加进度、榜单与保底计数。
+func (s *ActivityService) ForceApprove(ctx context.Context, adminID, bookID string) (*types.ActivityBookDTO, error) {
+	var out *types.ActivityBookDTO
+	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var book model.ActivityCheckInBook
+		if err := tx.Clauses(lockForUpdate()).First(&book, "id = ?", bookID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return ErrActivityBookNotFound
+			}
+			return err
+		}
+		if book.ReviewStatus == model.ReviewStatusApproved {
+			return ErrActivityInvalidInput
+		}
+		from := book.ReviewStatus
+
+		if err := s.applyApproval(tx, &book, true); err != nil {
+			return err
+		}
+		book.ReviewStatus = model.ReviewStatusApproved
+		book.CountsForTask = true
+		if err := tx.Model(&model.ActivityCheckInBook{}).Where("id = ?", book.ID).
+			Updates(map[string]any{
+				"review_status":   book.ReviewStatus,
+				"counts_for_task": book.CountsForTask,
+			}).Error; err != nil {
+			return err
+		}
+
+		// 审计日志，标注强制通过与操作人（PRD 9.3）
+		if err := tx.Create(&model.ActivityReview{
+			BookID:     book.ID,
+			ReviewerID: adminID,
+			FromStatus: from,
+			ToStatus:   book.ReviewStatus,
+			Reason:     "管理员强制通过（跳过队长投票）",
+		}).Error; err != nil {
+			return err
+		}
+
+		if err := s.addEvent(tx, book.TeamID, model.EventTypeReview,
+			fmt.Sprintf("《%s》管理员强制通过", book.Title)); err != nil {
+			return err
+		}
+
+		dto := bookToDTO(&book, "", "")
+		out = &dto
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // reviewVerb 审核结果的中文动词
 func reviewVerb(status string) string {
 	switch status {
