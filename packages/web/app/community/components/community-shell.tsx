@@ -11,15 +11,6 @@ export function CommunityShell({ banner, children }: { banner?: ReactNode; child
 
   return (
     <div className="relative flex h-screen flex-col bg-transparent">
-      {/* 氛围底：顶部一抹极淡靛蓝辉光，制造深度而非纯色平板（暗色下更明显） */}
-      <div
-        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[420px] opacity-70"
-        style={{
-          background:
-            'radial-gradient(60% 100% at 50% 0%, hsl(var(--primary) / 0.10), transparent 70%)',
-        }}
-        aria-hidden
-      />
       <Navbar onMenuClick={() => setSidebarOpen(true)} />
       {banner}
       <div className="flex flex-1 overflow-hidden">

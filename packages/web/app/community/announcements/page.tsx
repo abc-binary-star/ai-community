@@ -75,8 +75,8 @@ export default function AnnouncementsPage() {
           type="button"
           onClick={() => changeCategory('')}
           className={cn(
-            'rounded-full px-3 py-1.5 text-sm transition-colors',
-            !category ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+            'rounded-full border px-3 py-1.5 text-sm transition-colors',
+            !category ? 'border-primary/60 font-medium text-primary' : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
           )}
         >
           全部
@@ -87,8 +87,8 @@ export default function AnnouncementsPage() {
             type="button"
             onClick={() => changeCategory(key)}
             className={cn(
-              'rounded-full px-3 py-1.5 text-sm transition-colors',
-              category === key ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+              'rounded-full border px-3 py-1.5 text-sm transition-colors',
+              category === key ? 'border-primary/60 font-medium text-primary' : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
             {ANNOUNCEMENT_CATEGORY_LABELS[key]}

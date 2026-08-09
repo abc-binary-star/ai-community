@@ -28,8 +28,8 @@ import { ThemeToggle } from './theme-toggle'
 function BrandLogo() {
   return (
     <Link href="/community/discover" className="group flex items-center gap-2.5" aria-label="Commons 首页">
-      <span className="relative flex size-9 items-center justify-center rounded-xl bg-primary transition-colors duration-200 group-hover:bg-primary/90">
-        <span className="font-display text-xl leading-none text-primary-foreground">C</span>
+      <span className="relative flex size-9 items-center justify-center rounded-xl border border-primary/50 transition-colors duration-200 group-hover:border-primary">
+        <span className="font-display text-xl leading-none text-primary">C</span>
       </span>
       <span className="font-display text-xl font-bold leading-none tracking-tight text-foreground">
         Commons

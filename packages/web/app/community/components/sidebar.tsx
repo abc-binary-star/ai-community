@@ -157,11 +157,11 @@ function ChannelItem({
       className={cn(
         'group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150',
         active
-          ? 'bg-primary/10 font-medium text-foreground'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+          ? 'font-medium text-primary'
+          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
-      {/* 选中态左侧主色指示条（现代应用导航常见手法） */}
+      {/* 选中态左侧主色细指示线（线条式，不填色块） */}
       {active && (
         <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden />
       )}

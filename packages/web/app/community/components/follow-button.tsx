@@ -89,9 +89,10 @@ export function FollowButton({ username, isFollowing, className, onChanged }: Pr
           aria-pressed={state}
           className={cn(
             'inline-flex items-center gap-1 rounded-lg text-sm font-medium transition-colors',
+            'border',
             state
-              ? 'border border-border bg-background text-foreground hover:bg-accent'
-              : 'bg-primary text-primary-foreground hover:opacity-90',
+              ? 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+              : 'border-primary/60 text-primary hover:border-primary hover:bg-primary/[0.06]',
             'h-9 px-3',
             submitting && 'opacity-60',
             className,

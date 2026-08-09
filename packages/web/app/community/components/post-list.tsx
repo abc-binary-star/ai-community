@@ -104,15 +104,15 @@ export function PostListPage({
 
         {/* 视图切换：想法流用于发现和闲逛，帖子列表用于带着目的找文章。
             两者并存的成本很低，删掉任何一个都是过度自信。 */}
-        <div className="flex items-center gap-1 rounded-full border bg-card p-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setView('posts')}
             className={cn(
-              'flex-1 rounded-full px-4 py-1.5 text-sm transition-colors',
+              'flex-1 rounded-full border px-4 py-1.5 text-sm transition-colors',
               view === 'posts'
-                ? 'bg-primary/10 font-medium text-primary'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'border-primary/60 font-medium text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
             按帖子浏览
@@ -121,10 +121,10 @@ export function PostListPage({
             type="button"
             onClick={() => setView('ideas')}
             className={cn(
-              'flex-1 rounded-full px-4 py-1.5 text-sm transition-colors',
+              'flex-1 rounded-full border px-4 py-1.5 text-sm transition-colors',
               view === 'ideas'
-                ? 'bg-primary/10 font-medium text-primary'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'border-primary/60 font-medium text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
             想法流

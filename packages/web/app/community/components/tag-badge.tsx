@@ -23,13 +23,13 @@ export function TagBadge({ name, selected = false, onClick, size = 'sm', asLink 
     : 'text-xs px-3 py-1'
 
   const variantClasses = selected
-    ? 'bg-primary text-primary-foreground hover:bg-primary/90 border-primary'
+    ? 'border-primary text-primary'
     : channel
-      ? cn('bg-white/70 text-muted-foreground hover:border-transparent hover:bg-accent hover:text-foreground', 'border', color.border)
-      : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground border-transparent'
+      ? cn('text-muted-foreground hover:border-foreground/30 hover:text-foreground', color.border)
+      : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
 
   const baseClasses = cn(
-    'inline-flex items-center gap-1 rounded-full border font-medium transition-all duration-150 cursor-pointer hover:-translate-y-px',
+    'inline-flex items-center gap-1 rounded-full border font-medium transition-colors duration-150 cursor-pointer',
     sizeClasses,
     variantClasses,
   )

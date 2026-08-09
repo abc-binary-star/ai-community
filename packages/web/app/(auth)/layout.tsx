@@ -17,11 +17,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         href="/community/discover"
         className="group relative mb-8 flex items-center gap-2.5"
       >
-        <span className="relative flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-primary to-rose-500 shadow-[0_4px_14px_rgba(230,90,40,0.35)] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
-          <span className="font-display text-2xl leading-none text-white drop-shadow-sm">C</span>
-          <span className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-background bg-emerald-400" />
+        <span className="relative flex size-10 items-center justify-center rounded-xl border border-primary/50 transition-colors duration-200 group-hover:border-primary">
+          <span className="font-display text-2xl leading-none text-primary">C</span>
         </span>
-        <span className="font-display text-2xl leading-none tracking-wide text-foreground">Commons</span>
+        <span className="font-display text-2xl font-bold leading-none tracking-tight text-foreground">Commons</span>
       </Link>
       <Suspense>{children}</Suspense>
     </div>

@@ -54,10 +54,10 @@ export function IdeaFeed({
             type="button"
             onClick={() => onSortChange(s.key)}
             className={cn(
-              'rounded-full px-3 py-1.5 text-sm transition-colors',
+              'rounded-full border px-3 py-1.5 text-sm transition-colors',
               sort === s.key
-                ? 'bg-primary/10 font-medium text-primary'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                ? 'border-primary/60 font-medium text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
             {s.label}

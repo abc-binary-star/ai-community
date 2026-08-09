@@ -21,7 +21,7 @@ export function SortTabs({ current, basePath = '/community' }: { current: string
   }
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card p-1 shadow-sm">
+    <div className="inline-flex items-center gap-5 border-b border-border">
       {TABS.map((tab) => {
         const active = current === tab.key
         const Icon = tab.icon
@@ -31,14 +31,16 @@ export function SortTabs({ current, basePath = '/community' }: { current: string
             type="button"
             onClick={() => handleChange(tab.key)}
             className={cn(
-              'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-150',
-              active
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              'relative flex items-center gap-1.5 pb-2 text-sm font-medium transition-colors duration-150',
+              active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
             )}
           >
             <Icon className="size-3.5" />
             {tab.label}
+            {/* 选中态：底部主色细线，替代实色胶囊块 */}
+            {active && (
+              <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" aria-hidden />
+            )}
           </button>
         )
       })}

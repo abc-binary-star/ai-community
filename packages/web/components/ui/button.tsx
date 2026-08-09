@@ -11,15 +11,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // 主按钮：珊瑚实色平面，hover 仅降一档明度
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        // 描边按钮：卡片底 + 中性描边，hover 填浅底
-        outline: 'border border-input bg-card hover:bg-accent hover:text-accent-foreground',
-        // 次要按钮：浅中性块
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        // 幽灵按钮：透明，hover 浅底
-        ghost: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        // 主按钮：线条式——细主色描边 + 主色文字，hover 仅极淡染底。拒绝深色实心块。
+        default:
+          'border border-primary/60 text-primary hover:border-primary hover:bg-primary/[0.06]',
+        destructive:
+          'border border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/[0.06]',
+        // 描边按钮：中性细边，hover 极淡染
+        outline: 'border border-border text-foreground hover:border-foreground/30 hover:bg-muted/60',
+        // 次要按钮：中性细边 + 次级文字
+        secondary: 'border border-border/70 text-muted-foreground hover:border-border hover:text-foreground',
+        // 幽灵按钮：无边，hover 极淡底
+        ghost: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

@@ -169,10 +169,10 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
                 onClick={handleToggleRecord}
                 disabled={!supported || transcribing}
                 className={cn(
-                  'flex size-16 items-center justify-center rounded-full transition-all',
+                  'flex size-16 items-center justify-center rounded-full border transition-colors',
                   recording
-                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
-                    : 'bg-primary text-primary-foreground shadow-lg hover:bg-primary/90',
+                    ? 'border-red-500 text-red-500 animate-pulse'
+                    : 'border-primary/60 text-primary hover:border-primary hover:bg-primary/[0.06]',
                   (!supported || transcribing) && 'cursor-not-allowed opacity-50'
                 )}
                 aria-label={recording ? '停止录音' : '开始录音'}
@@ -261,10 +261,10 @@ export function VoiceComposer({ target, onInsert, onClose }: VoiceComposerProps)
                       type="button"
                       onClick={() => setStyle(s.key)}
                       className={cn(
-                        'rounded-full px-3 py-1 text-xs transition-colors',
+                        'rounded-full border px-3 py-1 text-xs transition-colors',
                         style === s.key
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground hover:bg-accent'
+                          ? 'border-primary/60 text-primary'
+                          : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
                       )}
                     >
                       {s.label}
