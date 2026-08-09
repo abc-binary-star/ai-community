@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookOpen, Clock, Heart, Loader2, Text, X } from 'lucide-react'
+import { BookOpen, ChevronDown, Clock, Heart, Loader2, Text, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fetchMemberCheckIns, likeCheckIn, unlikeCheckIn } from '../lib/api'
 import { formatReadingMinutes, formatWords } from '../lib/rules'
@@ -25,6 +25,16 @@ export function MemberProfileDialog({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [openCheckIns, setOpenCheckIns] = useState<Set<string>>(new Set())
+
+  const toggleCheckIn = (id: string) => {
+    setOpenCheckIns((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -157,41 +167,74 @@ export function MemberProfileDialog({
                 </p>
               ) : (
                 <ul className="mt-2 space-y-2">
-                  {profile.checkIns.map((item) => (
-                    <li key={item.checkInId} className="rounded-md border border-stone-300 bg-white p-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-bold text-stone-600">
-                          第 {item.tileIndex} 格 · 第 {item.lap} 轮 ·{' '}
-                          {new Date(item.createdAt).toLocaleDateString('zh-CN')}
-                        </p>
-                        <button
-                          type="button"
-                          disabled={busyId === item.checkInId}
-                          onClick={() => void toggleLike(item)}
-                          aria-pressed={item.likedByMe}
-                          className="inline-flex items-center gap-1 rounded-full border border-stone-300 px-2 py-0.5 text-[11px] font-bold transition-colors disabled:opacity-50"
-                        >
-                          <Heart
-                            className={cn('size-3', item.likedByMe ? 'fill-rose-500 text-rose-500' : 'text-stone-400')}
-                          />
-                          {item.likeCount}
-                        </button>
-                      </div>
-                      <ul className="mt-1.5 space-y-1">
-                        {item.books.map((b) => (
-                          <li key={b.id} className="flex items-baseline justify-between gap-2 text-[11px]">
-                            <span className="truncate text-stone-800">
-                              《{b.title}》 {b.author}
-                            </span>
-                            <span className="shrink-0 text-stone-400">
-                              {formatWords(b.wordCount)}
-                              {b.durationMinutes ? ` · ${formatReadingMinutes(b.durationMinutes)}` : ''}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  ))}
+                  {profile.checkIns.map((item) => {
+                    const open = openCheckIns.has(item.checkInId)
+                    return (
+                      <li
+                        key={item.checkInId}
+                        className="overflow-hidden rounded-md border border-stone-300 bg-white"
+                      >
+                        <div className="flex items-center gap-2 px-2.5 py-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleCheckIn(item.checkInId)}
+                            aria-expanded={open}
+                            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                          >
+                            <p className="min-w-0 truncate text-[11px] font-bold text-stone-600">
+                              第 {item.tileIndex} 格 · 第 {item.lap} 轮 ·{' '}
+                              {new Date(item.createdAt).toLocaleDateString('zh-CN')}
+                              <span className="ml-1.5 font-medium text-stone-400">
+                                {item.books.length} 本
+                              </span>
+                            </p>
+                            <ChevronDown
+                              aria-hidden
+                              className={cn(
+                                'size-3.5 shrink-0 text-stone-400 transition-transform',
+                                open && 'rotate-180',
+                              )}
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busyId === item.checkInId}
+                            onClick={() => void toggleLike(item)}
+                            aria-pressed={item.likedByMe}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-stone-300 px-2 py-0.5 text-[11px] font-bold transition-colors disabled:opacity-50"
+                          >
+                            <Heart
+                              className={cn(
+                                'size-3',
+                                item.likedByMe ? 'fill-rose-500 text-rose-500' : 'text-stone-400',
+                              )}
+                            />
+                            {item.likeCount}
+                          </button>
+                        </div>
+                        {open && (
+                          <ul className="space-y-1 border-t border-stone-200 px-2.5 py-2">
+                            {item.books.map((b) => (
+                              <li
+                                key={b.id}
+                                className="flex items-baseline justify-between gap-2 text-[11px]"
+                              >
+                                <span className="truncate text-stone-800">
+                                  《{b.title}》 {b.author}
+                                </span>
+                                <span className="shrink-0 text-stone-400">
+                                  {formatWords(b.wordCount)}
+                                  {b.durationMinutes
+                                    ? ` · ${formatReadingMinutes(b.durationMinutes)}`
+                                    : ''}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>

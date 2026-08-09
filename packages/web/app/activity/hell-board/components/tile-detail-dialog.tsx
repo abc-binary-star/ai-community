@@ -25,7 +25,6 @@ import type {
   TileRecord,
 } from '../lib/types'
 import { CheckInFormDialog } from './checkin-form-dialog'
-import { ReviewBadge } from './review-badge'
 import { TeamEmblem } from './team-emblem'
 
 const LIT_LABEL: Record<LitReason, string> = {
@@ -193,6 +192,8 @@ export function TileDetailDialog({
   // 本组已点亮格的补卡表单；reloadKey 用于补卡提交后刷新本格记录
   const [showCheckInForm, setShowCheckInForm] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [openTeams, setOpenTeams] = useState<Set<string>>(new Set())
+  const [booksOpen, setBooksOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -249,6 +250,25 @@ export function TileDetailDialog({
         }),
     [records],
   )
+
+  const teamRecords = useMemo(() => {
+    const map = new Map<string, TileRecord[]>()
+    for (const r of records) {
+      const arr = map.get(r.teamId) ?? []
+      arr.push(r)
+      map.set(r.teamId, arr)
+    }
+    return [...map.values()].map((arr) => [...arr].sort((a, b) => a.lap - b.lap))
+  }, [records])
+
+  const toggleTeam = (teamId: string) => {
+    setOpenTeams((prev) => {
+      const next = new Set(prev)
+      if (next.has(teamId)) next.delete(teamId)
+      else next.add(teamId)
+      return next
+    })
+  }
 
   if (!tile) return null
 
@@ -310,97 +330,140 @@ export function TileDetailDialog({
             <p className="mt-2 text-xs font-bold text-emerald-700">暂无小组在该格打卡。</p>
           ) : (
             <ul className="mt-2 space-y-1.5">
-              {records.map((row) => (
-                <li
-                  key={`${row.teamId}-${row.lap}`}
-                  className={cn(
-                    'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs',
-                    row.isMyTeam ? 'bg-sky-500/10' : 'bg-stone-50 border-stone-200',
-                  )}
-                >
-                  <span className="flex min-w-0 items-center gap-2 text-stone-800">
-                    <TeamEmblem
-                      emblem={teams.find((t) => t.id === row.teamId)?.emblem}
-                      size={20}
-                      className="shrink-0"
-                    />
-                    <span className="truncate font-bold">{row.teamName}</span>
-                    <span className="shrink-0 text-[10px] text-stone-400">第 {row.lap} 轮</span>
-                    {row.isMyTeam && <span className="text-[10px] text-sky-300">本组</span>}
-                  </span>
-                  <span className="shrink-0 text-stone-500">
-                    已通过 {row.bookCount} 本
-                    {row.lit && row.litReason && (
-                      <span className="ml-2 text-amber-300">已点亮 · {LIT_LABEL[row.litReason]}</span>
+              {teamRecords.map((teamRows) => {
+                const first = teamRows[0]
+                const isMyTeam = first.isMyTeam
+                const open = openTeams.has(first.teamId)
+                return (
+                  <li
+                    key={first.teamId}
+                    className={cn(
+                      'overflow-hidden rounded-lg border text-xs',
+                      isMyTeam ? 'border-sky-300 bg-sky-500/10' : 'border-stone-200 bg-stone-50',
                     )}
-                    {/* 本组已点亮格支持补卡：补录线下已完成的打卡；
-                        管理员对任意队伍已点亮格都可补卡（补卡人可选） */}
-                    {row.lit &&
-                      tile.taskType !== 'timed-penalty' &&
-                      !archived &&
-                      (row.isMyTeam || isAdmin) && (
-                        <button
-                          type="button"
-                          onClick={() => setShowCheckInForm(true)}
-                          className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-2 border-[#8b6b2c] bg-[#fff8e5] px-1.5 text-[10px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6]"
-                        >
-                          <ClipboardList className="size-3" />
-                          补卡
-                        </button>
-                      )}
-                  </span>
-                </li>
-              ))}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleTeam(first.teamId)}
+                      aria-expanded={open}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-black/[0.03]"
+                    >
+                      <TeamEmblem
+                        emblem={teams.find((t) => t.id === first.teamId)?.emblem}
+                        size={20}
+                        className="shrink-0"
+                      />
+                      <span className="truncate font-bold text-stone-800">{first.teamName}</span>
+                      {isMyTeam && <span className="shrink-0 text-[10px] font-bold text-sky-500">本组</span>}
+                      <span className="flex shrink-0 flex-wrap items-center gap-1">
+                        {teamRows.map((r) => (
+                          <span
+                            key={r.lap}
+                            className="rounded-full border border-stone-300 bg-white px-1.5 py-px text-[10px] font-bold text-stone-500"
+                          >
+                            第 {r.lap} 轮
+                          </span>
+                        ))}
+                      </span>
+                      <ChevronDown
+                        aria-hidden
+                        className={cn(
+                          'ml-auto size-4 shrink-0 text-stone-400 transition-transform',
+                          open && 'rotate-180',
+                        )}
+                      />
+                    </button>
+
+                    {open && (
+                      <div className="space-y-1.5 border-t border-stone-200/90 px-3 py-2">
+                        {teamRows.map((r) => (
+                          <div key={r.lap} className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-stone-600">
+                              第 {r.lap} 轮 · 已通过 {r.bookCount} 本
+                              {r.lit && r.litReason && (
+                                <span className="ml-2 font-bold text-amber-600">
+                                  已点亮 · {LIT_LABEL[r.litReason]}
+                                </span>
+                              )}
+                            </span>
+                            {r.lit &&
+                              tile.taskType !== 'timed-penalty' &&
+                              !archived &&
+                              (r.isMyTeam || isAdmin) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowCheckInForm(true)}
+                                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-2 border-[#8b6b2c] bg-[#fff8e5] px-1.5 text-[10px] font-bold text-[#7a5c1e] transition-colors hover:bg-[#fff3d6]"
+                                >
+                                  <ClipboardList className="size-3" />
+                                  补卡
+                                </button>
+                              )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
 
         <section aria-labelledby="tile-books-heading" className="mt-5">
-          <h3 id="tile-books-heading" className="flex items-center gap-1.5 text-sm font-medium text-stone-800">
+          <h3 id="tile-books-heading" className="sr-only">
             本格书目清单
-            <Library aria-hidden className="size-3 text-emerald-600" />
-            <span className="text-[11px] font-normal text-stone-400">全场公开 · 可互相参考选书</span>
           </h3>
-          {bookRecords.length === 0 ? (
-            <p className="mt-2 text-xs font-bold text-emerald-700">该格暂无打卡记录。</p>
-          ) : (
-            bookRecords.map((record) => (
-              <div key={`${record.teamId}-${record.lap}`} className="mt-3">
-                <p className="flex items-center gap-1.5 text-[11px] text-stone-400">
-                  <span
-                    aria-hidden
-                    className="size-2 shrink-0 rounded-full border border-stone-400/60"
-                    style={{ backgroundColor: record.teamColor }}
-                  />
-                  <span className="font-bold text-stone-600">{record.teamName}</span>
-                  {record.isMyTeam && <span className="text-[10px] font-black text-sky-600">本组</span>}
-                  <span>· 第 {record.lap} 轮</span>
-                </p>
-                <ul className="mt-1.5 space-y-1">
-                  {(record.books ?? []).map((book) => (
-                    <li
-                      key={book.id}
-                      className="flex items-start justify-between gap-2 rounded-lg bg-stone-50 px-3 py-2 text-xs"
-                    >
-                      <span className="min-w-0">
-                        <span className="text-stone-900">{book.title}</span>
-                        <span className="ml-1.5 text-stone-400">{book.author}</span>
-                        <span className="mt-0.5 block text-[11px] text-stone-400">
-                          {book.memberName} · {formatWords(book.wordCount)}
-                          {book.countsForTask ? ' · 计入任务进度' : ''}
-                        </span>
-                        {book.aiReason && (
-                          <span className="mt-0.5 block text-[11px] text-stone-400">
-                            AI 初审：{book.aiReason}
-                          </span>
-                        )}
-                      </span>
-                      <ReviewBadge status={book.reviewStatus} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
+          <button
+            type="button"
+            onClick={() => setBooksOpen((v) => !v)}
+            aria-expanded={booksOpen}
+            className="flex w-full items-center gap-1.5 rounded-md border border-stone-300 bg-stone-50 px-3 py-2 text-left transition-colors hover:bg-stone-100"
+          >
+            <Library aria-hidden className="size-3.5 shrink-0 text-emerald-600" />
+            <span className="text-sm font-medium text-stone-800">本格书目清单</span>
+            <span className="text-[11px] font-normal text-stone-400">全场公开 · 可互相参考选书</span>
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                'ml-auto size-4 shrink-0 text-stone-400 transition-transform',
+                booksOpen && 'rotate-180',
+              )}
+            />
+          </button>
+
+          {booksOpen && (
+            <div className="mt-2">
+              {bookRecords.length === 0 ? (
+                <p className="text-xs font-bold text-emerald-700">该格暂无打卡记录。</p>
+              ) : (
+                bookRecords.map((record) => (
+                  <div key={`${record.teamId}-${record.lap}`} className="mt-3">
+                    <p className="flex items-center gap-1.5 text-[11px] text-stone-400">
+                      <span
+                        aria-hidden
+                        className="size-2 shrink-0 rounded-full border border-stone-400/60"
+                        style={{ backgroundColor: record.teamColor }}
+                      />
+                      <span className="font-bold text-stone-600">{record.teamName}</span>
+                      {record.isMyTeam && <span className="text-[10px] font-black text-sky-600">本组</span>}
+                      <span>· 第 {record.lap} 轮</span>
+                    </p>
+                    <ul className="mt-1.5 space-y-1">
+                      {(record.books ?? []).map((book) => (
+                        <li
+                          key={book.id}
+                          className="flex items-baseline gap-2 rounded-lg bg-stone-50 px-3 py-1.5 text-xs"
+                        >
+                          <span className="min-w-0 truncate text-stone-900">{book.title}</span>
+                          {book.author && <span className="shrink-0 text-stone-400">{book.author}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              )}
+            </div>
           )}
         </section>
       </div>

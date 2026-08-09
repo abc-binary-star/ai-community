@@ -46,7 +46,7 @@ export function AllTeamsPanel() {
             <p className="text-xs text-stone-500">活动还没有配置小组</p>
           </div>
         ) : (
-          <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {teams.map((team: Team) => {
               const isMine = myTeam?.id === team.id
               const slots = Array.from({ length: TEAM_SIZE }, (_, i) => team.members[i] ?? null)
@@ -54,19 +54,19 @@ export function AllTeamsPanel() {
                 <section
                   key={team.id}
                   className={cn(
-                    'flex flex-col rounded-lg border-2 bg-gradient-to-b from-[#fffdf4] to-[#f7f0dc] p-3 shadow-[3px_3px_0_#292524]',
-                    isMine ? 'border-[#d9a441] ring-2 ring-[#d9a441]/35' : 'border-stone-800',
+                    'flex flex-col rounded-lg border-2 bg-gradient-to-b from-[#fffdf4] to-[#f7f0dc] p-2.5 shadow-[2px_2px_0_#292524]',
+                    isMine ? 'border-[#d9a441] ring-1 ring-[#d9a441]/35' : 'border-stone-800',
                   )}
                 >
                   {/* 队头：徽章 + 队名 + 当前位置 */}
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <TeamEmblem
                       emblem={team.emblem}
-                      size={36}
+                      size={28}
                       className="shrink-0 drop-shadow-[2px_2px_0_rgba(41,37,36,0.3)]"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 text-xs font-black text-stone-900">
+                      <p className="flex items-center gap-1.5 text-[11px] font-black text-stone-900">
                         <span className="truncate">{team.name}</span>
                         {isMine && (
                           <span className="shrink-0 rounded bg-[#ffd166] px-1 py-px text-[9px] font-black text-[#5c430d]">
@@ -86,7 +86,7 @@ export function AllTeamsPanel() {
                   </div>
 
                   {/* 成员名单：与队伍卡同款虚线分隔与条目样式 */}
-                  <div className="mt-3 border-t border-dashed border-[#dccfa8] pt-2.5">
+                  <div className="mt-2 border-t border-dashed border-[#dccfa8] pt-2">
                     <p className="flex items-center gap-1.5 text-[10px] font-black tracking-wide text-[#6b4e15]">
                       <span aria-hidden className="size-1.5 rotate-45 bg-[#d9a441]" />
                       成员
@@ -101,7 +101,7 @@ export function AllTeamsPanel() {
                             <button
                               type="button"
                               onClick={() => setSelected({ member: m, teamName: team.name })}
-                              className="flex w-full items-center gap-1.5 rounded-md border border-[#dccfa8] bg-white/80 px-2 py-1.5 text-left text-[11px] shadow-[1.5px_1.5px_0_#e0d6ba] transition-colors hover:bg-[#fdf9ec]"
+                              className="flex w-full items-center gap-1.5 rounded-md border border-[#dccfa8] bg-white/80 px-1.5 py-1 text-left text-[10px] shadow-[1px_1px_0_#e0d6ba] transition-colors hover:bg-[#fdf9ec]"
                             >
                               <span className="flex min-w-0 flex-1 items-center gap-1 font-bold text-stone-800">
                                 <span className="truncate">{m.name}</span>
@@ -122,7 +122,7 @@ export function AllTeamsPanel() {
                           <li
                             key={`empty-${i}`}
                             aria-hidden
-                            className="flex items-center gap-1.5 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-2 py-1.5 text-[10px] text-stone-400"
+                            className="flex items-center gap-1.5 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/60 px-1.5 py-1 text-[10px] text-stone-400"
                           >
                             <UserRoundPlus className="size-3" />
                             空位
