@@ -322,6 +322,12 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
     setDraft(null)
   }
 
+  const dismissPanelFromContent = (event: React.MouseEvent) => {
+    if (panel && !(event.target as HTMLElement).closest('a, button, [data-highlight]')) {
+      closePanel()
+    }
+  }
+
   const createHighlight = async (color: string) => {
     if (!pending) return
     try {
@@ -417,7 +423,7 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
   }, [isLoggedIn, postId])
 
   return (
-    <div className="relative">
+    <div className="relative" onClick={dismissPanelFromContent}>
       <MarkdownRenderer ref={containerRef} content={content} fontFamily={fontFamily} enableBlocks />
 
       {/* 页边批注记号（marginalia）：想法长在页边。
@@ -430,12 +436,16 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
             e.stopPropagation()
             openPanelView(b.anchor, '')
           }}
-          className="group absolute right-0 z-10 flex -translate-y-1/2 translate-x-1 items-center gap-1.5 pl-1.5 sm:translate-x-full sm:pl-3"
+          className="group absolute right-0 z-10 flex min-h-8 -translate-y-1/2 translate-x-1 items-center gap-1 rounded-l-lg border border-r-0 border-primary/20 bg-background/95 px-1.5 shadow-sm transition-colors hover:bg-primary/[0.06] sm:translate-x-full sm:rounded-r-lg sm:border-r sm:pl-2 sm:pr-2"
           style={{ top: b.top + 14 }}
           aria-label="查看段落想法"
         >
-          <span className="h-5 w-px bg-primary/50 transition-colors group-hover:bg-primary" aria-hidden />
-          <span className="font-serifcn text-sm leading-none text-primary/80 transition-colors group-hover:text-primary">
+          <span className="relative flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary" aria-hidden>
+            <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-2 -translate-x-1/2 rounded-b border-b-2 border-primary" />
+            <span className="absolute left-[7px] top-1 size-2 rounded-full border border-primary" />
+            <span className="absolute left-[11px] top-1 size-2 rounded-full border border-primary" />
+          </span>
+          <span className="font-mono text-xs font-bold tabular-nums text-primary/80 transition-colors group-hover:text-primary">
             {b.count > 99 ? '99+' : b.count}
           </span>
         </button>

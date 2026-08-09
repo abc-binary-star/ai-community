@@ -23,10 +23,11 @@ export type PostCardVariant = 'standard' | 'hero' | 'quote'
 interface PostCardProps {
   post: Post
   variant?: PostCardVariant
+  compact?: boolean
   onChanged?: (...args: unknown[]) => void
 }
 
-export function PostCard({ post, variant = 'standard', onChanged }: PostCardProps) {
+export function PostCard({ post, variant = 'standard', compact = false, onChanged }: PostCardProps) {
   const router = useRouter()
   const { data: channels } = useChannels()
   const color = channelColor(post.channel)
@@ -37,14 +38,14 @@ export function PostCard({ post, variant = 'standard', onChanged }: PostCardProp
     <Card
       className={cn(
         'channel-stripe group flex cursor-pointer flex-col overflow-hidden border-border/70 transition-colors duration-200 hover:border-primary/30 hover:shadow-card-hover',
-        variant === 'hero' && 'sm:flex-row',
+        variant === 'hero' && !compact && 'sm:flex-row',
       )}
       style={{ ['--stripe-color' as string]: color.stripe }}
       onClick={() => router.push(href)}
     >
       {/* hero：封面占左半，作为杂志式主图 */}
       {variant === 'hero' && post.coverUrl && (
-        <div className="relative shrink-0 overflow-hidden sm:w-[46%]">
+        <div className={cn('relative shrink-0 overflow-hidden', compact ? 'aspect-video w-full' : 'sm:w-[46%]')}>
           <img
             src={post.coverUrl}
             alt={post.title}
@@ -66,7 +67,7 @@ export function PostCard({ post, variant = 'standard', onChanged }: PostCardProp
           href={href}
           className={cn(
             'font-bold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary',
-            variant === 'hero' ? 'font-display text-2xl sm:text-3xl' : 'text-lg',
+            variant === 'hero' ? 'font-display line-clamp-3 text-2xl sm:text-3xl' : 'line-clamp-2 text-lg',
           )}
         >
           {post.title}

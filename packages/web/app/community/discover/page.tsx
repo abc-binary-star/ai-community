@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Loader2, PenLine, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Hash, Loader2, PenLine, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -170,6 +170,7 @@ function DiscoverPageInner() {
           ) : (
             <DiscoverFeed
               posts={posts}
+              layout="masonry"
               onChanged={() => queryClient.invalidateQueries({ queryKey: ['discover-posts'] })}
             />
           )}
@@ -193,21 +194,31 @@ function DiscoverPageInner() {
 
         {/* 侧栏：趋势话题 + 推荐用户 */}
         <div className="space-y-5">
-          <Card className="overflow-hidden">
-            <div className="border-b border-border/60 px-4 py-3">
-              <h2 className="flex items-center gap-2 font-semibold">
-                <TrendingUp className="size-4 text-primary" />
-                趋势话题
+          <Card className="overflow-hidden border-primary/15 bg-card/80 shadow-sm">
+            <div className="border-b border-primary/10 bg-primary/[0.04] px-4 py-3">
+              <h2 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Hash className="size-4" />
+                </span>
+                热门标签
+                <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">pulse</span>
               </h2>
             </div>
             <div className="p-4">
-              <div className="flex flex-wrap gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {trendingTags.length === 0 ? (
-                  <span className="text-sm text-muted-foreground">暂无热门话题</span>
+                  <span className="col-span-2 text-sm text-muted-foreground">暂无热门话题</span>
                 ) : (
                   trendingTags.map((tag, i) => (
-                    <Link key={tag.name} href={`/community?tag=${encodeURIComponent(tag.name)}`}>
-                      <TagBadge name={tag.name} size="md" channel={['tech', 'design', 'gaming', 'life', 'general'][i % 5]} />
+                    <Link
+                      key={tag.name}
+                      href={`/community?tag=${encodeURIComponent(tag.name)}`}
+                      className="group flex min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-background/70 px-2.5 py-2 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.06]"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span className="min-w-0 truncate text-sm font-medium">#{tag.name}</span>
                     </Link>
                   ))
                 )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { useEffect, useState } from 'react'
 import { PostCard, type PostCardVariant } from './post-card'
 import type { Post } from 'shared'
 
@@ -17,33 +17,58 @@ import type { Post } from 'shared'
 export function DiscoverFeed({
   posts,
   onChanged,
+  layout = 'stack',
 }: {
   posts: Post[]
   onChanged?: () => void
+  layout?: 'stack' | 'masonry'
 }) {
+  const [twoColumns, setTwoColumns] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)')
+    const sync = () => setTwoColumns(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
   if (posts.length === 0) return null
 
+  const renderPost = (post: Post, index: number) => {
+    const variant = pickVariant(post, index)
+    return (
+      <div
+        key={post.id}
+        className="animate-fade-in"
+        style={{ animationDelay: `${Math.min(index, 8) * 40}ms`, animationFillMode: 'backwards' }}
+      >
+        <PostCard post={post} variant={variant} compact={layout === 'masonry'} onChanged={onChanged} />
+      </div>
+    )
+  }
+
+  if (layout === 'stack') {
+    return <div className="grid gap-4">{posts.map(renderPost)}</div>
+  }
+
+  const columns = [posts.filter((_, index) => index % 2 === 0), posts.filter((_, index) => index % 2 === 1)]
+
+  if (!twoColumns) {
+    return <div className="grid gap-3">{posts.map(renderPost)}</div>
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      {posts.map((post, i) => {
-        const variant = pickVariant(post, i)
-        // hero 与每第 7 张无封面引文卡跨整行，形成呼吸节奏
-        const span = variant === 'hero' || (variant === 'quote' && i % 7 === 3)
-        return (
-          <div
-            key={post.id}
-            className={cn('animate-fade-in', span && 'md:col-span-2')}
-            style={{ animationDelay: `${Math.min(i, 8) * 40}ms`, animationFillMode: 'backwards' }}
-          >
-            <PostCard post={post} variant={variant} onChanged={onChanged} />
-          </div>
-        )
-      })}
+    <div className="grid grid-cols-2 gap-4">
+      {columns.map((column, columnIndex) => (
+        <div key={columnIndex} className="min-w-0 space-y-4">
+          {column.map((post) => renderPost(post, posts.indexOf(post)))}
+        </div>
+      ))}
     </div>
   )
 }
 
-// 按位置与内容决定卡片形态
 function pickVariant(post: Post, index: number): PostCardVariant {
   if (index === 0 && post.coverUrl) return 'hero'
   if (post.coverUrl) return 'standard'

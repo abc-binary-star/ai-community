@@ -15,9 +15,12 @@ import {
   Megaphone,
   type LucideIcon,
   MessageCircle,
+  Moon,
   Palette,
   Search,
   Sparkles,
+  ScrollText,
+  Sun,
   UserCircle,
   X,
 } from 'lucide-react'
@@ -27,6 +30,8 @@ import { useAnnouncementUnread } from '@/lib/use-announcements'
 import { channelColor } from '@/lib/channel-colors'
 import { CHANNELS, CHANNEL_LABELS } from 'shared'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
+import { useTheme } from '@/lib/use-theme'
 
 // ---- 图标映射：将数据库中的图标名称字符串映射为 lucide 组件 ----
 
@@ -41,6 +46,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'file-text': FileText,
   'bookmark': Bookmark,
   'megaphone': Megaphone,
+  'scroll-text': ScrollText,
   'hash': Hash,
 }
 
@@ -198,6 +204,8 @@ function SidebarContent({
 }) {
   const { data: tree } = useChannelTree()
   const { data: announcementUnread } = useAnnouncementUnread()
+  const user = useAuthStore((s) => s.user)
+  const { theme, toggle: toggleTheme } = useTheme()
   const [searchQuery, setSearchQuery] = useState('')
 
   // 构建频道树，API 不可用时使用 fallback
@@ -246,7 +254,7 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col bg-transparent">
-      {/* 顶部：搜索栏 + 关闭按钮 */}
+      {/* 顶部：搜索栏、主题切换和关闭按钮 */}
       <div className="flex items-center gap-2 p-3">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -258,6 +266,14 @@ function SidebarContent({
             className="h-9 w-full rounded-lg border border-transparent bg-muted/60 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary/40 focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           />
         </div>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+        >
+          {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
         {showCloseButton && (
           <button
             type="button"
@@ -281,6 +297,24 @@ function SidebarContent({
           colorKey="general"
           onNavigate={onNavigate}
         />
+
+        <div className="my-3 border-t border-border/50" />
+        <ChannelItem
+          label="社区公约"
+          icon="scroll-text"
+          href="/community/guidelines"
+          active={false}
+          onNavigate={onNavigate}
+        />
+        {user && (
+          <ChannelItem
+            label="我的草稿"
+            icon="file-text"
+            href="/community/drafts"
+            active={false}
+            onNavigate={onNavigate}
+          />
+        )}
 
         {/* 分组频道 */}
         {filteredCategories.map((cat) => (
@@ -333,18 +367,20 @@ function SidebarContent({
       </nav>
 
       {/* 底部：个人入口 */}
-      <div className="border-t border-border/70 p-2.5">
+      <div className="shrink-0 border-t border-border/70 p-2.5">
         <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
           <UserCircle className="size-3.5" />
           我的空间
         </p>
-        <ChannelItem
-          label="我的草稿"
-          icon="file-text"
-          href="/community/drafts"
-          active={false}
-          onNavigate={onNavigate}
-        />
+        {user && (
+          <ChannelItem
+            label="私信"
+            icon="message-circle"
+            href="/messages"
+            active={false}
+            onNavigate={onNavigate}
+          />
+        )}
         <ChannelItem
           label="我的收藏"
           icon="bookmark"

@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bookmark, ChevronDown, FileText, LogOut, Megaphone, Menu, MessageCircle, PenLine, ScrollText, Settings, ShieldCheck, UserCog } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronRight, Gauge, LogOut, Menu, MessageCircle, PenLine, Settings, ShieldCheck, UserRound } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +13,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuthStore } from '@/lib/store'
@@ -28,8 +31,8 @@ import { ThemeToggle } from './theme-toggle'
 function BrandLogo() {
   return (
     <Link href="/community/discover" className="group flex min-w-0 items-center gap-2" aria-label="Commons 首页">
-      <span className="relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/50 transition-colors duration-200 group-hover:border-primary sm:size-9 sm:rounded-xl">
-        <span className="font-display text-lg leading-none text-primary sm:text-xl">C</span>
+      <span className="relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/50 bg-primary/10 transition-colors duration-200 group-hover:border-primary sm:size-9 sm:rounded-xl">
+        <span className="font-display text-lg font-black leading-none text-primary sm:text-xl">Co</span>
       </span>
       <span className="hidden truncate font-display text-xl font-bold leading-none tracking-tight text-foreground sm:inline">
         Commons
@@ -185,10 +188,7 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href={`/u/${encodeURIComponent(user.username)}`}>
-                      <Avatar className="size-4">
-                        {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
-                        <AvatarFallback className="bg-primary/10 text-[10px] text-primary">{getInitials(user.username)}</AvatarFallback>
-                      </Avatar>
+                      <UserRound />
                       我的主页
                     </Link>
                   </DropdownMenuItem>
@@ -198,42 +198,38 @@ function NavbarInner({ onMenuClick }: { onMenuClick?: () => void }) {
                       设置
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/community/guidelines">
-                      <ScrollText />
-                      社区公约
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/community/drafts">
-                      <FileText />
-                      我的草稿
-                    </Link>
-                  </DropdownMenuItem>
                   {(user.role === 'admin' || user.role === 'moderator') && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/community/moderation">
-                        <ShieldCheck />
-                        内容审核
-                      </Link>
-                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <Gauge />
+                        管理中心
+                        <ChevronRight className="ml-auto" />
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem asChild>
+                          <Link href="/community/moderation">
+                            <ShieldCheck />
+                            内容审核
+                          </Link>
+                        </DropdownMenuItem>
+                        {user.role === 'admin' && (
+                          <DropdownMenuItem asChild>
+                            <Link href="/community/announcements/admin">
+                              公告管理
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
+                        {user.role === 'admin' && (
+                          <DropdownMenuItem asChild>
+                            <Link href="/community/admin/users">
+                              用户管理
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                   )}
-                  {user.role === 'admin' && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/community/announcements/admin">
-                        <Megaphone />
-                        公告管理
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  {user.role === 'admin' && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/community/admin/users">
-                        <UserCog />
-                        用户管理
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut />
                     退出登录
