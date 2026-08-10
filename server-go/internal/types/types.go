@@ -72,6 +72,17 @@ type ResetPasswordReq struct {
 	Password string `json:"password" vd:"len($)>=6 && len($)<=64"`
 }
 
+// ChangePasswordReq 用户自助修改密码请求
+type ChangePasswordReq struct {
+	OldPassword string `json:"oldPassword" vd:"len($)>=1"`
+	NewPassword string `json:"newPassword" vd:"len($)>=6 && len($)<=64"`
+}
+
+// BanUserReq 封禁/解禁用户请求
+type BanUserReq struct {
+	Action string `json:"action" vd:"in($, 'ban', 'unban')"`
+}
+
 type SuggestTagsReq struct {
 	Title   string `json:"title" vd:"len($)>=1"`
 	Content string `json:"content" vd:"len($)>=1"`

@@ -374,6 +374,35 @@ func (s *UserService) ResetPassword(ctx context.Context, username, newPassword s
 	return nil
 }
 
+// BanUser 封禁或解禁用户。action="ban" 封禁，action="unban" 解禁。
+func (s *UserService) BanUser(ctx context.Context, username, action, handlerID string) (string, error) {
+	var user model.User
+	if err := dal.DB.WithContext(ctx).Select("id", "role", "status").Where("username = ?", username).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", ErrUserNotFound
+		}
+		return "", err
+	}
+
+	if user.Role == "admin" {
+		return "", &ServiceError{Msg: "不能封禁管理员", Code: 403}
+	}
+
+	newStatus := "active"
+	if action == "ban" {
+		newStatus = "banned"
+	}
+
+	if err := dal.DB.WithContext(ctx).Model(&model.User{}).
+		Where("id = ?", user.ID).
+		Update("status", newStatus).Error; err != nil {
+		return "", err
+	}
+
+	log.Printf("[User/BanUser] %s 用户 %s (%s), handler=%s", action, username, user.ID, handlerID)
+	return newStatus, nil
+}
+
 // ========== Follow Module ==========
 
 // FollowUser 关注某用户。created=true 表示新建关注(201)，false 表示已关注(200)

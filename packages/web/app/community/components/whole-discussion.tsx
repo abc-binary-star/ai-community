@@ -24,9 +24,10 @@ interface Props {
   postId: string
 }
 
-// 整篇讨论：本次改版把「帖子底部评论」降级为想法面板的「整篇」分组。
-// 对整篇文章的评论在数据上是锚定到整篇的想法，三个讨论场域收敛为一个模型的
-// 三种锚定粒度。旧评论数据保留展示，标注为历史评论，不再提供新建入口。
+// 整篇讨论：帖子底部讨论统一使用「想法」系统。
+// 对整篇文章的想法等价于传统底部评论，锚点固定为 __whole__。
+// 支持回复、点赞、编辑、删除、举报，功能与段落想法一致。
+// 旧评论数据保留只读展示，标注为历史评论。
 export function WholeDiscussion({ postId }: Props) {
   const token = useAuthStore((s) => s.token)
   const currentUserId = useAuthStore((s) => s.user?.id)
@@ -46,10 +47,13 @@ export function WholeDiscussion({ postId }: Props) {
   const ideaCount =
     ideasQuery.data?.anchorCounts.find((c) => c.anchor === WHOLE_ANNOTATION_ANCHOR)?.count ?? ideas.length
 
-  // 历史评论：旧评论区数据只读展示，不再提供新建/回复入口
+  // 历史评论：旧评论区数据只读展示，不再提供新建/回复入口。
+  // gcTime: 0 使组件卸载后立即回收分页缓存，避免被删除的历史评论
+  // 在 inactive 缓存中驻留（默认 5 分钟）导致重新进入帖子时短暂复现。
   const historyQuery = useInfiniteQuery({
     queryKey: ['comments', postId],
     initialPageParam: 1,
+    gcTime: 0,
     queryFn: ({ pageParam }) =>
       api.get<Paginated<Comment>>(`/posts/${postId}/comments?page=${pageParam}&pageSize=${HISTORY_PAGE_SIZE}`),
     getNextPageParam: (lastPage) =>
@@ -85,7 +89,7 @@ export function WholeDiscussion({ postId }: Props) {
             className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"
           >
             <MessageSquarePlus className="size-4" />
-            对整篇文章写想法
+            参与讨论…
           </button>
         )
       ) : (
@@ -111,7 +115,7 @@ export function WholeDiscussion({ postId }: Props) {
           ))}
         </div>
       ) : (
-        <p className="py-4 text-center text-sm text-muted-foreground">还没有对整篇的想法，来写第一条吧</p>
+        <p className="py-4 text-center text-sm text-muted-foreground">还没有讨论，来发第一条吧</p>
       )}
 
       <HistorySection

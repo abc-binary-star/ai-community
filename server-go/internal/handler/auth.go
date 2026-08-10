@@ -94,3 +94,45 @@ func Me(ctx context.Context, c *app.RequestContext) {
 		"user": mapper.UserToDTO(user),
 	})
 }
+
+// ChangePassword 用户自助修改密码
+func ChangePassword(ctx context.Context, c *app.RequestContext) {
+	userID, _ := c.Get("userId")
+	uid, _ := userID.(string)
+
+	var req types.ChangePasswordReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "新密码长度需 6-64 位")
+		return
+	}
+
+	err := authService.ChangePassword(ctx, uid, req.OldPassword, req.NewPassword)
+	if err != nil {
+		if ae, ok := err.(*service.AuthError); ok {
+			response.Error(c, ae.Code, ae.Msg)
+			return
+		}
+		log.Printf("[Auth] 修改密码失败: %v", err)
+		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.JSON(c, map[string]string{"message": "密码修改成功"})
+}
+
+// DeleteAccount 用户注销账号
+func DeleteAccount(ctx context.Context, c *app.RequestContext) {
+	userID, _ := c.Get("userId")
+	uid, _ := userID.(string)
+
+	err := authService.DeleteAccount(ctx, uid)
+	if err != nil {
+		if ae, ok := err.(*service.AuthError); ok {
+			response.Error(c, ae.Code, ae.Msg)
+			return
+		}
+		log.Printf("[Auth] 注销账号失败: %v", err)
+		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.JSON(c, map[string]string{"message": "账号已注销"})
+}

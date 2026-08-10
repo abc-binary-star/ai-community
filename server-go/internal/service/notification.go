@@ -17,18 +17,22 @@ import (
 // NotificationService 通知服务
 type NotificationService struct{}
 
-// ListNotifications 获取当前用户的通知列表
-func (s *NotificationService) ListNotifications(ctx context.Context, userID string, page, pageSize int) (*types.Paginated[types.Notification], error) {
+// ListNotifications 获取当前用户的通知列表（支持按类型筛选）
+func (s *NotificationService) ListNotifications(ctx context.Context, userID string, page, pageSize int, notifType string) (*types.Paginated[types.Notification], error) {
+	query := dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID)
+	if notifType != "" && notifType != "all" {
+		query = query.Where("type = ?", notifType)
+	}
+
 	var total int64
-	if err := dal.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+	if err := query.Count(&total).Error; err != nil {
 		log.Printf("[Notification/ListNotifications] failed to count notifications, userID=%s, err=%v", userID, err)
 		return nil, err
 	}
 
 	offset := (page - 1) * pageSize
 	var rows []model.Notification
-	if err := dal.DB.WithContext(ctx).
-		Where("user_id = ?", userID).
+	if err := query.
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
@@ -115,6 +119,26 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) er
 		Where("user_id = ? AND read = ?", userID, false).
 		Update("read", true).Error; err != nil {
 		log.Printf("[Notification/MarkAllRead] failed to mark all notifications read, userID=%s, err=%v", userID, err)
+		return err
+	}
+	return nil
+}
+
+// DeleteNotification 删除单条通知（仅本人可删除）
+func (s *NotificationService) DeleteNotification(ctx context.Context, notifID, userID string) error {
+	var notif model.Notification
+	if err := dal.DB.WithContext(ctx).Select("id", "user_id").First(&notif, "id = ?", notifID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return &NotificationError{Msg: "通知不存在", Code: 404}
+		}
+		log.Printf("[Notification/DeleteNotification] failed to get notification, notifID=%s, err=%v", notifID, err)
+		return err
+	}
+	if notif.UserID != userID {
+		return &NotificationError{Msg: "无权操作", Code: 403}
+	}
+	if err := dal.DB.WithContext(ctx).Delete(&model.Notification{}, "id = ?", notifID).Error; err != nil {
+		log.Printf("[Notification/DeleteNotification] failed to delete notification, notifID=%s, err=%v", notifID, err)
 		return err
 	}
 	return nil

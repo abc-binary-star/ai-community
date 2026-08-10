@@ -586,54 +586,67 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 	}
 
 	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 1. 先查出帖子下所有评论 ID，用于删除评论点赞
-		var commentIDs []string
-		if err := tx.Model(&model.Comment{}).Where("post_id = ?", postID).Pluck("id", &commentIDs).Error; err != nil {
-			return fmt.Errorf("查询评论ID失败: %w", err)
-		}
-		// 2. 删除评论点赞
-		if len(commentIDs) > 0 {
-			if err := tx.Where("comment_id IN ?", commentIDs).Delete(&model.CommentLike{}).Error; err != nil {
-				return fmt.Errorf("删除评论点赞失败: %w", err)
-			}
-		}
-		// 3. 删除评论
-		if err := tx.Where("post_id = ?", postID).Delete(&model.Comment{}).Error; err != nil {
-			return fmt.Errorf("删除评论失败: %w", err)
-		}
-		// 4. 删除帖子点赞
-		if err := tx.Where("post_id = ?", postID).Delete(&model.PostLike{}).Error; err != nil {
-			return fmt.Errorf("删除帖子点赞失败: %w", err)
-		}
-		// 5. 删除收藏
-		if err := tx.Where("post_id = ?", postID).Delete(&model.Bookmark{}).Error; err != nil {
-			return fmt.Errorf("删除收藏失败: %w", err)
-		}
-		// 6. 删除帖子-标签关联
-		if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
-			return fmt.Errorf("删除标签关联失败: %w", err)
-		}
-		// 7. 删除帖子摘要
-		if err := tx.Where("post_id = ?", postID).Delete(&model.PostSummary{}).Error; err != nil {
-			return fmt.Errorf("删除帖子摘要失败: %w", err)
-		}
-		// 8. 删除讨论摘要
-		if err := tx.Where("post_id = ?", postID).Delete(&model.ThreadSummary{}).Error; err != nil {
-			return fmt.Errorf("删除讨论摘要失败: %w", err)
-		}
-		// 9. 通知中的 post_id 置空（SET NULL 语义）
-		if err := tx.Model(&model.Notification{}).Where("post_id = ?", postID).Update("post_id", nil).Error; err != nil {
-			return fmt.Errorf("清理通知关联失败: %w", err)
-		}
-		// 10. 最后删除帖子本身
-		if err := tx.Delete(&model.Post{}, "id = ?", postID).Error; err != nil {
-			return fmt.Errorf("删除帖子失败: %w", err)
-		}
-		return nil
+		return deletePostCascaded(tx, postID)
 	})
 	if err != nil {
 		log.Printf("[DeletePost] 删除帖子事务失败, postID=%s, err=%v", postID, err)
 		return err
+	}
+	return nil
+}
+
+// deletePostCascaded 在事务内级联删除帖子及其全部关联数据。
+// 复用自 DeletePost 的 10 步清理逻辑，供作者删帖与举报处置共用，
+// 避免裸删除产生孤儿数据或触发数据库外键阻塞。
+func deletePostCascaded(tx *gorm.DB, postID string) error {
+	// 1. 先查出帖子下所有评论 ID，用于删除评论点赞
+	var commentIDs []string
+	if err := tx.Model(&model.Comment{}).Where("post_id = ?", postID).Pluck("id", &commentIDs).Error; err != nil {
+		return fmt.Errorf("查询评论ID失败: %w", err)
+	}
+	// 2. 删除评论点赞
+	if len(commentIDs) > 0 {
+		if err := tx.Where("comment_id IN ?", commentIDs).Delete(&model.CommentLike{}).Error; err != nil {
+			return fmt.Errorf("删除评论点赞失败: %w", err)
+		}
+	}
+	// 3. 删除评论
+	if err := tx.Where("post_id = ?", postID).Delete(&model.Comment{}).Error; err != nil {
+		return fmt.Errorf("删除评论失败: %w", err)
+	}
+	// 4. 删除帖子点赞
+	if err := tx.Where("post_id = ?", postID).Delete(&model.PostLike{}).Error; err != nil {
+		return fmt.Errorf("删除帖子点赞失败: %w", err)
+	}
+	// 5. 删除收藏
+	if err := tx.Where("post_id = ?", postID).Delete(&model.Bookmark{}).Error; err != nil {
+		return fmt.Errorf("删除收藏失败: %w", err)
+	}
+	// 6. 删除帖子-标签关联
+	if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
+		return fmt.Errorf("删除标签关联失败: %w", err)
+	}
+	// 7. 删除帖子摘要
+	if err := tx.Where("post_id = ?", postID).Delete(&model.PostSummary{}).Error; err != nil {
+		return fmt.Errorf("删除帖子摘要失败: %w", err)
+	}
+	// 8. 删除讨论摘要
+	if err := tx.Where("post_id = ?", postID).Delete(&model.ThreadSummary{}).Error; err != nil {
+		return fmt.Errorf("删除讨论摘要失败: %w", err)
+	}
+	// 9. 通知中的 post_id 置空（SET NULL 语义）
+	if err := tx.Model(&model.Notification{}).Where("post_id = ?", postID).Update("post_id", nil).Error; err != nil {
+		return fmt.Errorf("清理通知关联失败: %w", err)
+	}
+	// 10. 通知中的 comment_id 置空（评论随帖子一并删除）
+	if len(commentIDs) > 0 {
+		if err := tx.Model(&model.Notification{}).Where("comment_id IN ?", commentIDs).Update("comment_id", nil).Error; err != nil {
+			return fmt.Errorf("清理评论通知关联失败: %w", err)
+		}
+	}
+	// 11. 最后删除帖子本身
+	if err := tx.Delete(&model.Post{}, "id = ?", postID).Error; err != nil {
+		return fmt.Errorf("删除帖子失败: %w", err)
 	}
 	return nil
 }

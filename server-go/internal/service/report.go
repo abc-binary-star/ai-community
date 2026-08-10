@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -181,21 +182,31 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 		}
 
 		if req.Status == "approved" {
-			// 删除目标内容（可能已被删除，容错）
+			// 删除目标内容（可能已被删除，容错），与作者侧删除保持一致的级联清理
 			switch report.TargetType {
 			case "post":
-				tx.Delete(&model.Post{}, "id = ?", report.TargetID)
+				if err := deletePostCascaded(tx, report.TargetID); err != nil {
+					return fmt.Errorf("处置帖子失败: %w", err)
+				}
 			case "comment":
-				tx.Delete(&model.Comment{}, "id = ?", report.TargetID)
+				if err := deleteCommentCascaded(tx, report.TargetID); err != nil {
+					return fmt.Errorf("处置评论失败: %w", err)
+				}
 			case "annotation":
-				tx.Model(&model.Annotation{}).Where("id = ?", report.TargetID).Update("status", model.AnnotationStatusModerated)
+				if err := tx.Model(&model.Annotation{}).Where("id = ?", report.TargetID).Update("status", model.AnnotationStatusModerated).Error; err != nil {
+					return fmt.Errorf("处置想法失败: %w", err)
+				}
 			case "annotation_reply":
-				tx.Model(&model.AnnotationReply{}).Where("id = ?", report.TargetID).Update("status", model.AnnotationStatusModerated)
+				if err := tx.Model(&model.AnnotationReply{}).Where("id = ?", report.TargetID).Update("status", model.AnnotationStatusModerated).Error; err != nil {
+					return fmt.Errorf("处置想法回复失败: %w", err)
+				}
 			}
 			// 同步处理同目标的其他待处理举报
-			tx.Model(&model.Report{}).
+			if err := tx.Model(&model.Report{}).
 				Where("target_type = ? AND target_id = ? AND status = ? AND id <> ?", report.TargetType, report.TargetID, "pending", reportID).
-				Updates(map[string]interface{}{"status": "approved", "handled_by": handlerID, "note": "同目标内容已被处置"})
+				Updates(map[string]interface{}{"status": "approved", "handled_by": handlerID, "note": "同目标内容已被处置"}).Error; err != nil {
+				return fmt.Errorf("同步处理同目标举报失败: %w", err)
+			}
 		}
 		return nil
 	})
@@ -213,6 +224,48 @@ func (s *ReportService) HandleReport(ctx context.Context, reportID, handlerID st
 
 	dto := s.mapReportToDTO(ctx, &updated)
 	return &dto, nil
+}
+
+// deleteCommentCascaded 在事务内级联删除评论及其全部后代回复，并清理点赞与通知关联。
+func deleteCommentCascaded(tx *gorm.DB, commentID string) error {
+	descendantIDs, err := collectCommentDescendants(tx, commentID)
+	if err != nil {
+		return err
+	}
+	if len(descendantIDs) == 0 {
+		return nil
+	}
+	// 删除评论点赞
+	if err := tx.Where("comment_id IN ?", descendantIDs).Delete(&model.CommentLike{}).Error; err != nil {
+		return fmt.Errorf("删除评论点赞失败: %w", err)
+	}
+	// 删除评论（含全部后代回复）
+	if err := tx.Where("id IN ?", descendantIDs).Delete(&model.Comment{}).Error; err != nil {
+		return fmt.Errorf("删除评论失败: %w", err)
+	}
+	// 通知中的 comment_id 置空（SET NULL 语义）
+	if err := tx.Model(&model.Notification{}).Where("comment_id IN ?", descendantIDs).Update("comment_id", nil).Error; err != nil {
+		return fmt.Errorf("清理评论通知关联失败: %w", err)
+	}
+	return nil
+}
+
+// collectCommentDescendants 收集评论自身及其全部后代回复的 ID（按 parent_id 自关联递归）。
+func collectCommentDescendants(tx *gorm.DB, commentID string) ([]string, error) {
+	ids := []string{commentID}
+	queue := []string{commentID}
+	for len(queue) > 0 {
+		var children []string
+		if err := tx.Model(&model.Comment{}).Where("parent_id IN ?", queue).Pluck("id", &children).Error; err != nil {
+			return nil, fmt.Errorf("查询子回复失败: %w", err)
+		}
+		if len(children) == 0 {
+			break
+		}
+		ids = append(ids, children...)
+		queue = children
+	}
+	return ids, nil
 }
 
 // fillTargetSnapshots 批量填充举报目标的标题与内容预览（帖子取标题+正文，评论取正文）

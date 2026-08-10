@@ -164,6 +164,29 @@ func ResetUserPassword(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]string{"message": "密码已重置"})
 }
 
+// BanUser 封禁/解禁用户（仅管理员/版主）
+// POST /api/users/:username/ban
+func BanUser(ctx context.Context, c *app.RequestContext) {
+	var req types.BanUserReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "action 必须是 ban 或 unban")
+		return
+	}
+
+	username := c.Param("username")
+	handlerID := middleware.GetCurrentUserID(c)
+
+	status, err := userService.BanUser(ctx, username, req.Action, handlerID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]interface{}{
+		"ok":     true,
+		"status": status,
+	})
+}
+
 // ========== Follow Handlers ==========
 
 // FollowUser 关注某用户
@@ -348,8 +371,9 @@ var searchService = &service.SearchService{}
 func ListNotifications(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
 	page, pageSize := pagination.Parse(c)
+	notifType := c.Query("type")
 
-	result, err := notificationService.ListNotifications(ctx, userID, page, pageSize)
+	result, err := notificationService.ListNotifications(ctx, userID, page, pageSize, notifType)
 	if err != nil {
 		log.Printf("[Notification] 获取通知列表失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
@@ -387,6 +411,19 @@ func MarkAllRead(ctx context.Context, c *app.RequestContext) {
 	if err := notificationService.MarkAllRead(ctx, userID); err != nil {
 		log.Printf("[Notification] 全部已读失败: %v", err)
 		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.OK(c)
+}
+
+// DeleteNotification 删除单条通知
+// DELETE /api/notifications/:id
+func DeleteNotification(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+	userID := middleware.GetCurrentUserID(c)
+
+	if err := notificationService.DeleteNotification(ctx, id, userID); err != nil {
+		handleServiceError(c, err)
 		return
 	}
 	response.OK(c)

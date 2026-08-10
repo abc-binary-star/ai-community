@@ -4,9 +4,10 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, MessageCircle, Send } from 'lucide-react'
+import { ArrowLeft, Loader2, MessageCircle, Search, Send, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
@@ -33,6 +34,7 @@ function MessagesInner() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
   const [input, setInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const chatBodyRef = useRef<HTMLDivElement>(null)
   const hasLoadedOnce = useRef(false)
@@ -77,6 +79,16 @@ function MessagesInner() {
 
   const convs = conversationsQuery.data?.items ?? []
   const activeConv = convs.find((c) => c.id === activeConvId) ?? null
+
+  // 客户端搜索过滤：按对端用户名或最后一条消息内容
+  const filteredConvs = searchQuery.trim()
+    ? convs.filter((c) => {
+        const q = searchQuery.toLowerCase()
+        const name = (c.otherUser.displayName || c.otherUser.username).toLowerCase()
+        const lastMsg = (c.lastMessage || '').toLowerCase()
+        return name.includes(q) || lastMsg.includes(q)
+      })
+    : convs
 
   // 消息列表（5s 轮询增量）
   const messagesQuery = useQuery({
@@ -202,6 +214,27 @@ function MessagesInner() {
     })
   }
 
+  // 删除会话
+  const deleteConvMutation = useMutation({
+    mutationFn: (convId: string) => api.del<{ ok: boolean }>(`/messages/conversations/${convId}`),
+    onSuccess: (_data, convId) => {
+      queryClient.invalidateQueries({ queryKey: ['messages-conversations'] })
+      queryClient.invalidateQueries({ queryKey: ['messages-unread-count'] })
+      queryClient.removeQueries({ queryKey: ['messages', convId] })
+      if (activeConvId === convId) {
+        setActiveConvId(null)
+        setMobileView('list')
+      }
+      toast.success('会话已删除')
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : '删除失败'),
+  })
+
+  const handleDeleteConversation = (convId: string) => {
+    if (!window.confirm('确定删除此会话？删除后无法恢复。')) return
+    deleteConvMutation.mutate(convId)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
@@ -237,6 +270,15 @@ function MessagesInner() {
             <MessageCircle className="size-5 text-primary" />
             私信
           </h1>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索会话"
+              className="h-9 pl-8 text-sm"
+            />
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {conversationsQuery.isLoading ? (
@@ -244,15 +286,17 @@ function MessagesInner() {
               <Loader2 className="size-4 animate-spin" />
               加载中…
             </div>
-          ) : convs.length === 0 ? (
+          ) : filteredConvs.length === 0 ? (
             <div className="px-6 py-16 text-center text-sm text-muted-foreground">
-              <p>暂无会话</p>
-              <p className="mt-2 text-xs text-muted-foreground/70">去用户主页点击「发私信」开始聊天</p>
+              <p>{searchQuery.trim() ? '没有匹配的会话' : '暂无会话'}</p>
+              {!searchQuery.trim() && (
+                <p className="mt-2 text-xs text-muted-foreground/70">去用户主页点击「发私信」开始聊天</p>
+              )}
             </div>
           ) : (
             <ul className="divide-y divide-border">
-              {convs.map((conv) => (
-                <li key={conv.id}>
+              {filteredConvs.map((conv) => (
+                <li key={conv.id} className="group relative">
                   <button
                     type="button"
                     onClick={() => openConversation(conv.id)}
@@ -294,6 +338,22 @@ function MessagesInner() {
                         )}
                       </div>
                     </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteConversation(conv.id)
+                    }}
+                    disabled={deleteConvMutation.isPending}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-muted-foreground opacity-100 transition-colors hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                    aria-label="删除会话"
+                  >
+                    {deleteConvMutation.isPending && deleteConvMutation.variables === conv.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
                   </button>
                 </li>
               ))}

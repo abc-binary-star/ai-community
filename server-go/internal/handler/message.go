@@ -90,6 +90,19 @@ func SendMessage(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, msg)
 }
 
+// DeleteConversation 删除会话及其所有消息
+// DELETE /api/messages/conversations/:id
+func DeleteConversation(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	conversationID := c.Param("id")
+
+	if err := messageService.DeleteConversation(ctx, userID, conversationID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]bool{"ok": true})
+}
+
 // MarkConversationRead 标记会话中对方发来的消息为已读
 // POST /api/messages/conversations/:id/read
 func MarkConversationRead(ctx context.Context, c *app.RequestContext) {

@@ -111,6 +111,15 @@ export default function SettingsPage() {
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
+  // 修改密码
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  // 注销账号
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteUsernameConfirm, setDeleteUsernameConfirm] = useState('')
+
   const mutation = useMutation({
     mutationFn: (data: { avatar: string; displayName: string; bio: string }) =>
       api.put<UserType>('/users/me', data),
@@ -165,6 +174,46 @@ export default function SettingsPage() {
     queryFn: () => api.get<AIUsage>('/ai/usage'),
     enabled: !!token,
   })
+
+  // 修改密码
+  const changePwdMutation = useMutation({
+    mutationFn: (data: { oldPassword: string; newPassword: string }) =>
+      api.post<{ message: string }>('/auth/change-password', data),
+    onSuccess: () => {
+      toast.success('密码修改成功')
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : '修改失败'),
+  })
+
+  const handleChangePassword = () => {
+    if (newPassword !== confirmPassword) {
+      toast.error('两次输入的新密码不一致')
+      return
+    }
+    if (newPassword.length < 6) {
+      toast.error('新密码至少 6 位')
+      return
+    }
+    changePwdMutation.mutate({ oldPassword, newPassword })
+  }
+
+  // 注销账号
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => api.del<{ message: string }>('/auth/account'),
+    onSuccess: () => {
+      toast.success('账号已注销')
+      useAuthStore.getState().clearAuth()
+      router.push('/')
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : '注销失败'),
+  })
+
+  const handleDeleteAccount = () => {
+    deleteAccountMutation.mutate()
+  }
 
   const onCropComplete = useCallback((_area: unknown, areaPixels: { x: number; y: number; width: number; height: number }) => {
     setCroppedAreaPixels(areaPixels)
@@ -569,6 +618,92 @@ export default function SettingsPage() {
               ) : (
                 <p className="py-4 text-center text-sm text-muted-foreground">暂无法获取 AI 用量</p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* 账号安全 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">账号安全</CardTitle>
+              <CardDescription>修改密码或注销账号</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* 修改密码 */}
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="oldPassword">当前密码</Label>
+                  <Input
+                    id="oldPassword"
+                    type="password"
+                    value={oldPassword}
+                    onChange={(e) => setOldPassword(e.target.value)}
+                    placeholder="输入当前密码"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="newPassword">新密码</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="6-64 位"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword">确认新密码</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="再次输入新密码"
+                  />
+                </div>
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={changePwdMutation.isPending || !oldPassword || !newPassword || !confirmPassword}
+                >
+                  {changePwdMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <ShieldOff className="size-4" />}
+                  修改密码
+                </Button>
+              </div>
+
+              {/* 注销账号 */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-destructive">注销账号</h4>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  注销后你的帖子、评论、想法、收藏和关注关系将被永久删除，此操作不可撤销。
+                </p>
+                {deleteConfirm ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-sm font-medium">确认注销？输入你的用户名以确认：</p>
+                    <Input
+                      value={deleteUsernameConfirm}
+                      onChange={(e) => setDeleteUsernameConfirm(e.target.value)}
+                      placeholder="输入用户名确认"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        variant="destructive"
+                        onClick={handleDeleteAccount}
+                        disabled={deleteAccountMutation.isPending || deleteUsernameConfirm !== user?.username}
+                      >
+                        {deleteAccountMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
+                        确认注销
+                      </Button>
+                      <Button variant="outline" onClick={() => { setDeleteConfirm(false); setDeleteUsernameConfirm('') }}>
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button variant="outline" className="mt-3 text-destructive" onClick={() => setDeleteConfirm(true)}>
+                    <Ban className="size-4" />
+                    注销账号
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
       </div>

@@ -45,6 +45,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	auth.POST("/login", handler.Login)
 	auth.POST("/refresh", handler.RefreshToken)
 	auth.GET("/me", middleware.Auth(), handler.Me)
+	auth.POST("/change-password", middleware.Auth(), handler.ChangePassword)
+	auth.DELETE("/account", middleware.Auth(), handler.DeleteAccount)
 
 	// --- 帖子路由 ---
 	// 注意：前端请求 /api/posts（不带尾部斜杠），Hertz 不会自动重定向，
@@ -146,6 +148,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	users.PUT("/:username/role", middleware.Auth(), middleware.RequireRole("admin"), handler.UpdateUserRole)
 	// 管理员重置用户密码（仅 admin；新密码由管理员线下告知用户）
 	users.POST("/:username/reset-password", middleware.Auth(), middleware.RequireRole("admin"), handler.ResetUserPassword)
+	// 封禁/解禁用户（admin/moderator）
+	users.POST("/:username/ban", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.BanUser)
 	users.POST("/:username/block", middleware.Auth(), handler.BlockUser)
 	users.DELETE("/:username/block", middleware.Auth(), handler.UnblockUser)
 
@@ -165,6 +169,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/notifications/unread-count", middleware.Auth(), handler.UnreadCount)
 	h.POST("/api/notifications/:id/read", middleware.Auth(), handler.MarkNotificationRead)
 	h.POST("/api/notifications/read-all", middleware.Auth(), handler.MarkAllRead)
+	h.DELETE("/api/notifications/:id", middleware.Auth(), handler.DeleteNotification)
 	h.GET("/api/notifications/preferences", middleware.Auth(), handler.GetNotificationPreferences)
 	h.PUT("/api/notifications/preferences", middleware.Auth(), handler.UpdateNotificationPreferences)
 
@@ -183,6 +188,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/messages/unread-count", middleware.Auth(), handler.UnreadMessageCount)
 	h.GET("/api/messages/conversations", middleware.Auth(), handler.ListConversations)
 	h.POST("/api/messages/conversations", middleware.Auth(), handler.CreateConversation)
+	h.DELETE("/api/messages/conversations/:id", middleware.Auth(), handler.DeleteConversation)
 	h.GET("/api/messages/conversations/:id/messages", middleware.Auth(), handler.ListMessages)
 	h.POST("/api/messages/conversations/:id/messages", middleware.Auth(), handler.SendMessage)
 	h.POST("/api/messages/conversations/:id/read", middleware.Auth(), handler.MarkConversationRead)

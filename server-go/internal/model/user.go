@@ -16,7 +16,9 @@ type User struct {
 	Avatar      *string `json:"avatar"`
 	Bio         *string `json:"bio"`
 	DisplayName *string `json:"displayName"`
-	Role        string  `gorm:"type:varchar(20);default:'user';not null" json:"role"`
+	Role string  `gorm:"type:varchar(20);default:'user';not null" json:"role"`
+	// Status 账号状态：active 正常 / banned 已封禁。封禁用户无法登录和发帖。
+	Status string `gorm:"type:varchar(20);default:'active';not null;index" json:"status"`
 	// Plan 当前套餐：free / pro。管理员不受 AI 配额限制（role=admin）。
 	Plan string `gorm:"type:varchar(20);default:'free';not null;index" json:"plan"`
 	// PlanExpiresAt 订阅到期时间；为空表示长期（管理员或非订阅账号）。

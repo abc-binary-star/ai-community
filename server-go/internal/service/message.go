@@ -284,6 +284,26 @@ func (s *MessageService) SendMessage(ctx context.Context, userID, conversationID
 	}, nil
 }
 
+// DeleteConversation 删除会话及其所有消息（仅参与者可删除）
+func (s *MessageService) DeleteConversation(ctx context.Context, userID, conversationID string) error {
+	conv, err := s.getParticipatedConversation(ctx, userID, conversationID)
+	if err != nil {
+		log.Printf("[Message/DeleteConversation] failed to verify participation, userID=%s, conversationID=%s, err=%v", userID, conversationID, err)
+		return err
+	}
+	// 先删除会话下所有消息
+	if err := dal.DB.WithContext(ctx).Where("conversation_id = ?", conv.ID).Delete(&model.Message{}).Error; err != nil {
+		log.Printf("[Message/DeleteConversation] failed to delete messages, conversationID=%s, err=%v", conv.ID, err)
+		return err
+	}
+	// 再删除会话本身
+	if err := dal.DB.WithContext(ctx).Delete(&model.Conversation{}, "id = ?", conv.ID).Error; err != nil {
+		log.Printf("[Message/DeleteConversation] failed to delete conversation, conversationID=%s, err=%v", conv.ID, err)
+		return err
+	}
+	return nil
+}
+
 // MarkConversationRead 将会话中对方发来的消息全部标记为已读
 func (s *MessageService) MarkConversationRead(ctx context.Context, userID, conversationID string) error {
 	if _, err := s.getParticipatedConversation(ctx, userID, conversationID); err != nil {

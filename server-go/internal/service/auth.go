@@ -70,6 +70,10 @@ func (s *AuthService) Login(ctx context.Context, req types.LoginReq) (*types.Aut
 		return nil, ErrInvalidCredentials
 	}
 
+	if user.Status == "banned" {
+		return nil, ErrUserBanned
+	}
+
 	return s.buildAuthResponse(&user)
 }
 
@@ -132,6 +136,73 @@ func (s *AuthService) buildAuthResponse(user *model.User) (*types.AuthResponse, 
 	}, nil
 }
 
+// ChangePassword 用户自助修改密码
+func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
+	var user model.User
+	if err := dal.DB.WithContext(ctx).Select("id", "password").First(&user, "id = ?", userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return err
+	}
+
+	return dal.DB.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("password", string(hashed)).Error
+}
+
+// DeleteAccount 用户注销账号：软删除用户及其内容
+func (s *AuthService) DeleteAccount(ctx context.Context, userID string) error {
+	var user model.User
+	if err := dal.DB.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	// 管理员不可自助注销
+	if user.Role == "admin" {
+		return ErrCannotDeleteAdmin
+	}
+
+	// 删除用户发布的内容（帖子级联删除评论，评论级联删除回复）
+	if err := dal.DB.WithContext(ctx).Where("author_id = ?", userID).Delete(&model.Post{}).Error; err != nil {
+		return err
+	}
+	// 删除用户发布的评论
+	if err := dal.DB.WithContext(ctx).Where("author_id = ?", userID).Delete(&model.Comment{}).Error; err != nil {
+		return err
+	}
+	// 删除用户的想法/批注
+	if err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).Delete(&model.Annotation{}).Error; err != nil {
+		return err
+	}
+	// 删除用户的通知
+	if err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).Delete(&model.Notification{}).Error; err != nil {
+		return err
+	}
+	// 删除关注关系
+	dal.DB.WithContext(ctx).Where("follower_id = ? OR following_id = ?", userID, userID).Delete(&model.Follow{})
+	// 删除点赞
+	dal.DB.WithContext(ctx).Where("user_id = ?", userID).Delete(&model.PostLike{})
+	dal.DB.WithContext(ctx).Where("user_id = ?", userID).Delete(&model.CommentLike{})
+	// 删除收藏
+	dal.DB.WithContext(ctx).Where("user_id = ?", userID).Delete(&model.Bookmark{})
+	// 删除屏蔽
+	dal.DB.WithContext(ctx).Where("blocker_id = ? OR blocked_id = ?", userID, userID).Delete(&model.Block{})
+
+	// 最后删除用户
+	return dal.DB.WithContext(ctx).Delete(&model.User{}, "id = ?", userID).Error
+}
+
 // 登录时序侧信道防御的固定 dummy hash
 const dummyHash = "$2a$12$yi8g72mJ6IFwFohHyRY6..G3f1g.0g//x0qTfwxBrwTs912HKv86y"
 
@@ -141,6 +212,8 @@ var (
 	ErrInvalidCredentials  = &AuthError{Msg: "邮箱或密码错误", Code: 401}
 	ErrInvalidRefreshToken = &AuthError{Msg: "refreshToken 无效或已过期", Code: 401}
 	ErrUserNotFound        = &AuthError{Msg: "用户不存在", Code: 404}
+	ErrUserBanned          = &AuthError{Msg: "账号已被封禁", Code: 403}
+	ErrCannotDeleteAdmin   = &AuthError{Msg: "管理员账号不可自助注销", Code: 403}
 )
 
 type AuthError struct {

@@ -27,6 +27,15 @@ func Auth() app.HandlerFunc {
 			c.Abort()
 			return
 		}
+		// 检查用户是否被封禁
+		var user model.User
+		if err := dal.DB.WithContext(ctx).Select("status").First(&user, "id = ?", claims.UserID).Error; err == nil {
+			if user.Status == "banned" {
+				response.Forbidden(c, "账号已被封禁")
+				c.Abort()
+				return
+			}
+		}
 		c.Set("userId", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Next(ctx)
