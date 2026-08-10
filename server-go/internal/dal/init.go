@@ -54,6 +54,7 @@ func Init(cfg *conf.Config) {
 		&model.Follow{},
 		&model.Notification{},
 		&model.Report{},
+		&model.Appeal{},
 		&model.Channel{},
 		&model.ChannelCategory{},
 		&model.Block{},

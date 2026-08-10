@@ -136,6 +136,17 @@ type HandleReportReq struct {
 	Note   string `json:"note" vd:"len($)<=500"`
 }
 
+// CreateAppealReq 提交账号申诉
+type CreateAppealReq struct {
+	Content string `json:"content" vd:"len($)>=10 && len($)<=6000"` // 2000中文字符=6000字节
+}
+
+// HandleAppealReq 处理申诉
+type HandleAppealReq struct {
+	Status string `json:"status" vd:"in($, 'resolved', 'rejected')"`
+	Note   string `json:"note" vd:"len($)<=500"`
+}
+
 type CreateChannelReq struct {
 	Name        string  `json:"name" vd:"len($)>=2 && len($)<=90"`   // 30中文字符=90字节
 	Label       string  `json:"label" vd:"len($)>=1 && len($)<=150"` // 50中文字符=150字节
@@ -359,6 +370,19 @@ type Report struct {
 	Note        string      `json:"note"`
 	CreatedAt   string      `json:"createdAt"`
 	UpdatedAt   string      `json:"updatedAt"`
+}
+
+type Appeal struct {
+	ID        string      `json:"id"`
+	UserID    string      `json:"userId"`
+	User      PublicUser  `json:"user"`
+	Content   string      `json:"content"`
+	Status    string      `json:"status"`
+	HandledBy *string     `json:"handledBy"`
+	Handler   *PublicUser `json:"handler"`
+	Note      string      `json:"note"`
+	CreatedAt string      `json:"createdAt"`
+	UpdatedAt string      `json:"updatedAt"`
 }
 
 type Channel struct {

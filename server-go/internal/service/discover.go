@@ -21,7 +21,7 @@ const recommendedUserLimit = 8
 // Discover 聚合发现页数据：跨频道热门帖子 + 趋势话题 + 推荐用户
 func (s *DiscoverService) Discover(ctx context.Context, currentUserID string) (*types.DiscoverResponse, error) {
 	// 跨频道热门帖子（复用 ListPosts 的 hot 排序）
-	hotPosts, err := (&PostService{}).ListPosts(ctx, "all", "hot", "", "", "", currentUserID, 1, hotPostLimit)
+	hotPosts, err := (&PostService{}).ListPosts(ctx, "all", "hot", "", "", "", "", currentUserID, 1, hotPostLimit)
 	if err != nil {
 		log.Printf("[Discover/Discover] failed to get hot posts, currentUserID=%s, err=%v", currentUserID, err)
 		return nil, err

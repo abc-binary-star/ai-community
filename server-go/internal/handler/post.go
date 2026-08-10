@@ -37,10 +37,11 @@ func ListPosts(ctx context.Context, c *app.RequestContext) {
 	q := c.Query("q")
 	tag := c.Query("tag")
 	status := c.Query("status")
+	feed := c.Query("feed")
 	page, pageSize := pagination.Parse(c)
 	userID := middleware.GetCurrentUserID(c)
 
-	result, err := postService.ListPosts(ctx, channel, sort, q, tag, status, userID, page, pageSize)
+	result, err := postService.ListPosts(ctx, channel, sort, q, tag, status, feed, userID, page, pageSize)
 	if err != nil {
 		handlePostError(c, err)
 		return

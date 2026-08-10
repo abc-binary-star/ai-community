@@ -1,12 +1,13 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Flame, Timer } from 'lucide-react'
+import { Flame, Timer, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TABS = [
   { key: 'latest', label: '最新', icon: Timer },
   { key: 'hot', label: '最热', icon: Flame },
+  { key: 'following', label: '关注', icon: Users },
 ] as const
 
 export function SortTabs({ current, basePath = '/community' }: { current: string; basePath?: string }) {
@@ -15,15 +16,26 @@ export function SortTabs({ current, basePath = '/community' }: { current: string
 
   const handleChange = (sort: string) => {
     const params = new URLSearchParams(searchParams.toString())
-    params.set('sort', sort)
-    params.delete('page')
+    if (sort === 'following') {
+      params.set('feed', 'following')
+      params.delete('sort')
+      params.delete('channel')
+      params.delete('page')
+    } else {
+      params.delete('feed')
+      params.set('sort', sort)
+      params.delete('page')
+    }
     router.push(`${basePath}?${params.toString()}`)
   }
 
   return (
     <div className="inline-flex items-center gap-5 border-b border-border">
       {TABS.map((tab) => {
-        const active = current === tab.key
+        const active =
+          tab.key === 'following'
+            ? current === 'following'
+            : current === tab.key && !searchParams.get('feed')
         const Icon = tab.icon
         return (
           <button

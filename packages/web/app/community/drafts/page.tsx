@@ -2,21 +2,24 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { FileText, Loader2, PenLine, Trash2, HardDrive, Database } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Loader2, PenLine, Trash2, HardDrive, Database } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import type { Post } from 'shared'
+import type { Paginated, Post } from 'shared'
 import {
   listUserNewDrafts,
   deleteDraftFromDB,
   type LocalDraft,
 } from '@/lib/draft-storage'
 
+const PAGE_SIZE = 20
+
 export default function DraftsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
   const hasHydrated = useAuthStore((s) => s._hasHydrated)
@@ -26,8 +29,10 @@ export default function DraftsPage() {
   const [loadingLocal, setLoadingLocal] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingLocalId, setDeletingLocalId] = useState<string | null>(null)
+  const [totalPages, setTotalPages] = useState(1)
 
   const userId = user?.id ?? ''
+  const page = Math.max(1, Number(searchParams.get('page')) || 1)
 
   useEffect(() => {
     if (hasHydrated && !token) {
@@ -36,11 +41,14 @@ export default function DraftsPage() {
     }
     if (!token) return
     api
-      .get<{ items: Post[] }>('/posts?status=draft&channel=all')
-      .then((data) => setDrafts(data.items))
+      .get<Paginated<Post>>(`/posts?status=draft&channel=all&page=${page}&pageSize=${PAGE_SIZE}`)
+      .then((data) => {
+        setDrafts(data.items)
+        setTotalPages(data.totalPages ?? 1)
+      })
       .catch((e) => toast.error(e instanceof ApiError ? e.message : '草稿加载失败'))
       .finally(() => setLoading(false))
-  }, [hasHydrated, token, router])
+  }, [hasHydrated, token, router, page])
 
   useEffect(() => {
     if (!userId) return
@@ -210,6 +218,41 @@ export default function DraftsPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {/* 服务器草稿分页 */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.set('page', String(page - 1))
+                router.push(`/community/drafts?${params.toString()}`)
+              }}
+            >
+              <ChevronLeft />
+              上一页
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {page} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.set('page', String(page + 1))
+                router.push(`/community/drafts?${params.toString()}`)
+              }}
+            >
+              下一页
+              <ChevronRight />
+            </Button>
+          </div>
         )}
       </section>
     </div>

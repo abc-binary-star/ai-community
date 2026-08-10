@@ -126,6 +126,19 @@ export interface Report {
   updatedAt: string
 }
 
+export interface Appeal {
+  id: string
+  userId: string
+  user: PublicUser
+  content: string
+  status: 'pending' | 'resolved' | 'rejected'
+  handledBy: string | null
+  handler: PublicUser | null
+  note: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Channel {
   id: string
   name: string

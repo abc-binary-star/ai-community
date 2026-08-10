@@ -123,13 +123,22 @@ func mapPostsToDTOs(ctx context.Context, posts []model.Post, userID string) []ty
 
 // ListPosts 帖子列表
 // status: 空或 published=公开列表；draft=仅当前用户自己的草稿
-func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag, status, userID string, page, pageSize int) (*types.Paginated[types.Post], error) {
+func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag, status, feed, userID string, page, pageSize int) (*types.Paginated[types.Post], error) {
 	// 校验 channel，无效时回退到 general
 	if channel != "all" && !validChannel(ctx, channel) {
 		channel = "general"
 	}
 
 	query := dal.DB.WithContext(ctx).Model(&model.Post{})
+
+	// 关注动态流：只显示当前用户关注用户的帖子，需登录
+	if feed == "following" {
+		if userID == "" {
+			return &types.Paginated[types.Post]{Items: []types.Post{}, Total: 0, Page: page, PageSize: pageSize, TotalPages: 0}, nil
+		}
+		query = query.Where("author_id IN (?)",
+			dal.DB.Model(&model.Follow{}).Select("following_id").Where("follower_id = ?", userID))
+	}
 
 	// 状态过滤：草稿仅本人可见，公开列表只显示已发布
 	if status == "draft" {
@@ -172,6 +181,15 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 	dbQuery := dal.DB.WithContext(ctx).
 		Preload("Author").
 		Preload("Tags")
+
+	// 关注动态流同步到 dbQuery
+	if feed == "following" {
+		if userID == "" {
+			return &types.Paginated[types.Post]{Items: []types.Post{}, Total: 0, Page: page, PageSize: pageSize, TotalPages: 0}, nil
+		}
+		dbQuery = dbQuery.Where("author_id IN (?)",
+			dal.DB.Model(&model.Follow{}).Select("following_id").Where("follower_id = ?", userID))
+	}
 
 	// 过滤当前用户屏蔽的作者
 	if userID != "" && status != "draft" {

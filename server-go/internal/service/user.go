@@ -146,6 +146,51 @@ func (s *UserService) SearchUsersAdmin(ctx context.Context, q string) ([]AdminUs
 	return items, nil
 }
 
+// ListUsers 分页浏览全部用户（仅管理员调用），支持可选关键词过滤
+func (s *UserService) ListUsers(ctx context.Context, q string, page, pageSize int) (*types.Paginated[AdminUserSearchItem], error) {
+	query := dal.DB.WithContext(ctx).Model(&model.User{})
+
+	if q = strings.TrimSpace(q); q != "" {
+		like := "%" + q + "%"
+		query = query.Where("username ILIKE ? OR email ILIKE ? OR display_name ILIKE ?", like, like, like)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	var users []model.User
+	if err := query.
+		Order("created_at DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]AdminUserSearchItem, 0, len(users))
+	for _, u := range users {
+		items = append(items, AdminUserSearchItem{
+			ID:          u.ID,
+			Username:    u.Username,
+			Avatar:      u.Avatar,
+			DisplayName: u.DisplayName,
+			Email:       u.Email,
+			Role:        u.Role,
+			CreatedAt:   u.CreatedAt,
+		})
+	}
+
+	return &types.Paginated[AdminUserSearchItem]{
+		Items:      items,
+		Total:      int(total),
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: pagination.TotalPages(int(total), pageSize),
+	}, nil
+}
+
 // GetUser 查看用户主页（公开），批量计算统计与关注状态
 func (s *UserService) GetUser(ctx context.Context, username, currentUserId string) (*types.PublicUser, error) {
 	var u model.User

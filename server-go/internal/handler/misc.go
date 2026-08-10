@@ -80,6 +80,21 @@ func SearchUsersAdmin(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]interface{}{"items": items})
 }
 
+// ListUsersAdmin 分页浏览全部用户（仅管理员）
+// GET /api/users/admin/list?page=&pageSize=&q=
+func ListUsersAdmin(ctx context.Context, c *app.RequestContext) {
+	q := c.Query("q")
+	page, pageSize := pagination.Parse(c)
+
+	result, err := userService.ListUsers(ctx, q, page, pageSize)
+	if err != nil {
+		log.Printf("[ListUsersAdmin] 获取用户列表失败: %v", err)
+		response.Error(c, consts.StatusInternalServerError, "服务器内部错误")
+		return
+	}
+	response.JSON(c, result)
+}
+
 // GetUser 查看用户主页（公开）
 // GET /api/users/:username
 func GetUser(ctx context.Context, c *app.RequestContext) {

@@ -139,6 +139,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	users.GET("/search", middleware.Auth(), handler.SearchUsers)
 	// 角色管理专用搜索，须在 :username 参数路由之前注册（静态段优先匹配）
 	users.GET("/admin/role-management/search", middleware.Auth(), middleware.RequireRole("admin"), handler.SearchUsersAdmin)
+	// 分页浏览全部用户（仅管理员）
+	users.GET("/admin/list", middleware.Auth(), middleware.RequireRole("admin"), handler.ListUsersAdmin)
 	users.GET("/:username", middleware.OptionalAuth(), handler.GetUser)
 	users.GET("/:username/posts", middleware.OptionalAuth(), handler.GetUserPosts)
 	users.PUT("/me", middleware.Auth(), handler.UpdateUser)
@@ -180,6 +182,11 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/reports", middleware.Auth(), handler.CreateReport)
 	h.GET("/api/reports", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.ListReports)
 	h.PUT("/api/reports/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.HandleReport)
+
+	// --- 申诉路由 ---
+	h.POST("/api/appeals", middleware.Auth(), handler.CreateAppeal)
+	h.GET("/api/appeals", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.ListAppeals)
+	h.PUT("/api/appeals/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.HandleAppeal)
 
 	// --- 发现页路由 ---
 	h.GET("/api/discover", middleware.OptionalAuth(), handler.Discover)

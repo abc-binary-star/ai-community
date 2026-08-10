@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Ban, Bell, Check, Image as ImageIcon, Loader2, Save, ShieldOff, Sparkles, Upload, User, X } from 'lucide-react'
+import { ArrowLeft, Ban, Bell, Check, Image as ImageIcon, Loader2, Save, ShieldAlert, ShieldOff, Sparkles, Upload, User, X } from 'lucide-react'
 import Cropper from 'react-easy-crop'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -120,6 +120,9 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleteUsernameConfirm, setDeleteUsernameConfirm] = useState('')
 
+  // 账号申诉
+  const [appealContent, setAppealContent] = useState('')
+
   const mutation = useMutation({
     mutationFn: (data: { avatar: string; displayName: string; bio: string }) =>
       api.put<UserType>('/users/me', data),
@@ -213,6 +216,25 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = () => {
     deleteAccountMutation.mutate()
+  }
+
+  // 提交账号申诉
+  const submitAppealMutation = useMutation({
+    mutationFn: (content: string) => api.post<{ id: string }>('/appeals', { content }),
+    onSuccess: () => {
+      toast.success('申诉已提交，管理员会尽快处理')
+      setAppealContent('')
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : '提交失败'),
+  })
+
+  const handleSubmitAppeal = () => {
+    const content = appealContent.trim()
+    if (content.length < 10) {
+      toast.error('申诉内容至少 10 字')
+      return
+    }
+    submitAppealMutation.mutate(content)
   }
 
   const onCropComplete = useCallback((_area: unknown, areaPixels: { x: number; y: number; width: number; height: number }) => {
@@ -704,6 +726,29 @@ export default function SettingsPage() {
                   </Button>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* 账号申诉 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">账号申诉</CardTitle>
+              <CardDescription>如果账号被处置（如封禁）或遇到问题，可提交申诉</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={appealContent}
+                onChange={(e) => setAppealContent(e.target.value)}
+                placeholder="请描述申诉原因，10-2000 字"
+                rows={4}
+              />
+              <Button
+                onClick={handleSubmitAppeal}
+                disabled={submitAppealMutation.isPending || appealContent.trim().length < 10}
+              >
+                {submitAppealMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <ShieldAlert className="size-4" />}
+                提交申诉
+              </Button>
             </CardContent>
           </Card>
       </div>

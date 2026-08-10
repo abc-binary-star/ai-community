@@ -4,12 +4,12 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, MessageCircle, Search, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, ImagePlus, Loader2, MessageCircle, Search, Send, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { api, ApiError } from '@/lib/api'
+import { api, apiFetch, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { cn, formatEditedTime, getInitials } from '@/lib/utils'
 import { CommunityShell } from '@/app/community/components/community-shell'
@@ -21,6 +21,36 @@ const MESSAGES_PAGE_SIZE = 50
 interface MessagesPageData {
   items: Message[]
   hasMore: boolean
+}
+
+// 把消息文本中的 markdown 图片语法渲染为实际图片；其余文本原样返回
+function renderMessageContent(content: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  const re = /!\[[^\]]*\]\((\s*https?:\/\/[^)\s]+)\s*\)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = re.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(<span key={key++}>{content.slice(lastIndex, match.index)}</span>)
+    }
+    const url = match[1].trim()
+    nodes.push(
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={key++}
+        src={url}
+        alt="图片"
+        className="max-h-64 w-auto max-w-full rounded-lg object-contain"
+        loading="lazy"
+      />,
+    )
+    lastIndex = re.lastIndex
+  }
+  if (lastIndex < content.length) {
+    nodes.push(<span key={key++}>{content.slice(lastIndex)}</span>)
+  }
+  return nodes.length > 0 ? nodes : [content]
 }
 
 function MessagesInner() {
@@ -212,6 +242,34 @@ function MessagesInner() {
       const body = chatBodyRef.current
       if (body) body.scrollTop = body.scrollHeight
     })
+  }
+
+  // 上传图片并作为消息插入
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImageSelect = async (file: File) => {
+    if (!activeConvId) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('请选择图片文件')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('图片不能超过 10MB')
+      return
+    }
+    setUploadingImage(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const data = await apiFetch<{ url: string }>('/upload/image', { method: 'POST', body: formData })
+      const md = `![图片](${data.url})`
+      sendMutation.mutate(md)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '图片上传失败')
+    } finally {
+      setUploadingImage(false)
+    }
   }
 
   // 删除会话
@@ -424,7 +482,7 @@ function MessagesInner() {
                             isSelf ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-card',
                           )}
                         >
-                          <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                          <p className="whitespace-pre-wrap break-words">{renderMessageContent(m.content)}</p>
                           <div
                             className={cn(
                               'mt-1 flex items-center justify-end gap-1 text-[11px]',
@@ -445,6 +503,28 @@ function MessagesInner() {
             {/* 输入区 */}
             <div className="border-t border-border bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
               <div className="flex items-end gap-2">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleImageSelect(file)
+                    e.target.value = ''
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-11 w-11 shrink-0 text-muted-foreground"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploadingImage || !activeConvId || sendMutation.isPending}
+                  aria-label="发送图片"
+                >
+                  {uploadingImage ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+                </Button>
                 <Textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}

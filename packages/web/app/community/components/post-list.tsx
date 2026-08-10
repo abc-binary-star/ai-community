@@ -39,6 +39,7 @@ export function PostListPage({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { data: channels } = useChannels()
+  const feed = searchParams.get('feed')
   const color = channelColor(channel)
 
   // 视图切换走 URL：想法流与帖子列表都可被直接分享和刷新保留
@@ -58,14 +59,15 @@ export function PostListPage({
   }
 
   const queryParams = new URLSearchParams()
-  queryParams.set('channel', channel)
+  queryParams.set('channel', feed === 'following' ? 'all' : channel)
   queryParams.set('page', String(page))
   queryParams.set('sort', sort)
+  if (feed) queryParams.set('feed', feed)
   if (q) queryParams.set('q', q)
   if (tag) queryParams.set('tag', tag)
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['posts', channel, page, sort, q, tag],
+    queryKey: ['posts', channel, page, sort, q, tag, feed],
     queryFn: () =>
       api.get<Paginated<Post>>(`/posts?${queryParams.toString()}&pageSize=20`),
     enabled: view === 'posts',
@@ -95,10 +97,14 @@ export function PostListPage({
       <div className="min-w-0 flex-1 space-y-6">
         {/* 频道标题头：编辑式版面。频道色做一道竖线锚点，去卡片框，靠字号与留白。 */}
         <div className="flex items-center gap-3 border-b border-border pb-5">
-          <span className={cn('h-9 w-1 rounded-full', color.dot)} />
+          <span className={cn('h-9 w-1 rounded-full', feed === 'following' ? 'bg-primary' : color.dot)} />
           <div>
-            <h1 className="font-display text-3xl leading-none tracking-tight">{getChannelLabel(channels, channel)}</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">分享与讨论，找到同好</p>
+            <h1 className="font-display text-3xl leading-none tracking-tight">
+              {feed === 'following' ? '关注动态' : getChannelLabel(channels, channel)}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {feed === 'following' ? '只看你关注的人的帖子' : '分享与讨论，找到同好'}
+            </p>
           </div>
         </div>
 
@@ -135,7 +141,7 @@ export function PostListPage({
 
         {view === 'posts' && (
         <div className="flex items-center justify-between gap-3">
-          <SortTabs current={sort} />
+          <SortTabs current={feed === 'following' ? 'following' : sort} />
           <Button asChild size="sm" className="hidden rounded-full sm:inline-flex">
             <Link href="/community/post/new">
               <PenLine />
@@ -172,12 +178,15 @@ export function PostListPage({
       ) : (
         <div className="rounded-2xl border border-dashed bg-card/50 py-20 text-center">
           <p className="text-muted-foreground">
-            {q || tag ? '没有找到匹配的帖子' : '这个频道还没有帖子'}
+            {feed === 'following'
+              ? '登录后即可查看关注的人的动态'
+              : q || tag
+                ? '没有找到匹配的帖子'
+                : '这个频道还没有帖子'}
           </p>
           <Button asChild className="mt-4 rounded-full">
-            <Link href="/community/post/new">
-              <PenLine />
-              抢先发帖
+            <Link href={feed === 'following' ? '/login' : '/community/post/new'}>
+              {feed === 'following' ? '去登录' : <><PenLine /> 抢先发帖</>}
             </Link>
           </Button>
         </div>

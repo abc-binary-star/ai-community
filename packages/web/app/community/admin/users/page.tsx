@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { ArrowLeft, KeyRound, Loader2, Search, ShieldCheck, UserCog, X } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ArrowLeft, ChevronLeft, ChevronRight, KeyRound, Loader2, Search, ShieldCheck, UserCog, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +12,8 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { getInitials } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
+import type { Paginated } from 'shared'
 
 interface AdminUserItem {
   id: string
@@ -49,15 +50,18 @@ function RoleBadge({ role }: { role: string }) {
 const selectClass =
   'h-9 rounded-lg border border-input bg-card px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
 
+const PAGE_SIZE = 20
+
 export default function UserRoleAdminPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const hasHydrated = useAuthStore((s) => s._hasHydrated)
 
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<AdminUserItem[]>([])
-  const [searched, setSearched] = useState(false)
-  const [searching, setSearching] = useState(false)
+  const [totalPages, setTotalPages] = useState(1)
+  const [loading, setLoading] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [resetTarget, setResetTarget] = useState<AdminUserItem | null>(null)
@@ -65,27 +69,46 @@ export default function UserRoleAdminPage() {
   const [resetPwd2, setResetPwd2] = useState('')
   const [resetting, setResetting] = useState(false)
 
+  const page = Math.max(1, Number(searchParams.get('page')) || 1)
+
   const canManage = hasHydrated && !!user && user.role === 'admin'
 
-  const doSearch = async (kw: string) => {
-    const trimmed = kw.trim()
-    if (!trimmed) {
-      toast.info('请输入邮箱或用户名')
-      return
-    }
-    setSearching(true)
+  const loadUsers = async (kw: string, p: number) => {
+    setLoading(true)
     try {
-      const data = await api.get<{ items: AdminUserItem[] }>(
-        `/users/admin/role-management/search?q=${encodeURIComponent(trimmed)}`,
-      )
+      const params = new URLSearchParams()
+      params.set('page', String(p))
+      params.set('pageSize', String(PAGE_SIZE))
+      if (kw.trim()) params.set('q', kw.trim())
+      const data = await api.get<Paginated<AdminUserItem>>(`/users/admin/list?${params.toString()}`)
       setItems(data.items ?? [])
-      setSearched(true)
-      setDrafts({})
+      setTotalPages(data.totalPages ?? 1)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : '搜索失败')
+      toast.error(e instanceof ApiError ? e.message : '加载失败')
     } finally {
-      setSearching(false)
+      setLoading(false)
     }
+  }
+
+  // 首次加载 / 页码变化时刷新列表
+  useEffect(() => {
+    if (!canManage) return
+    loadUsers(query, page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManage, page])
+
+  const goPage = (n: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('page', String(n))
+    router.push(`/community/admin/users?${params.toString()}`)
+  }
+
+  const doSearch = (kw: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('page')
+    if (kw.trim()) params.set('q', kw.trim())
+    router.push(`/community/admin/users?${params.toString()}`)
+    loadUsers(kw, 1)
   }
 
   const saveRole = async (username: string, role: string) => {
@@ -165,7 +188,7 @@ export default function UserRoleAdminPage() {
           用户管理
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          按邮箱或用户名搜索（两者均唯一，昵称可能重复），可将其设为管理员 / 版主 / 普通用户、重置密码。
+          分页浏览全部用户，支持按邮箱 / 用户名 / 昵称过滤，可设置角色、重置密码。
         </p>
       </div>
 
@@ -180,20 +203,25 @@ export default function UserRoleAdminPage() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入邮箱或用户名，如：xxx@qq.com"
+            placeholder="输入邮箱 / 用户名 / 昵称过滤"
             className="flex-1"
           />
-          <Button type="submit" disabled={searching}>
-            {searching ? <Loader2 className="animate-spin" /> : <Search />}
+          <Button type="submit" disabled={loading}>
+            {loading ? <Loader2 className="animate-spin" /> : <Search />}
             搜索
           </Button>
         </form>
       </Card>
 
-      {searched && items.length === 0 && (
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          加载中…
+        </div>
+      ) : items.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">未找到匹配的用户</p>
-      )}
-
+      ) : (
+        <>
       <div className="space-y-2">
         {items.map((u) => {
           const isSelf = u.id === user?.id
@@ -262,6 +290,24 @@ export default function UserRoleAdminPage() {
           )
         })}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goPage(page - 1)}>
+            <ChevronLeft />
+            上一页
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {page} / {totalPages}
+          </span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>
+            下一页
+            <ChevronRight />
+          </Button>
+        </div>
+      )}
+        </>
+      )}
 
       {resetTarget && (
         <div
