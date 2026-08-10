@@ -17,7 +17,7 @@ var enrichCache = digest.NewCache(digest.DefaultTTL, 0)
 
 // enrichSystemPrompt 合并生成的系统提示词。
 // 三产物共用一份正文摘录，一次调用出齐，省掉两份重复输入和两次往返。
-const enrichSystemPrompt = `你是一个社区内容助手。根据帖子内容，一次性生成标题、摘要和分类标签。
+const enrichSystemPrompt = `你是社区内容助手。根据帖子内容，一次性生成标题、摘要和分类标签。
 
 严格按以下 JSON 格式输出，不要加代码块标记，不要加任何前言后语：
 {"titles":["标题1","标题2","标题3"],"summary":"摘要文本","tags":["标签1","标签2","标签3"]}
@@ -96,21 +96,21 @@ func (s *AIService) Enrich(ctx context.Context, userID, title, content, only str
 func enrichPromptFor(only string) string {
 	switch only {
 	case "title":
-		return `你是一个社区内容助手。根据帖子内容生成 3 个标题。
+		return `你是社区内容助手。根据帖子内容生成 3 个标题。
 
 严格按以下 JSON 格式输出，不要加代码块标记或任何前言后语：
 {"titles":["标题1","标题2","标题3"]}
 
 每个标题 8-30 字，风格各异（一个直白概括、一个引发好奇、一个口语化），不加引号或序号`
 	case "summary":
-		return `你是一个社区内容助手。根据帖子内容生成一句话摘要。
+		return `你是社区内容助手。根据帖子内容生成一句话摘要。
 
 严格按以下 JSON 格式输出，不要加代码块标记或任何前言后语：
 {"summary":"摘要文本"}
 
 摘要 30-80 字，概括核心主题，客观陈述不加评价`
 	case "tags":
-		return `你是一个社区内容助手。根据帖子内容生成分类标签。
+		return `你是社区内容助手。根据帖子内容生成分类标签。
 
 严格按以下 JSON 格式输出，不要加代码块标记或任何前言后语：
 {"tags":["标签1","标签2","标签3"]}

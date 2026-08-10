@@ -20,6 +20,28 @@ var titleCache = digest.NewCache(digest.DefaultTTL, 0)
 // summaryCache 摘要缓存
 var summaryCache = digest.NewCache(digest.DefaultTTL, 0)
 
+// styleDesc 将前端风格 key 映射为中文描述。
+// 编辑器面板和语音输入各自维护一套风格列表，这里同时兼容两者：
+// 编辑器 5 种（natural/formal/friendly/concise/vivid）+ 语音 4 种（含 casual）
+func styleDesc(style string) string {
+	switch style {
+	case "natural", "":
+		return "自然流畅"
+	case "formal":
+		return "正式严谨"
+	case "casual":
+		return "口语轻松"
+	case "friendly":
+		return "轻松亲切"
+	case "concise":
+		return "简洁精炼"
+	case "vivid":
+		return "生动细节"
+	default:
+		return "自然流畅"
+	}
+}
+
 // SuggestTitle 根据帖子内容生成 3 个候选标题
 func (s *AIService) SuggestTitle(ctx context.Context, userID, content string) ([]string, error) {
 	cacheKey := digest.NormHash("title", content)
@@ -27,18 +49,16 @@ func (s *AIService) SuggestTitle(ctx context.Context, userID, content string) ([
 		return strings.Split(cached, "\n"), nil
 	}
 
-	// 用摘录替代「截取前 2000 字」：长文的结论常在后半段，
-	// 前缀截断会让模型看不到，摘录覆盖全篇。
 	d := digest.For(content, digest.BudgetTitle)
 	truncated := d.Text
 
-	systemPrompt := `你是一个社区帖子标题助手。根据帖子内容，生成 3 个不同风格的标题供用户选择。
+	systemPrompt := `你是社区帖子标题助手。根据帖子内容生成 3 个不同风格的标题。
 
 要求：
-1. 每个标题 8-30 个字，简洁有力
-2. 3 个标题风格各异：一个直白概括、一个引发好奇、一个口语化
-3. 不要加引号或序号
-4. 只返回标题，每行一个，共 3 行`
+- 每个标题 8-30 字
+- 3 个风格各异：一个直白概括、一个引发好奇、一个口语化
+- 不加引号、序号或前缀
+- 每行一个，共 3 行，不输出其他内容`
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
@@ -119,57 +139,44 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 		truncated = string(runes[:40000])
 	}
 
-	// 选段润色时取选段在原文中的前后各 200 字作为上下文。
-	// 原先实现直接丢弃 content，模型看不到上下文，衔接处容易润色得突兀；
-	// 而前端仍传了整篇正文，这部分数据白白浪费。
+	// 选段润色时取选段在原文中的前后各 200 字作为上下文
 	var before, after string
 	if selection != "" {
 		before, after = selectionContext(content, selection, 200)
 	}
 
-	styleDesc := "简洁自然"
-	switch style {
-	case "formal":
-		styleDesc = "正式严谨"
-	case "casual":
-		styleDesc = "口语轻松"
-	case "friendly":
-		styleDesc = "亲和友好"
-	}
-
-	// 选段润色和全文润色使用不同策略
+	sd := styleDesc(style)
 	isSelection := selection != ""
 
 	var systemPrompt string
 	if isSelection {
-		// 选段润色：聚焦文字表达质量，主动改写措辞但不动整体排版
-		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请对用户选中的文字片段做实质性润色改写，风格为%s。
+		systemPrompt = fmt.Sprintf(`你是社区内容润色助手。请对用户选中的文字片段做实质性润色改写，风格：%s。
 
 要求：
-1. 修正错别字、标点误用和语病
-2. 主动优化措辞：替换口语化、重复、笼统的表达，让用词更精准生动
-3. 重组句子结构：拆分冗长句、合并零碎句，让行文节奏更流畅
-4. 删除冗余的赘词和空话，让表达更凝练有力
-5. 保持原意和事实不变，不新增未提及的信息
-6. 保留原有的段落数量和换行位置，不增删空行、不添加标题或列表
-7. 不要增加表情符号，不要添加 Markdown 加粗等标记
-8. 即使原文已经通顺，也要在措辞和句式上做出可感知的优化
-9. 不要加任何前言、后语或解释，直接输出润色后的文字
-10. 若输入中含【上文】【下文】标记，它们只是上下文参考，用于让衔接更自然；只输出【需要润色的片段】的润色结果，不要输出上下文内容`, styleDesc)
+- 修正错别字、标点误用和语病
+- 主动优化措辞：替换口语化、重复、笼统的表达，用词更精准
+- 重组句子结构：拆分冗长句、合并零碎句，让节奏更流畅
+- 删除冗余赘词，让表达更凝练
+- 保持原意和事实不变，不新增未提及的信息
+- 保留原有段落数量和换行位置，不增删空行、不添加标题或列表
+- 不增加表情符号，不添加 Markdown 加粗等标记
+- 即使原文已通顺，也要在措辞和句式上做出可感知的优化
+- 若输入含【上文】【下文】标记，它们仅供衔接参考；只输出【需要润色的片段】的润色结果
+- 不加任何前言、后语或解释，直接输出润色后的文字`, sd)
 	} else {
-		// 全文润色：综合优化排版、格式、表情符号、加粗强调
-		systemPrompt = fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色整篇文章，风格为%s。
+		systemPrompt = fmt.Sprintf(`你是社区内容润色助手。请帮用户润色整篇文章，风格：%s。
 
 要求：
-1. 修正错别字和语病，确保用词准确
-2. 优化句子结构和表达流畅度，使行文更自然
-3. 整理文本格式：合理使用标题、分段、列表等 Markdown 元素，使层次分明
-4. 优化排版：段落间用空行分隔，长段落适当拆分
-5. 适当增加表情符号，让内容更生动有趣，但不过度使用（每段最多 1-2 个）
-6. 适度使用加粗（**加粗**）强调重点句和重点词，让读者快速抓住核心信息，但不要整段加粗
-7. 保持原意不变，不改写事实内容
-8. 保留代码块（`+"```"+`）、链接、图片等 Markdown 元素，不修改其内容
-9. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+- 修正错别字和语病，确保用词准确
+- 优化句子结构和表达流畅度
+- 整理文本格式：合理使用标题、分段、列表等 Markdown 元素
+- 段落间用空行分隔，长段落适当拆分
+- 适当增加表情符号让内容更生动（每段最多 1-2 个）
+- 适度使用加粗（**加粗**）强调重点，但不要整段加粗
+- 保持原意不变，不改写事实内容
+- 保留代码块、链接、图片等 Markdown 元素，不修改其内容
+- 文中可能出现 AIPROTECTED0TOKEN、AIPROTECTED1TOKEN 等占位符（代表代码、链接或图片），必须原样保留，不要展开、改写或删除
+- 不加任何前言或后语，直接输出润色后的内容`, sd)
 	}
 
 	// 选段润色用稍高温度，避免模型对已通顺的文字原样返回
@@ -222,31 +229,22 @@ func (s *AIService) Rewrite(ctx context.Context, userID, content, selection, sty
 // RewriteChunk 润色单个分片。与 Rewrite 的全文润色用相同的 system prompt，
 // 但提示 AI 这是文章的一部分，需保持上下文连贯。
 func (s *AIService) RewriteChunk(ctx context.Context, userID, content, style string, index, total int) (string, error) {
-	styleDesc := "简洁自然"
-	switch style {
-	case "formal":
-		styleDesc = "正式严谨"
-	case "casual":
-		styleDesc = "口语轻松"
-	case "friendly":
-		styleDesc = "亲和友好"
-	}
-
 	// 分片序号放在 user message 而非 system prompt，让所有分片的 system prompt
 	// 完全一致。服务商对相同的 prompt 前缀提供上下文缓存优惠，
 	// 原先把「第 i/n 部分」嵌进 system prompt 会让每片前缀都不同，主动放弃了该折扣。
-	systemPrompt := fmt.Sprintf(`你是一个社区内容润色助手。请帮用户润色文章，风格为%s。
+	systemPrompt := fmt.Sprintf(`你是社区内容润色助手。请帮用户润色文章的一部分，风格：%s。
 输入会标明当前是第几部分，请只润色该部分内容，并与相邻部分保持风格连贯。
 
 要求：
-1. 修正错别字和语病，确保用词准确
-2. 优化句子结构和表达流畅度，使行文更自然
-3. 整理文本格式：合理使用标题、分段、列表等 Markdown 元素
-4. 优化排版：段落间用空行分隔
-5. 适度使用加粗强调重点
-6. 保持原意不变，不改写事实内容
-7. 保留代码块、链接、图片等 Markdown 元素
-8. 不要加任何前言或后语，直接输出润色后的内容`, styleDesc)
+- 修正错别字和语病，确保用词准确
+- 优化句子结构和表达流畅度
+- 整理文本格式：合理使用标题、分段、列表等 Markdown 元素
+- 段落间用空行分隔
+- 适度使用加粗强调重点
+- 保持原意不变，不改写事实内容
+- 保留代码块、链接、图片等 Markdown 元素
+- 文中可能出现 AIPROTECTED0TOKEN、AIPROTECTED1TOKEN 等占位符（代表代码、链接或图片），必须原样保留
+- 不加任何前言或后语，直接输出润色后的内容`, styleDesc(style))
 
 	userMsg := fmt.Sprintf("【第 %d/%d 部分】\n%s", index+1, total, content)
 
@@ -280,13 +278,13 @@ func (s *AIService) Summarize(ctx context.Context, userID, content string) (stri
 	d := digest.For(content, digest.BudgetSummarize)
 	truncated := d.Text
 
-	systemPrompt := `你是一个社区帖子摘要助手。根据帖子内容，生成一句话摘要。
+	systemPrompt := `你是社区帖子摘要助手。根据帖子内容生成一句话摘要。
 
 要求：
-1. 30-80 个字，概括帖子的核心主题或关键信息
-2. 客观陈述，不加主观评价
-3. 不要加引号、序号或前言后语
-4. 只输出摘要文本`
+- 30-80 字，概括帖子的核心主题或关键信息
+- 客观陈述，不加主观评价
+- 不加引号、序号或前言后语
+- 只输出摘要文本`
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{
 		System:      systemPrompt,
@@ -318,39 +316,29 @@ func (s *AIService) VoicePolish(ctx context.Context, userID, content, style, tar
 		truncated = string(runes[:40000])
 	}
 
-	styleDesc := "简洁自然"
-	switch style {
-	case "formal":
-		styleDesc = "正式严谨"
-	case "casual":
-		styleDesc = "口语轻松"
-	case "friendly":
-		styleDesc = "亲和友好"
-	}
+	sd := styleDesc(style)
 
 	var systemPrompt string
 	if target == "comment" {
-		// 评论模式：精简为 1-3 句
-		systemPrompt = fmt.Sprintf(`你是一个语音转文字润色助手。用户通过语音输入了一段口语内容，请将其润色为适合发布的社区评论，风格为%s。
+		systemPrompt = fmt.Sprintf(`你是语音转文字润色助手。用户通过语音输入了一段口语内容，请将其润色为适合发布的社区评论，风格：%s。
 
 要求：
-1. 去除口语中的口水词（嗯、啊、那个、就是说、然后等）和重复语句
-2. 补充正确的标点符号
-3. 精简为 1-3 句话，保留核心观点
-4. 保持说话者的原意和语气，不要添加未提及的信息
-5. 不要加前言后语，直接输出润色后的评论`, styleDesc)
+- 去除口水词（嗯、啊、那个、就是说、然后等）和重复语句
+- 补充正确的标点符号
+- 精简为 1-3 句话，保留核心观点
+- 保持说话者的原意和语气，不添加未提及的信息
+- 不加前言后语，直接输出润色后的评论`, sd)
 	} else {
-		// 段落模式：展开为结构化 Markdown 段落，可插入到文章中
-		systemPrompt = fmt.Sprintf(`你是一个语音转文字润色助手。用户通过语音输入了一段口语内容，请将其润色为适合插入文章的结构化段落，风格为%s。
+		systemPrompt = fmt.Sprintf(`你是语音转文字润色助手。用户通过语音输入了一段口语内容，请将其润色为适合插入文章的结构化段落，风格：%s。
 
 要求：
-1. 去除口语中的口水词（嗯、啊、那个、就是说、然后等）和重复语句
-2. 补充正确的标点符号
-3. 按语义分段，段落间用空行分隔
-4. 如有明显的层次结构，可使用 Markdown 标题、列表等元素
-5. 适度使用加粗强调重点词句
-6. 保持说话者的原意和语气，不要添加未提及的信息
-7. 不要加前言后语，直接输出润色后的内容`, styleDesc)
+- 去除口水词（嗯、啊、那个、就是说、然后等）和重复语句
+- 补充正确的标点符号
+- 按语义分段，段落间用空行分隔
+- 如有明显的层次结构，可使用 Markdown 标题、列表等元素
+- 适度使用加粗强调重点词句
+- 保持说话者的原意和语气，不添加未提及的信息
+- 不加前言后语，直接输出润色后的内容`, sd)
 	}
 
 	text, err := ai.Chat(ctx, ai.ChatRequest{

@@ -207,13 +207,13 @@ func generateThreadSummaryText(ctx context.Context, userID string, post *model.P
 		commentsText = string(runes[:6000])
 	}
 
-	systemPrompt := `你是一个社区讨论分析助手。用户会给你一篇帖子和若干条评论，请用一段连贯的段落总结讨论的核心内容。
+	systemPrompt := `你是社区讨论分析助手。用户会给你一篇帖子和若干条评论，请用一段连贯的段落总结讨论的核心内容。
 
 要求：
-1. 用 2-4 句话写成一段连贯的段落，总结讨论的主要观点、结论、共识与分歧
-2. 不要逐条复述评论，要归纳总结
-3. 保留关键细节（如技术方案名、具体结论）
-4. 只输出摘要段落，不要任何前言、后语或标题`
+- 用 2-4 句话写成一段连贯的段落，总结讨论的主要观点、结论、共识与分歧
+- 不要逐条复述评论，要归纳总结
+- 保留关键细节（如技术方案名、具体结论）
+- 只输出摘要段落，不要任何前言、后语或标题`
 
 	userMsg := fmt.Sprintf("帖子标题：%s\n帖子内容：%s\n\n讨论评论：\n%s", post.Title, postContent, commentsText)
 
