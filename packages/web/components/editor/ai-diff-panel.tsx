@@ -56,6 +56,8 @@ export interface AiDiffPanelProps {
   /** 原始快照（doc），用于整体还原 */
   originalSnapshot?: JSONContent | null
   onRestoreSnapshot?: () => void
+  /** 采纳前新鲜度检查：返回 false 时阻止应用（正文可能在生成期间被外部修改） */
+  onCheckFreshness?: () => boolean
 }
 
 const DEFAULT_STYLES: Array<{ key: string; label: string }> = [
@@ -79,10 +81,11 @@ export function AiDiffPanel(props: AiDiffPanelProps) {
     setRequesting,
     originalSnapshot,
     onRestoreSnapshot,
+    onCheckFreshness,
   } = props
 
   const [state, setState] = useState<PolishWorkflowState>(() => createInitialWorkflowState(originalMarkdown))
-  const [applyMode, setApplyMode] = useState<'diff' | 'polished' | 'original'>('diff')
+  const [applyMode, setApplyMode] = useState<'diff' | 'polished' | 'original'>('polished')
 
   // 当前润色候选的分段 diff
   const segments: DiffSegment[] = useMemo(() => {
@@ -141,6 +144,7 @@ export function AiDiffPanel(props: AiDiffPanelProps) {
   }, [handleStart])
 
   const handleAccept = useCallback(() => {
+    if (onCheckFreshness && !onCheckFreshness()) return
     setState((prev) => {
       const next = acceptCandidate(prev)
       onApplyMarkdown(next.currentValue)
@@ -153,7 +157,7 @@ export function AiDiffPanel(props: AiDiffPanelProps) {
       })
       return next
     })
-  }, [onApplyMarkdown, pageType, postId, state.candidate?.style])
+  }, [onApplyMarkdown, pageType, postId, state.candidate?.style, onCheckFreshness])
 
   const handleReject = useCallback(() => {
     setState((prev) => {
@@ -294,7 +298,7 @@ export function AiDiffPanel(props: AiDiffPanelProps) {
       )}
 
       {reviewEnabled && state.candidate && diffPreview && (
-        <div className="max-h-80 overflow-auto rounded-md border border-border bg-muted/20 p-3 text-sm leading-relaxed">
+        <div className="max-h-[45vh] overflow-auto rounded-md border border-border bg-muted/20 p-3 text-sm leading-relaxed">
           {diffPreview}
         </div>
       )}
@@ -306,16 +310,16 @@ function DiffLineView({ segments }: { segments: DiffSegment[] }) {
   return (
     <div className="whitespace-pre-wrap break-words">
       {segments.map((s, idx) => {
-        if (s.op === 'equal') return <span key={idx}>{s.text}</span>
+        if (s.op === 'equal') return <span key={idx} className="text-muted-foreground/60">{s.text}</span>
         if (s.op === 'insert') {
           return (
-            <span key={idx} className="rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 underline decoration-emerald-400/40 underline-offset-2">
+            <span key={idx} className="rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 underline decoration-emerald-400/40 underline-offset-2">
               {s.text}
             </span>
           )
         }
         return (
-          <span key={idx} className="rounded bg-rose-500/15 text-rose-700 dark:text-rose-300 line-through decoration-rose-400/60">
+          <span key={idx} className="rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 line-through decoration-rose-400/50">
             {s.text}
           </span>
         )

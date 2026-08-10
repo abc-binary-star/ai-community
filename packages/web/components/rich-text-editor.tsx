@@ -6,14 +6,14 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
   Bold, Braces, Code, Eraser, FileText, Heading2, Image as ImageIcon, Italic, Link2, List,
-  ListChecks, ListOrdered, Loader2, Mic, MoreHorizontal, Quote, Redo2, Sparkles, Strikethrough,
+  ListChecks, ListOrdered, Loader2, Mic, MoreHorizontal, Plus, Quote, Redo2, Sparkles, Strikethrough,
   Type, Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { VoiceComposer } from '@/app/community/components/voice-composer'
 import { api, apiFetch, apiFetchStream, ApiError } from '@/lib/api'
@@ -118,6 +118,40 @@ function ToolbarButton({ action, className }: { action: ToolbarAction; className
     >
       {action.icon}
     </Button>
+  )
+}
+
+function ToolbarGroupDropdown({ triggerIcon, triggerLabel, items }: { triggerIcon: React.ReactNode; triggerLabel: string; items: ToolbarAction[] }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 shrink-0 gap-1 px-2 text-xs"
+          onMouseDown={(event) => event.preventDefault()}
+          title={triggerLabel}
+          aria-label={triggerLabel}
+        >
+          {triggerIcon}
+          {triggerLabel}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        {items.map((action) => (
+          <DropdownMenuItem
+            key={action.label}
+            disabled={action.disabled}
+            onSelect={action.run}
+            className={cn(action.active && 'bg-accent text-accent-foreground')}
+          >
+            {action.icon}
+            {action.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -512,6 +546,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     setOriginalSnapshot(aiDiffPolishInput.snapshot)
   }, [editor, aiDiffPolishInput])
 
+  // 全文/选段采纳前的新鲜度检查：防止面板打开期间正文被外部修改后静默覆盖
+  const handleCheckFullFreshness = useCallback(() => {
+    if (!editor || !aiDiffPolishInput) return false
+    if (JSON.stringify(editor.getJSON()) !== JSON.stringify(aiDiffPolishInput.snapshot)) {
+      toast.warning('正文已在 AI 生成期间被修改，已停止本次应用')
+      return false
+    }
+    return true
+  }, [editor, aiDiffPolishInput])
+
   const replaceBlockPreservingId = useCallback((blockId: string, polishedMarkdown: string): 'accepted' | 'failed' | 'stale' => {
     if (!editor) return 'failed'
     let targetPos: number | null = null
@@ -583,36 +627,81 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
   if (!editor) return <div className={cn('rounded-lg border bg-card', className)} style={{ height }} />
 
-  const commonActions: ToolbarAction[] = [
+  const historyActions: ToolbarAction[] = [
     { label: '撤销', icon: <Undo2 className="size-4" />, disabled: polishing || !editor.can().undo(), run: () => editor.chain().focus().undo().run() },
     { label: '重做', icon: <Redo2 className="size-4" />, disabled: polishing || !editor.can().redo(), run: () => editor.chain().focus().redo().run() },
-    { label: '二级标题', icon: <Heading2 className="size-4" />, active: editor.isActive('heading', { level: 2 }), disabled: polishing, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+  ]
+
+  const inlineActions: ToolbarAction[] = [
     { label: '粗体', icon: <Bold className="size-4" />, active: editor.isActive('bold'), disabled: polishing, run: () => editor.chain().focus().toggleBold().run() },
     { label: '斜体', icon: <Italic className="size-4" />, active: editor.isActive('italic'), disabled: polishing, run: () => editor.chain().focus().toggleItalic().run() },
+  ]
+
+  const textStyleActions: ToolbarAction[] = [
+    { label: '二级标题', icon: <Heading2 className="size-4" />, active: editor.isActive('heading', { level: 2 }), disabled: polishing, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
     { label: '删除线', icon: <Strikethrough className="size-4" />, active: editor.isActive('strike'), disabled: polishing, run: () => editor.chain().focus().toggleStrike().run() },
-    { label: '链接', icon: <Link2 className="size-4" />, active: editor.isActive('link'), disabled: polishing, run: setLink },
-    { label: '无序列表', icon: <List className="size-4" />, active: editor.isActive('bulletList'), disabled: polishing, run: () => editor.chain().focus().toggleBulletList().run() },
-    { label: '有序列表', icon: <ListOrdered className="size-4" />, active: editor.isActive('orderedList'), disabled: polishing, run: () => editor.chain().focus().toggleOrderedList().run() },
-    { label: '任务列表', icon: <ListChecks className="size-4" />, active: editor.isActive('taskList'), disabled: polishing, run: () => editor.chain().focus().toggleTaskList().run() },
     { label: '引用', icon: <Quote className="size-4" />, active: editor.isActive('blockquote'), disabled: polishing, run: () => editor.chain().focus().toggleBlockquote().run() },
     { label: '行内代码', icon: <Code className="size-4" />, active: editor.isActive('code'), disabled: polishing, run: () => editor.chain().focus().toggleCode().run() },
     { label: '代码块', icon: <Braces className="size-4" />, active: editor.isActive('codeBlock'), disabled: polishing, run: () => editor.chain().focus().toggleCodeBlock().run() },
   ]
 
-  const mobileActions = commonActions.slice(2, 7)
-  const desktopActions = commonActions
+  const listActions: ToolbarAction[] = [
+    { label: '无序列表', icon: <List className="size-4" />, active: editor.isActive('bulletList'), disabled: polishing, run: () => editor.chain().focus().toggleBulletList().run() },
+    { label: '有序列表', icon: <ListOrdered className="size-4" />, active: editor.isActive('orderedList'), disabled: polishing, run: () => editor.chain().focus().toggleOrderedList().run() },
+    { label: '任务列表', icon: <ListChecks className="size-4" />, active: editor.isActive('taskList'), disabled: polishing, run: () => editor.chain().focus().toggleTaskList().run() },
+  ]
+
+  const insertActions: ToolbarAction[] = [
+    { label: '插入图片', icon: <ImageIcon className="size-4" />, disabled: polishing || imageCount >= MAX_POST_IMAGES, run: () => fileInputRef.current?.click() },
+    { label: '链接', icon: <Link2 className="size-4" />, active: editor.isActive('link'), disabled: polishing, run: setLink },
+    { label: '导入 Word', icon: <FileText className="size-4" />, disabled: polishing || importing, run: () => docxInputRef.current?.click() },
+    { label: '语音输入', icon: <Mic className="size-4" />, disabled: polishing, run: () => setVoiceOpen(true) },
+  ]
 
   return (
     <div ref={containerRef} className={cn('w-full space-y-2', className)}>
       <div className="overflow-hidden rounded-lg border border-input bg-card">
         <div className="flex items-center gap-1 border-b bg-muted/50 p-1.5">
           <div className="hidden min-w-0 items-center gap-1 overflow-x-auto md:flex">
-            {desktopActions.map((action) => <ToolbarButton key={action.label} action={action} />)}
+            <ToolbarButton action={historyActions[0]} />
+            <ToolbarButton action={historyActions[1]} />
+            <div className="mx-1 h-5 w-px shrink-0 bg-border" />
+            <ToolbarButton action={inlineActions[0]} />
+            <ToolbarButton action={inlineActions[1]} />
+            <div className="mx-1 h-5 w-px shrink-0 bg-border" />
+            <ToolbarGroupDropdown triggerIcon={<Type className="size-4" />} triggerLabel="样式" items={textStyleActions} />
+            <ToolbarGroupDropdown triggerIcon={<List className="size-4" />} triggerLabel="列表" items={listActions} />
+            <ToolbarGroupDropdown triggerIcon={<Plus className="size-4" />} triggerLabel="插入" items={insertActions} />
           </div>
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto md:hidden">
-            {mobileActions.map((action) => <ToolbarButton key={action.label} action={action} className="size-10" />)}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" title="更多工具" aria-label="更多工具">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>更多工具</DropdownMenuLabel>
+                {insertActions.map((action) => (
+                  <DropdownMenuItem key={action.label} disabled={action.disabled} onSelect={action.run}>{action.icon}{action.label}</DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger><Type className="size-4" />全文字体</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-52">
+                    {FONT_OPTIONS.map((option) => <DropdownMenuItem key={option.key} onSelect={() => onFontChange?.(option.key)} style={{ fontFamily: option.family }}>{option.name}</DropdownMenuItem>)}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuItem
+                  disabled={polishing}
+                  onSelect={() => { if (window.confirm('确定清空全部内容吗？')) editor.commands.clearContent() }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Eraser className="size-4" />清空内容
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <ToolbarButton action={{ label: '插入图片', icon: <ImageIcon className="size-4" />, disabled: polishing || imageCount >= MAX_POST_IMAGES, run: () => fileInputRef.current?.click() }} className="max-md:size-10" />
           <Button
             type="button"
             variant="ghost"
@@ -639,34 +728,32 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           >
             <List className="size-4" />
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 md:hidden" title="更多工具" aria-label="更多工具">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>更多工具</DropdownMenuLabel>
-              {commonActions.filter((action) => !mobileActions.includes(action)).map((action) => (
-                <DropdownMenuItem key={action.label} onSelect={action.run}>{action.icon}{action.label}</DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={polishing || importing} onSelect={() => docxInputRef.current?.click()}><FileText />导入 Word</DropdownMenuItem>
-              <DropdownMenuItem disabled={polishing} onSelect={() => setVoiceOpen(true)}><Mic />语音输入</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <div className="hidden items-center gap-1 md:flex">
-            <Button type="button" variant="ghost" size="icon" className="size-8" disabled={polishing || importing} onClick={() => docxInputRef.current?.click()} title="导入 Word" aria-label="导入 Word">
-              {importing ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-            </Button>
-            <Button type="button" variant="ghost" size="icon" className="size-8" disabled={polishing} onClick={() => setVoiceOpen(true)} title="语音输入" aria-label="语音输入"><Mic className="size-4" /></Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8" disabled={polishing} title="全文字体" aria-label="全文字体"><Type className="size-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 {FONT_OPTIONS.map((option) => <DropdownMenuItem key={option.key} onSelect={() => onFontChange?.(option.key)} style={{ fontFamily: option.family }}>{option.name}</DropdownMenuItem>)}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" disabled={polishing} onClick={() => { if (window.confirm('确定清空全部内容吗？')) editor.commands.clearContent() }} title="清空内容" aria-label="清空内容"><Eraser className="size-4" /></Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" title="更多工具" aria-label="更多工具">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>更多工具</DropdownMenuLabel>
+                <DropdownMenuItem disabled={!featureFlags.outlineView || polishing} onSelect={() => setShowOutline((v) => !v)}><List className="size-4" />大纲</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={polishing}
+                  onSelect={() => { if (window.confirm('确定清空全部内容吗？')) editor.commands.clearContent() }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Eraser className="size-4" />清空内容
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 border-l pl-2">
             <span className={cn('hidden text-xs tabular-nums sm:inline', imageCount > MAX_POST_IMAGES ? 'font-medium text-destructive' : 'text-muted-foreground')}>{imageCount}/{MAX_POST_IMAGES} 图</span>
@@ -706,69 +793,70 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         </div>
       )}
       {featureFlags.aiDiffReview && aiDiffPolishInput && (
-        <div className="rounded-md border border-border bg-card p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Sparkles className="size-3.5" />
-              AI 润色审阅
-              {aiDiffPolishInput.selection ? <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">选段</span> : null}
+        <div className="fixed inset-x-0 bottom-0 z-50 bg-card/95 backdrop-blur-sm animate-in slide-in-from-bottom duration-200 md:inset-auto md:bottom-4 md:right-4 md:w-[400px] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-border md:shadow-2xl md:animate-in md:fade-in md:zoom-in-95">
+          <div className="flex max-h-[62dvh] flex-col md:max-h-[70vh]">
+            <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Sparkles className="size-3.5" />
+                AI 润色审阅
+                {aiDiffPolishInput.selection ? <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">选段</span> : null}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                onClick={handleDiscardAiDiff}
+              >
+                放弃
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-              onClick={handleDiscardAiDiff}
-            >
-              放弃
-            </Button>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {aiBlocks.length > 0 && !aiDiffPolishInput.selection ? (
+                <AiBlockDiffPanel
+                  key={aiDiffPolishInput.snapshot.content?.map((node) => node.attrs?.blockId).join(':')}
+                  initialBlocks={aiBlocks}
+                  pageType={pageType}
+                  postId={postId}
+                  onGenerateBlock={handleGenerateBlock}
+                  onApplyBlock={handleApplyBlock}
+                  onCheckBlockFreshness={handleCheckBlockFreshness}
+                  onRestoreSnapshot={() => {
+                    if (!editor) return
+                    editor.commands.setContent(aiDiffPolishInput.snapshot)
+                    setAiDiffPolishInput(null)
+                  }}
+                  onClose={handleDiscardAiDiff}
+                />
+              ) : (
+                <AiDiffPanel
+                  originalMarkdown={aiDiffPolishInput.originalMarkdown}
+                  onApplyMarkdown={handleApplyMarkdown}
+                  pageType={pageType}
+                  postId={postId}
+                  reviewEnabled={true}
+                  onRegenerate={handleRegenerate}
+                  requesting={polishing}
+                  setRequesting={setPolishing}
+                  originalSnapshot={aiDiffPolishInput.snapshot}
+                  onRestoreSnapshot={() => {
+                    if (!editor) return
+                    editor.commands.setContent(aiDiffPolishInput.snapshot)
+                    setAiDiffPolishInput(null)
+                  }}
+                  onCheckFreshness={handleCheckFullFreshness}
+                />
+              )}
+            </div>
           </div>
-          {aiBlocks.length > 0 && !aiDiffPolishInput.selection ? (
-            <AiBlockDiffPanel
-              key={aiDiffPolishInput.snapshot.content?.map((node) => node.attrs?.blockId).join(':')}
-              initialBlocks={aiBlocks}
-              pageType={pageType}
-              postId={postId}
-              onGenerateBlock={handleGenerateBlock}
-              onApplyBlock={handleApplyBlock}
-              onCheckBlockFreshness={handleCheckBlockFreshness}
-              onRestoreSnapshot={() => {
-                if (!editor) return
-                editor.commands.setContent(aiDiffPolishInput.snapshot)
-                setAiDiffPolishInput(null)
-              }}
-              onClose={handleDiscardAiDiff}
-            />
-          ) : (
-            <AiDiffPanel
-              originalMarkdown={aiDiffPolishInput.originalMarkdown}
-              onApplyMarkdown={handleApplyMarkdown}
-              pageType={pageType}
-              postId={postId}
-              reviewEnabled={true}
-              onRegenerate={handleRegenerate}
-              requesting={polishing}
-              setRequesting={setPolishing}
-              originalSnapshot={aiDiffPolishInput.snapshot}
-              onRestoreSnapshot={() => {
-                if (!editor) return
-                editor.commands.setContent(aiDiffPolishInput.snapshot)
-                setAiDiffPolishInput(null)
-              }}
-            />
-          )}
         </div>
       )}
       {voiceOpen && <VoiceComposer target="paragraph" onInsert={(text: string) => editor.chain().focus().insertContent(markdownToTiptapDoc(text).content ?? []).run()} onClose={() => setVoiceOpen(false)} />}
       <MobileToolbar
         editor={editor}
-        onImage={() => fileInputRef.current?.click()}
         onPolish={handlePolish}
         polishing={polishing}
-        onInsertDocx={() => docxInputRef.current?.click()}
-        onVoiceInput={() => setVoiceOpen(true)}
         onOpenInsertSheet={() => setInsertSheetOpen(true)}
-        onOpenMore={() => setInsertSheetOpen(false)}
       />
       <MobileInsertSheet
         open={insertSheetOpen}

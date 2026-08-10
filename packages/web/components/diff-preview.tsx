@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Check, RefreshCcw, Sparkles, Undo2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, FileDiff, RefreshCcw, Sparkles, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -25,13 +25,13 @@ function DiffInline({ segments }: { segments: DiffSegment[] }) {
     <div className="whitespace-pre-wrap break-words font-[inherit] leading-[inherit]">
       {segments.map((seg, i) => {
         if (seg.op === 'equal') {
-          return <span key={i} className="text-foreground">{seg.text}</span>
+          return <span key={i} className="text-muted-foreground/60">{seg.text}</span>
         }
         if (seg.op === 'delete') {
           return (
             <span
               key={i}
-              className="bg-destructive/15 text-destructive line-through decoration-destructive/60"
+              className="bg-destructive/10 text-destructive line-through decoration-destructive/50"
             >
               {seg.text}
             </span>
@@ -40,7 +40,7 @@ function DiffInline({ segments }: { segments: DiffSegment[] }) {
         return (
           <span
             key={i}
-            className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 underline decoration-emerald-500/60 underline-offset-2"
+            className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 underline decoration-emerald-500/50 underline-offset-2"
           >
             {seg.text}
           </span>
@@ -72,6 +72,8 @@ export function DiffPreview({
     return { inserted, deleted }
   }, [segments])
 
+  const [viewMode, setViewMode] = useState<'polished' | 'diff'>('polished')
+
   return (
     <div className={cn('space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-4', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -99,6 +101,18 @@ export function DiffPreview({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant={viewMode === 'diff' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => setViewMode((v) => (v === 'diff' ? 'polished' : 'diff'))}
+            disabled={loading}
+            title={viewMode === 'diff' ? '只看润色结果' : '对照原稿查看差异'}
+          >
+            {viewMode === 'diff' ? <Check className="size-3.5" /> : <FileDiff className="size-3.5" />}
+            {viewMode === 'diff' ? '润色稿' : '查看差异'}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -160,20 +174,39 @@ export function DiffPreview({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <span className="inline-block size-1.5 rounded-full bg-muted-foreground/60" />
-            原稿
+      {viewMode === 'diff' ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="inline-block size-1.5 rounded-full bg-muted-foreground/60" />
+              原稿
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-background p-3 text-sm leading-6">
+              <div className="whitespace-pre-wrap break-words text-muted-foreground">{original}</div>
+            </div>
           </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-background p-3 text-sm leading-6">
-            <div className="whitespace-pre-wrap break-words text-muted-foreground">{original}</div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="inline-block size-1.5 rounded-full bg-primary" />
+              润色稿 · Diff
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded-md border border-primary/20 bg-background p-3 text-sm leading-6">
+              {loading ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <RefreshCcw className="size-3.5 animate-spin" />
+                  <span className="text-xs">正在用「{polishStyleLabel(currentStyle)}」风格重新生成…</span>
+                </div>
+              ) : (
+                <DiffInline segments={segments} />
+              )}
+            </div>
           </div>
         </div>
+      ) : (
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             <span className="inline-block size-1.5 rounded-full bg-primary" />
-            润色稿 · Diff
+            润色稿
           </div>
           <div className="max-h-64 overflow-y-auto rounded-md border border-primary/20 bg-background p-3 text-sm leading-6">
             {loading ? (
@@ -182,28 +215,30 @@ export function DiffPreview({
                 <span className="text-xs">正在用「{polishStyleLabel(currentStyle)}」风格重新生成…</span>
               </div>
             ) : (
-              <DiffInline segments={segments} />
+              <div className="whitespace-pre-wrap break-words">{polished}</div>
             )}
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-3">
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block size-3 rounded-sm bg-destructive/15 align-middle" />
-            删除
+      {viewMode === 'diff' && (
+        <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-3">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block size-3 rounded-sm bg-destructive/15 align-middle" />
+              删除
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block size-3 rounded-sm bg-emerald-500/15 align-middle" />
+              插入
+            </span>
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block size-3 rounded-sm bg-emerald-500/15 align-middle" />
-            插入
+            <Undo2 className="size-3" />
+            采纳后可再次点击「恢复原稿」一次性撤销整次润色
           </span>
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Undo2 className="size-3" />
-          采纳后可再次点击「恢复原稿」一次性撤销整次润色
-        </span>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

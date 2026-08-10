@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
-  Bold, Braces, ChevronDown, ChevronUp, Code, FileText, Heading2, Image as ImageIcon,
-  Italic, Link2, List, ListChecks, ListOrdered, Mic, Quote, Slash, Sparkles,
-  Strikethrough, Type, Undo2, Redo2, X,
+  Bold, Braces, Code, FileText, Heading2, Image as ImageIcon,
+  Italic, Link2, List, ListChecks, ListOrdered, Mic, Plus, Quote, Slash, Sparkles,
+  Strikethrough, Type, Undo2, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -85,12 +85,8 @@ export function useVirtualKeyboard(containerRef: React.RefObject<HTMLElement | n
 
 interface MobileToolbarProps {
   editor: Editor | null
-  onImage?: () => void
   onPolish?: () => void
   polishing?: boolean
-  onOpenMore?: () => void
-  onInsertDocx?: () => void
-  onVoiceInput?: () => void
   onOpenInsertSheet?: () => void
 }
 
@@ -144,18 +140,25 @@ export function MobileInsertSheet({ open, onClose, onImage, onDocx, onVoice, onS
 
 export function MobileToolbar({
   editor,
-  onImage,
   onPolish,
   polishing,
-  onOpenMore,
-  onInsertDocx,
-  onVoiceInput,
   onOpenInsertSheet,
 }: MobileToolbarProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [activeSheet, setActiveSheet] = useState<'format' | 'list' | null>(null)
   if (!editor) return null
 
-  const primary = [
+  const toggleSheet = (sheet: 'format' | 'list') => {
+    setActiveSheet((cur) => (cur === sheet ? null : sheet))
+  }
+
+  const formatItems = [
+    {
+      key: 'h2',
+      icon: <Heading2 className="size-5" />,
+      active: editor.isActive('heading', { level: 2 }),
+      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+      label: '标题',
+    },
     {
       key: 'bold',
       icon: <Bold className="size-5" />,
@@ -178,49 +181,18 @@ export function MobileToolbar({
       label: '删除线',
     },
     {
-      key: 'code',
-      icon: <Code className="size-5" />,
-      active: editor.isActive('code'),
-      run: () => editor.chain().focus().toggleCode().run(),
-      label: '行内代码',
-    },
-  ]
-
-  const secondary = [
-    {
-      key: 'h2',
-      icon: <Heading2 className="size-5" />,
-      active: editor.isActive('heading', { level: 2 }),
-      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-      label: '标题',
-    },
-    {
-      key: 'bullet',
-      icon: <List className="size-5" />,
-      active: editor.isActive('bulletList'),
-      run: () => editor.chain().focus().toggleBulletList().run(),
-      label: '无序',
-    },
-    {
-      key: 'ordered',
-      icon: <ListOrdered className="size-5" />,
-      active: editor.isActive('orderedList'),
-      run: () => editor.chain().focus().toggleOrderedList().run(),
-      label: '有序',
-    },
-    {
-      key: 'todo',
-      icon: <ListChecks className="size-5" />,
-      active: editor.isActive('taskList'),
-      run: () => editor.chain().focus().toggleTaskList().run(),
-      label: '待办',
-    },
-    {
       key: 'quote',
       icon: <Quote className="size-5" />,
       active: editor.isActive('blockquote'),
       run: () => editor.chain().focus().toggleBlockquote().run(),
       label: '引用',
+    },
+    {
+      key: 'code',
+      icon: <Code className="size-5" />,
+      active: editor.isActive('code'),
+      run: () => editor.chain().focus().toggleCode().run(),
+      label: '行内代码',
     },
     {
       key: 'codeblock',
@@ -245,6 +217,44 @@ export function MobileToolbar({
       },
       label: '链接',
     },
+    {
+      key: 'paragraph',
+      icon: <Type className="size-5" />,
+      active: editor.isActive('paragraph'),
+      run: () => editor.chain().focus().setParagraph().run(),
+      label: '正文',
+    },
+  ]
+
+  const listItems = [
+    {
+      key: 'bullet',
+      icon: <List className="size-5" />,
+      active: editor.isActive('bulletList'),
+      run: () => editor.chain().focus().toggleBulletList().run(),
+      label: '无序',
+    },
+    {
+      key: 'ordered',
+      icon: <ListOrdered className="size-5" />,
+      active: editor.isActive('orderedList'),
+      run: () => editor.chain().focus().toggleOrderedList().run(),
+      label: '有序',
+    },
+    {
+      key: 'todo',
+      icon: <ListChecks className="size-5" />,
+      active: editor.isActive('taskList'),
+      run: () => editor.chain().focus().toggleTaskList().run(),
+      label: '待办',
+    },
+    {
+      key: 'slash',
+      icon: <Slash className="size-5" />,
+      active: false,
+      run: () => editor.chain().focus().insertContent('/').run(),
+      label: '/命令',
+    },
   ]
 
   return (
@@ -252,7 +262,7 @@ export function MobileToolbar({
       'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-sm transition-transform md:hidden',
       'animate-in slide-in-from-bottom duration-300',
     )}>
-      <div className="flex items-center justify-between gap-1 border-b border-border/50 px-1 py-1">
+      <div className="flex items-center gap-1 px-1 py-1">
         <Button
           type="button"
           variant="ghost"
@@ -269,81 +279,36 @@ export function MobileToolbar({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-10 shrink-0"
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
-          title="重做"
-          aria-label="重做"
+          className={cn('size-10 shrink-0', activeSheet === 'format' && 'bg-accent text-accent-foreground')}
+          onClick={() => toggleSheet('format')}
+          title="格式"
+          aria-label="格式"
         >
-          <Redo2 className="size-5" />
+          <Type className="size-5" />
         </Button>
-        <div className="mx-1 h-5 w-px bg-border" />
-        {primary.map((a) => (
-          <Button
-            key={a.key}
-            type="button"
-            variant={a.active ? 'secondary' : 'ghost'}
-            size="icon"
-            className="size-10 shrink-0"
-            onClick={a.run}
-            title={a.label}
-            aria-label={a.label}
-          >
-            {a.icon}
-          </Button>
-        ))}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn('size-10 shrink-0', activeSheet === 'list' && 'bg-accent text-accent-foreground')}
+          onClick={() => toggleSheet('list')}
+          title="列表"
+          aria-label="列表"
+        >
+          <List className="size-5" />
+        </Button>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {onOpenInsertSheet ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-10"
-              onClick={onOpenInsertSheet}
-              title="插入"
-              aria-label="插入"
-            >
-              <ImageIcon className="size-5" />
-            </Button>
-          ) : onImage ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-10"
-              onClick={onImage}
-              title="插入图片"
-              aria-label="插入图片"
-            >
-              <ImageIcon className="size-5" />
-            </Button>
-          ) : null}
-          {onInsertDocx && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-10"
-              onClick={onInsertDocx}
-              title="导入 Word"
-              aria-label="导入 Word"
-            >
-              <FileText className="size-5" />
-            </Button>
-          )}
-          {onVoiceInput && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-10"
-              onClick={onVoiceInput}
-              title="语音输入"
-              aria-label="语音输入"
-            >
-              <Mic className="size-5" />
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-10"
+            onClick={onOpenInsertSheet}
+            title="插入"
+            aria-label="插入"
+          >
+            <Plus className="size-5" />
+          </Button>
           {onPolish && (
             <Button
               type="button"
@@ -358,22 +323,11 @@ export function MobileToolbar({
               <Sparkles className="size-5" />
             </Button>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn('size-10 transition-transform', expanded && 'rotate-180')}
-            onClick={() => { onOpenMore?.(); setExpanded((v) => !v) }}
-            title={expanded ? '收起更多工具' : '展开更多工具'}
-            aria-label={expanded ? '收起更多工具' : '展开更多工具'}
-          >
-            {expanded ? <ChevronUp className="size-5" /> : <ChevronDown className="size-5" />}
-          </Button>
         </div>
       </div>
-      {expanded && (
-        <div className="grid grid-cols-4 gap-1 px-1 py-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          {secondary.map((a) => (
+      {activeSheet === 'format' && (
+        <div className="grid grid-cols-4 gap-1 border-t border-border/50 px-1 py-2 animate-in fade-in slide-in-from-top-1 duration-150">
+          {formatItems.map((a) => (
             <Button
               key={a.key}
               type="button"
@@ -387,31 +341,24 @@ export function MobileToolbar({
               <span className="text-[10px] text-muted-foreground">{a.label}</span>
             </Button>
           ))}
-          <Button
-            type="button"
-            variant="ghost"
-            className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-md"
-            onClick={() => {
-              editor.chain().focus().insertContent('/').run()
-              onOpenMore?.()
-            }}
-            title="斜杠命令"
-            aria-label="斜杠命令"
-          >
-            <Slash className="size-5" />
-            <span className="text-[10px] text-muted-foreground">/命令</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-md"
-            onClick={() => editor.chain().focus().setParagraph().run()}
-            title="正文"
-            aria-label="正文"
-          >
-            <Type className="size-5" />
-            <span className="text-[10px] text-muted-foreground">正文</span>
-          </Button>
+        </div>
+      )}
+      {activeSheet === 'list' && (
+        <div className="grid grid-cols-4 gap-1 border-t border-border/50 px-1 py-2 animate-in fade-in slide-in-from-top-1 duration-150">
+          {listItems.map((a) => (
+            <Button
+              key={a.key}
+              type="button"
+              variant={a.active ? 'secondary' : 'ghost'}
+              className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-md"
+              onClick={a.run}
+              title={a.label}
+              aria-label={a.label}
+            >
+              {a.icon}
+              <span className="text-[10px] text-muted-foreground">{a.label}</span>
+            </Button>
+          ))}
         </div>
       )}
     </div>

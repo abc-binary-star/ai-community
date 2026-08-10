@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react'
 import {
   Bold, Check, Code, Code2, Eraser, Eye, EyeOff, FileText, Heading, Image as ImageIcon, Link2,
-  List, ListOrdered, ListChecks, Mic, Quote, Sparkles, Loader2, Strikethrough,
+  List, ListOrdered, ListChecks, Mic, Plus, Quote, Sparkles, Loader2, Strikethrough,
   Table as TableIcon, Type, Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -254,14 +254,17 @@ function insertLinePrefix(
   })
 }
 
-const TOOLBAR: ToolbarBtn[] = [
-  {
-    icon: <Heading className="size-4" />, label: '标题',
-    action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '## '),
-  },
+const TOOLBAR_INLINE: ToolbarBtn[] = [
   {
     icon: <Bold className="size-4" />, label: '粗体',
     action: (ta, v, cb) => insertText(ta, v, cb, '**', '**', '粗体文本'),
+  },
+]
+
+const TOOLBAR_TEXT_STYLE: ToolbarBtn[] = [
+  {
+    icon: <Heading className="size-4" />, label: '标题',
+    action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '## '),
   },
   {
     icon: <Strikethrough className="size-4" />, label: '删除线',
@@ -279,14 +282,9 @@ const TOOLBAR: ToolbarBtn[] = [
     icon: <Code2 className="size-4" />, label: '代码块',
     action: (ta, v, cb) => insertText(ta, v, cb, '```ts\n', '\n```', '// code here'),
   },
-  {
-    icon: <Link2 className="size-4" />, label: '链接',
-    action: (ta, v, cb) => insertText(ta, v, cb, '[', '](https://)', '链接文字'),
-  },
-  {
-    icon: <ImageIcon className="size-4" />, label: '图片',
-    action: (ta, v, cb) => insertText(ta, v, cb, '![', '](https://)', '图片描述'),
-  },
+]
+
+const TOOLBAR_LIST: ToolbarBtn[] = [
   {
     icon: <List className="size-4" />, label: '无序列表',
     action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '- '),
@@ -299,11 +297,58 @@ const TOOLBAR: ToolbarBtn[] = [
     icon: <ListChecks className="size-4" />, label: '任务列表',
     action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '- [ ] '),
   },
+]
+
+const TOOLBAR_INSERT: ToolbarBtn[] = [
+  {
+    icon: <Link2 className="size-4" />, label: '链接',
+    action: (ta, v, cb) => insertText(ta, v, cb, '[', '](https://)', '链接文字'),
+  },
+  {
+    icon: <ImageIcon className="size-4" />, label: '图片',
+    action: (ta, v, cb) => insertText(ta, v, cb, '![', '](https://)', '图片描述'),
+  },
   {
     icon: <TableIcon className="size-4" />, label: '表格',
     action: (ta, v, cb) => insertText(ta, v, cb, '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| ', ' |  |  |\n', '内容'),
   },
 ]
+
+function MarkdownToolbarGroupDropdown({
+  triggerIcon,
+  triggerLabel,
+  items,
+  onAction,
+}: {
+  triggerIcon: React.ReactNode
+  triggerLabel: string
+  items: ToolbarBtn[]
+  onAction: (btn: ToolbarBtn) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 shrink-0 gap-1 px-2 text-xs"
+          onMouseDown={(e) => e.preventDefault()}
+          title={triggerLabel}
+          aria-label={triggerLabel}
+        >
+          {triggerIcon}
+          {triggerLabel}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        {items.map((btn) => (
+          <DropdownMenuItem key={btn.label} onSelect={() => onAction(btn)}>{btn.icon}{btn.label}</DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 // 全文字体选项见 lib/font-options.ts（免费可商用字体，SIL OFL / 免费商用授权）
 
@@ -853,7 +898,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       <div className="rounded-lg border border-input bg-card overflow-hidden">
         {/* 工具栏 */}
         <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5 [&_button]:max-sm:size-10">
-          {TOOLBAR.map((btn) => (
+          {TOOLBAR_INLINE.map((btn) => (
             <Button
               key={btn.label}
               type="button"
@@ -867,6 +912,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               {btn.icon}
             </Button>
           ))}
+          <MarkdownToolbarGroupDropdown triggerIcon={<Heading className="size-4" />} triggerLabel="样式" items={TOOLBAR_TEXT_STYLE} onAction={handleAction} />
+          <MarkdownToolbarGroupDropdown triggerIcon={<List className="size-4" />} triggerLabel="列表" items={TOOLBAR_LIST} onAction={handleAction} />
+          <MarkdownToolbarGroupDropdown triggerIcon={<Plus className="size-4" />} triggerLabel="插入" items={TOOLBAR_INSERT} onAction={handleAction} />
           {/* 全文字体：选择后全文统一应用，实时生效并随发布保存 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1117,15 +1165,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         )}
       </div>
       {candidate && (
-        <DiffPreview
-          original={candidate.selection ? candidate.original.slice(candidate.selection.start, candidate.selection.end) : candidate.original}
-          polished={candidate.polished}
-          currentStyle={candidate.style}
-          loading={polishing}
-          onAccept={handleAcceptCandidate}
-          onReject={handleRejectCandidate}
-          onChangeStyle={handleChangeCandidateStyle}
-        />
+        <div className="fixed inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom duration-200 md:inset-auto md:bottom-4 md:right-4 md:w-[480px] md:max-w-[calc(100vw-2rem)] md:animate-in md:fade-in md:zoom-in-95">
+          <DiffPreview
+            original={candidate.selection ? candidate.original.slice(candidate.selection.start, candidate.selection.end) : candidate.original}
+            polished={candidate.polished}
+            currentStyle={candidate.style}
+            loading={polishing}
+            onAccept={handleAcceptCandidate}
+            onReject={handleRejectCandidate}
+            onChangeStyle={handleChangeCandidateStyle}
+            className="max-h-[70vh] overflow-y-auto rounded-none border-0 shadow-2xl md:rounded-2xl md:border"
+          />
+        </div>
       )}
       {!candidate && originalSnapshot !== null && (
         <div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
