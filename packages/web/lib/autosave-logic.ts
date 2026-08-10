@@ -82,6 +82,7 @@ export type SaveStatusTransitionEvent =
   | 'save_success'
   | 'save_error'
   | 'ack_error'
+  | 'start_retry'
 
 export function transitionSaveStatus(
   current: SaveStatus,
@@ -104,7 +105,13 @@ export function transitionSaveStatus(
     case 'error':
       if (event === 'edit') return 'idle'
       if (event === 'start_save') return 'saving'
+      if (event === 'start_retry') return 'retrying'
       if (event === 'ack_error') return 'idle'
+      return current
+    case 'retrying':
+      if (event === 'edit') return 'retrying'
+      if (event === 'save_success') return 'saved'
+      if (event === 'save_error') return 'error'
       return current
     default:
       return current

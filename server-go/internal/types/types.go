@@ -48,6 +48,8 @@ type UpdatePostReq struct {
 	ContentDocEnabled *bool `json:"contentDocEnabled"`
 	// EditorDowngraded 用户是否从富文本编辑器回退到 Markdown 编辑器
 	EditorDowngraded *bool `json:"editorDowngraded"`
+	// ExpectedUpdatedAt 乐观锁：客户端期望的服务端更新时间，不一致时返回 409
+	ExpectedUpdatedAt *string `json:"expectedUpdatedAt"`
 }
 
 type CreateCommentReq struct {

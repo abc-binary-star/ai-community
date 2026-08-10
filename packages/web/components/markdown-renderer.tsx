@@ -11,6 +11,8 @@ import rehypePrism from 'rehype-prism-plus'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { cn } from '@/lib/utils'
 import { BLOCK_ID_ATTR, BLOCK_ID_PREFIX, markdownHeadingsToOutline } from '@/lib/block-id'
+import { ANCHORABLE_DOM_TAGS, isDomTagCompatibleWithTiptapType } from '@/lib/anchorable-blocks'
+import { extractContentBlockDescriptors, type ContentBlockDescriptor } from '@/lib/content-block-descriptor'
 
 const MENTION_REGEX = /@([a-zA-Z0-9_\u4e00-\u9fff]{2,20})/g
 
@@ -60,7 +62,6 @@ function renderTextWithMentions(text: string): React.ReactNode[] {
 }
 
 const BLOCK_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'] as const
-const ANCHORABLE_TAGS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'] as const
 
 function hashText(s: string, seed = 0): string {
   let h = 2166136261 ^ seed
@@ -91,22 +92,23 @@ export const MarkdownRenderer = memo(
       return map
     }, [content, enableBlockIds])
 
-    const contentBlockIds = React.useMemo(() => {
-      const ids: string[] = []
-      const walk = (node: JSONContent) => {
-        if (node.type === 'paragraph' || node.type === 'heading' || node.type === 'blockquote' || node.type === 'listItem' || node.type === 'taskItem') {
-          if (typeof node.attrs?.blockId === 'string') ids.push(node.attrs.blockId)
-        }
-        for (const child of node.content ?? []) walk(child)
-      }
-      if (contentDoc?.type === 'doc') walk(contentDoc)
-      return ids
+    const contentDescriptors = React.useMemo<ContentBlockDescriptor[]>(() => {
+      if (!contentDoc || contentDoc.type !== 'doc') return []
+      return extractContentBlockDescriptors(contentDoc).descriptors
     }, [contentDoc])
-    let contentBlockCursor = 0
-    const nextContentBlockId = () => {
-      const id = contentBlockIds[contentBlockCursor]
-      contentBlockCursor += 1
-      return id
+
+    // 渲染时按顺序消费描述符，同时校验 DOM 标签与 Tiptap 类型是否兼容
+    let descriptorCursor = 0
+    const nextStableBlockId = (domTag: string): string | undefined => {
+      while (descriptorCursor < contentDescriptors.length) {
+        const desc = contentDescriptors[descriptorCursor]
+        descriptorCursor += 1
+        if (isDomTagCompatibleWithTiptapType(domTag, desc.type)) {
+          return desc.blockId
+        }
+        // 类型不匹配：跳过此描述符，不绑定错误 ID
+      }
+      return undefined
     }
 
     const blockIdGenerator = React.useMemo(() => {
@@ -138,7 +140,7 @@ export const MarkdownRenderer = memo(
           (child) => React.isValidElement(child) && child.type === 'img',
         )
         const text = extractPlainText(node)
-        const blockAttrs = buildBlockAttrs('p', text, enableBlocks, enableBlockIds, blockIdGenerator, nextContentBlockId())
+        const blockAttrs = buildBlockAttrs('p', text, enableBlocks, enableBlockIds, blockIdGenerator, nextStableBlockId('p'))
         return (
           <p
             {...props}
@@ -204,12 +206,12 @@ export const MarkdownRenderer = memo(
       ),
       blockquote: ({ children, node, ...props }) => {
         const text = extractPlainText(node)
-        const blockAttrs = buildBlockAttrs('blockquote', text, enableBlocks, enableBlockIds, blockIdGenerator, nextContentBlockId())
+        const blockAttrs = buildBlockAttrs('blockquote', text, enableBlocks, enableBlockIds, blockIdGenerator, nextStableBlockId('blockquote'))
         return <blockquote {...props} {...blockAttrs}>{children}</blockquote>
       },
       li: ({ children, node, ...props }) => {
         const text = extractPlainText(node)
-        const blockAttrs = buildBlockAttrs('li', text, enableBlocks, enableBlockIds, blockIdGenerator, nextContentBlockId())
+        const blockAttrs = buildBlockAttrs('li', text, enableBlocks, enableBlockIds, blockIdGenerator, nextStableBlockId('li'))
         return <li {...props} {...blockAttrs}>{children}</li>
       },
     }
@@ -219,7 +221,7 @@ export const MarkdownRenderer = memo(
       if (!dyn[tag]) {
         dyn[tag] = ({ children, node, ...props }: React.ComponentProps<'h1'> & { node?: unknown }) => {
           const text = extractPlainText(node)
-          const blockAttrs = buildBlockAttrs(tag, text, enableBlocks, enableBlockIds, blockIdGenerator, nextContentBlockId())
+          const blockAttrs = buildBlockAttrs(tag, text, enableBlocks, enableBlockIds, blockIdGenerator, nextStableBlockId(tag))
           return React.createElement(tag, { ...props, ...blockAttrs }, children)
         }
       }
@@ -275,7 +277,7 @@ function buildBlockAttrs(
   stableBlockId?: string,
 ): Record<string, unknown> {
   const attrs: Record<string, unknown> = {}
-  const isAnchorable = ANCHORABLE_TAGS.includes(tag as typeof ANCHORABLE_TAGS[number])
+  const isAnchorable = ANCHORABLE_DOM_TAGS.has(tag)
   if (isAnchorable && enableBlocks) {
     attrs['data-block'] = ''
   }

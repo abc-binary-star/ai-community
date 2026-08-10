@@ -40,7 +40,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false
     }
-  }, [hasHydrated, token, user, router, setUser])
+  }, [hasHydrated, token, user, router, setUser, pathname])
 
   // persist 尚未从 localStorage 恢复时先显示加载态，避免误跳转
   if (!hasHydrated) {

@@ -201,7 +201,7 @@ export function HighlightableContent({ postId, content, contentDoc, fontFamily }
       block.classList.remove('ring-2', 'ring-primary/40', 'rounded-md')
     }
     window.requestAnimationFrame(settle)
-  }, [searchParams, content, highlights])
+  }, [searchParams, content, highlights, annotationsEnabled, isLoggedIn])
 
   // 卸载标志：供定位循环自行终止，避免在已卸载的节点上继续滚动
   useEffect(() => {

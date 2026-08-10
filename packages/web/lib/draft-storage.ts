@@ -27,7 +27,7 @@ export interface LocalDraft extends DraftData {
   source: 'new' | 'edit'
 }
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'retrying'
 
 export interface ConflictInfo {
   hasConflict: boolean

@@ -11,21 +11,44 @@ import {
 
 export type { DiffSegment }
 
-export type BlockReviewStatus = 'pending' | 'accepted' | 'rejected'
+export type BlockReviewStatus =
+  | 'pending'
+  | 'generating'
+  | 'ready'
+  | 'accepted'
+  | 'rejected'
+  | 'failed'
+  | 'stale'
 
 export interface AiDiffBlock {
   blockId: string
+  blockType: string
   originalMarkdown: string
   polishedMarkdown: string
+  sourceVersion: string
+  requestId?: string
+  style?: string
   status: BlockReviewStatus
+  error?: string
+}
+
+export function hashAiDiffSource(value: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
 }
 
 export function createAiDiffBlocks(
-  blocks: Array<{ blockId: string; originalMarkdown: string }>,
+  blocks: Array<{ blockId: string; blockType?: string; originalMarkdown: string }>,
 ): AiDiffBlock[] {
   return blocks.map((block) => ({
     ...block,
+    blockType: block.blockType ?? 'paragraph',
     polishedMarkdown: '',
+    sourceVersion: hashAiDiffSource(block.originalMarkdown),
     status: 'pending',
   }))
 }
@@ -33,7 +56,7 @@ export function createAiDiffBlocks(
 export function updateAiDiffBlock(
   blocks: AiDiffBlock[],
   blockId: string,
-  patch: Partial<Pick<AiDiffBlock, 'polishedMarkdown' | 'status'>>,
+  patch: Partial<Omit<AiDiffBlock, 'blockId' | 'originalMarkdown' | 'blockType'>>,
 ): AiDiffBlock[] {
   return blocks.map((block) => block.blockId === blockId ? { ...block, ...patch } : block)
 }
@@ -42,11 +65,49 @@ export function decideAllAiDiffBlocks(
   blocks: AiDiffBlock[],
   status: Extract<BlockReviewStatus, 'accepted' | 'rejected'>,
 ): AiDiffBlock[] {
-  return blocks.map((block) => ({ ...block, status }))
+  return blocks.map((block) => {
+    if (block.status !== 'ready' && status === 'accepted') return block
+    if (block.status === 'generating') return block
+    return { ...block, status, error: undefined }
+  })
 }
 
 export function pendingAiDiffBlockCount(blocks: AiDiffBlock[]): number {
-  return blocks.filter((block) => block.status === 'pending').length
+  return blocks.filter((block) => block.status === 'pending' || block.status === 'ready').length
+}
+
+export interface ApplyAllSummary {
+  succeeded: number
+  failed: number
+  skipped: number
+  blocks: AiDiffBlock[]
+}
+
+export function applyReadyAiDiffBlocks(
+  blocks: AiDiffBlock[],
+  apply: (block: AiDiffBlock) => 'accepted' | 'failed' | 'stale',
+): ApplyAllSummary {
+  let succeeded = 0
+  let failed = 0
+  let skipped = 0
+  const next = blocks.map((block) => {
+    if (block.status !== 'ready' || !block.polishedMarkdown) {
+      skipped += 1
+      return block
+    }
+    const result = apply(block)
+    if (result === 'accepted') {
+      succeeded += 1
+      return { ...block, status: 'accepted' as const, error: undefined }
+    }
+    failed += 1
+    return {
+      ...block,
+      status: result,
+      error: result === 'stale' ? '原段落已变化，请重新生成' : '无法应用该段修改',
+    }
+  })
+  return { succeeded, failed, skipped, blocks: next }
 }
 
 export interface DiffStats {

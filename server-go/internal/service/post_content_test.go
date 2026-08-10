@@ -83,8 +83,8 @@ func TestValidatePostContentDocLimits(t *testing.T) {
 	}
 }
 
-func ptrBool(v bool) *bool { return &v }
-func ptrString(v string) *string { return &v }
+func ptrBool(v bool) *bool                       { return &v }
+func ptrString(v string) *string                 { return &v }
 func ptrJSON(v json.RawMessage) *json.RawMessage { return &v }
 
 func TestUpdatePostContentPairRules(t *testing.T) {

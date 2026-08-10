@@ -38,9 +38,16 @@ export interface UseDraftAutoSaveResult {
   discardLocal: () => Promise<void>
   useLocalVersion: () => Promise<void>
   acceptServerVersion: (server: DraftData & { updatedAt: string }) => Promise<void>
+  /** 暂停自动保存（发布期间调用） */
+  pause: () => void
+  /** 恢复自动保存 */
+  resume: () => void
+  /** 发布成功后清理本地草稿 */
+  clearDraftAfterPublish: () => Promise<void>
 }
 
 const DEFAULT_DEBOUNCE_MS = 1500
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 30000]
 
 export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSaveResult {
   const {
@@ -62,6 +69,10 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
   const serverUpdatedAtRef = useRef<number | undefined>()
   const saveInFlightRef = useRef(false)
   const pendingPatchRef = useRef<Partial<DraftData> | null>(null)
+  const pausedRef = useRef(false)
+  const retryCountRef = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onlineListenerRef = useRef(false)
 
   useEffect(() => {
     draftRef.current = draft
@@ -82,8 +93,10 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
       await saveDraftToDB(next)
       setLastSavedAt(next.updatedAt)
       setSaveStatus('saved')
+      retryCountRef.current = 0
     } catch (e) {
-      setLastError(e instanceof Error ? e.message : '本地保存失败')
+      const msg = e instanceof Error ? e.message : '本地保存失败'
+      setLastError(msg)
       setSaveStatus('error')
     } finally {
       saveInFlightRef.current = false
@@ -91,6 +104,7 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
   }, [])
 
   const checkAndPersist = useCallback(async () => {
+    if (pausedRef.current) return
     const pending = pendingPatchRef.current
     const current = draftRef.current
     pendingPatchRef.current = null
@@ -116,7 +130,9 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
       if (saveStatus === 'saved' || saveStatus === 'error') {
         setSaveStatus('idle')
       }
-      debouncedSave()
+      if (!pausedRef.current) {
+        debouncedSave()
+      }
     },
     [debouncedSave, saveStatus],
   )
@@ -126,6 +142,42 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
   }, [checkAndPersist])
 
   const isDirty = !!draft && draftChangedSinceSync(draft)
+
+  // 14. 离线重试：监听 online 事件
+  useEffect(() => {
+    if (onlineListenerRef.current) return
+    onlineListenerRef.current = true
+    const handleOnline = () => {
+      if (saveStatus === 'error' && retryCountRef.current > 0) {
+        retryCountRef.current = 0
+        void checkAndPersist()
+      }
+    }
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      onlineListenerRef.current = false
+    }
+  }, [saveStatus, checkAndPersist])
+
+  // 14. 离线重试：指数退避
+  useEffect(() => {
+    if (saveStatus !== 'error' || pausedRef.current) return
+    if (retryTimerRef.current) return
+    const delay = RETRY_DELAYS[Math.min(retryCountRef.current, RETRY_DELAYS.length - 1)]
+    retryCountRef.current += 1
+    setSaveStatus('retrying')
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null
+      void checkAndPersist()
+    }, delay)
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+    }
+  }, [saveStatus, checkAndPersist])
 
   useBeforeUnload(isDirty)
 
@@ -249,6 +301,35 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
     [userId, postId, persistDraft],
   )
 
+  // 12. 发布锁：暂停/恢复
+  const pause = useCallback(() => {
+    pausedRef.current = true
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+  }, [])
+
+  const resume = useCallback(() => {
+    pausedRef.current = false
+    // 恢复后如果有未保存的改动，触发一次保存
+    if (pendingPatchRef.current || (draftRef.current && draftChangedSinceSync(draftRef.current))) {
+      void checkAndPersist()
+    }
+  }, [checkAndPersist])
+
+  // 12. 发布成功后清理本地草稿
+  const clearDraftAfterPublish = useCallback(async () => {
+    const current = draftRef.current
+    if (current) {
+      await deleteDraftFromDB(current.id)
+    }
+    pendingPatchRef.current = null
+    pausedRef.current = false
+    setSaveStatus('idle')
+    setLastError(undefined)
+  }, [])
+
   return {
     draft,
     saveStatus,
@@ -261,6 +342,9 @@ export function useDraftAutoSave(opts: UseDraftAutoSaveOptions): UseDraftAutoSav
     discardLocal,
     useLocalVersion,
     acceptServerVersion,
+    pause,
+    resume,
+    clearDraftAfterPublish,
   }
 }
 

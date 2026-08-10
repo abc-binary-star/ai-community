@@ -23,15 +23,17 @@ import { cn } from '@/lib/utils'
 import { polishContent } from '@/lib/polish-api'
 import {
   contentExtensions, contentDocText, countContentImages, ensureDocBlockIds, markdownToTiptapDoc,
-  protectMarkdownForRewrite, replaceContentImageSources, tiptapBlockToMarkdown, tiptapDocToMarkdown,
+  protectMarkdownForRewrite, replaceContentImageSources, sanitizeDocBlockIds, tiptapBlockToMarkdown, tiptapDocToMarkdown,
 } from '@/lib/content-projection'
+import { isValidBlockId } from '@/lib/block-id'
+import { BLOCK_ID_TYPES } from '@/lib/anchorable-blocks'
 import { compressImage, MAX_POST_CHARS, MAX_POST_IMAGES } from '@/components/markdown-editor'
 import { BubbleMenu } from '@/components/editor/bubble-menu'
 import { SlashMenu } from '@/components/editor/slash-menu'
 import { OutlineView } from '@/components/editor/outline-view'
 import { AiDiffPanel } from '@/components/editor/ai-diff-panel'
 import { AiBlockDiffPanel } from '@/components/editor/ai-block-diff-panel'
-import { createAiDiffBlocks } from '@/lib/ai-diff-workflow'
+import { createAiDiffBlocks, hashAiDiffSource, type AiDiffBlock } from '@/lib/ai-diff-workflow'
 import { MobileInsertSheet, MobileToolbar, useVirtualKeyboard } from '@/components/editor/mobile-toolbar'
 import {
   isAiDiffReviewEnabled,
@@ -222,19 +224,32 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
       }
     },
     onUpdate: ({ editor: currentEditor }) => {
-      // 输入法合成中：不做 blockId 强制写入，避免中文/日文选字时光标跳回段首
+      const json = currentEditor.getJSON()
+      // 输入法合成中：跳过 blockId 强制写入，直接通知
       if (isComposingRef.current) {
-        onChangeRef.current(currentEditor.getJSON(), tiptapDocToMarkdown(currentEditor.getJSON()))
+        onChangeRef.current(json, tiptapDocToMarkdown(json))
         return
       }
-      const ensured = ensureDocBlockIds(currentEditor.getJSON())
-      const currentStr = JSON.stringify(currentEditor.getJSON())
-      const ensuredStr = JSON.stringify(ensured)
-      if (currentStr !== ensuredStr) {
-        currentEditor.commands.setContent(ensured, { emitUpdate: false })
+      // 快速检查：是否有 block 缺少 blockId（仅结构性变化才需要 ensure）
+      const needsEnsure = (() => {
+        let found = false
+        const walk = (n: JSONContent) => {
+          if (found) return
+          if (BLOCK_ID_TYPES.has(n.type ?? '') && !isValidBlockId(n.attrs?.blockId)) {
+            found = true
+            return
+          }
+          for (const c of n.content ?? []) walk(c)
+        }
+        walk(json)
+        return found
+      })()
+      const finalDoc = needsEnsure ? ensureDocBlockIds(json) : json
+      if (needsEnsure) {
+        currentEditor.commands.setContent(finalDoc, { emitUpdate: false })
       }
-      valueRef.current = ensured
-      onChangeRef.current(ensured, tiptapDocToMarkdown(ensured))
+      valueRef.current = finalDoc
+      onChangeRef.current(finalDoc, tiptapDocToMarkdown(finalDoc))
     },
   })
 
@@ -242,8 +257,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     if (!editor) return
     const timer = window.setTimeout(() => {
       const current = editor.getJSON()
-      if (JSON.stringify(current) !== JSON.stringify(ensureDocBlockIds(current))) {
-        editor.commands.setContent(ensureDocBlockIds(current), { emitUpdate: false })
+      // 加载后修复重复和非法 blockId，再补齐缺失
+      const { doc: sanitized, repaired } = sanitizeDocBlockIds(current)
+      const ensured = ensureDocBlockIds(sanitized)
+      if (repaired || JSON.stringify(current) !== JSON.stringify(ensured)) {
+        editor.commands.setContent(ensured, { emitUpdate: false })
       }
     }, 0)
     return () => {
@@ -259,8 +277,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
   useEffect(() => {
     if (!editor) return
-    if (JSON.stringify(editor.getJSON()) !== JSON.stringify(value)) {
-      editor.commands.setContent(ensureDocBlockIds(value), { emitUpdate: false })
+    // 外部值变更时先修复重复/非法 ID 再补齐缺失
+    const { doc: sanitized } = sanitizeDocBlockIds(value)
+    const ensured = ensureDocBlockIds(sanitized)
+    if (JSON.stringify(editor.getJSON()) !== JSON.stringify(ensured)) {
+      editor.commands.setContent(ensured, { emitUpdate: false })
     }
   }, [editor, value])
 
@@ -491,27 +512,32 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     setOriginalSnapshot(aiDiffPolishInput.snapshot)
   }, [editor, aiDiffPolishInput])
 
-  const replaceBlockPreservingId = useCallback((blockId: string, polishedMarkdown: string): boolean => {
-    if (!editor) return false
+  const replaceBlockPreservingId = useCallback((blockId: string, polishedMarkdown: string): 'accepted' | 'failed' | 'stale' => {
+    if (!editor) return 'failed'
     let targetPos: number | null = null
-    let targetNode: { nodeSize: number } | null = null
+    let targetNode: { nodeSize: number; type: { name: string }; attrs: Record<string, unknown> } | null = null
     editor.state.doc.descendants((node, pos) => {
       if (targetNode || !node.isBlock || node.attrs.blockId !== blockId) return !targetNode
       targetNode = node
       targetPos = pos
       return false
     })
-    if (!targetNode || targetPos === null) return false
+    if (!targetNode || targetPos === null) return 'stale'
     const from = targetPos as number
     const nodeSize = (targetNode as { nodeSize: number }).nodeSize
     const replacement = markdownToTiptapDoc(polishedMarkdown).content ?? []
-    if (replacement.length !== 1) return false
+    // 结构约束：润色结果必须恰好对应一个块
+    if (replacement.length === 0) return 'failed'
+    if (replacement.length > 1) return 'failed'
     const next = replacement[0]
-    if (!next.type) return false
+    if (!next.type) return 'failed'
+    // 类型约束：不允许改变块类型（paragraph 不能变成 list 等）
+    const originalType = (targetNode as { type: { name: string } }).type.name
+    if (next.type !== originalType) return 'failed'
     const attrs = { ...(next.attrs ?? {}), blockId }
     const nextNode = editor.schema.nodeFromJSON({ ...next, attrs })
     editor.view.dispatch(editor.state.tr.replaceWith(from, from + nodeSize, nextNode))
-    return true
+    return 'accepted'
   }, [editor])
 
   const aiBlocks = useMemo(() => {
@@ -519,20 +545,35 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     return aiDiffPolishInput.blocks
   }, [aiDiffPolishInput])
 
-  const handleGenerateBlock = useCallback(async (blockId: string, originalBlockMarkdown: string, style: string) => {
-    return polishContent({ content: originalBlockMarkdown, style })
+  const handleGenerateBlock = useCallback(async (blockId: string, originalBlockMarkdown: string, style: string, signal: AbortSignal) => {
+    return polishContent({ content: originalBlockMarkdown, style, signal })
   }, [])
 
-  const handleApplyBlock = useCallback((blockId: string, polishedMarkdown: string) => {
-    const applied = replaceBlockPreservingId(blockId, polishedMarkdown)
-    if (applied) {
+  const handleApplyBlock = useCallback((block: AiDiffBlock): 'accepted' | 'failed' | 'stale' => {
+    const result = replaceBlockPreservingId(block.blockId, block.polishedMarkdown)
+    if (result === 'accepted') {
       setAiDiffPolishInput((current) => current ? {
         ...current,
         originalMarkdown: tiptapDocToMarkdown(editor?.getJSON() ?? current.snapshot),
       } : current)
     }
-    return applied
+    return result
   }, [editor, replaceBlockPreservingId])
+
+  const handleCheckBlockFreshness = useCallback((blockId: string, sourceVersion: string): boolean => {
+    if (!editor) return false
+    let currentText = ''
+    editor.state.doc.descendants((node) => {
+      if (currentText) return false
+      if (node.isBlock && node.attrs.blockId === blockId) {
+        currentText = node.textContent ?? ''
+        return false
+      }
+      return true
+    })
+    if (!currentText) return false
+    return hashAiDiffSource(currentText) === sourceVersion
+  }, [editor])
 
   // 整体放弃 AiDiff：清空面板
   const handleDiscardAiDiff = useCallback(() => {
@@ -688,10 +729,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               initialBlocks={aiBlocks}
               pageType={pageType}
               postId={postId}
-              requesting={polishing}
-              setRequesting={setPolishing}
               onGenerateBlock={handleGenerateBlock}
               onApplyBlock={handleApplyBlock}
+              onCheckBlockFreshness={handleCheckBlockFreshness}
               onRestoreSnapshot={() => {
                 if (!editor) return
                 editor.commands.setContent(aiDiffPolishInput.snapshot)

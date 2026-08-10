@@ -71,7 +71,7 @@ export default function NewPostPage() {
     disabled: autosaveDisabled,
   })
 
-  const { state: autosaveState, snapshot: draftSnapshot, patch, initializeNew, markServerSynced } = autosave
+  const { state: autosaveState, snapshot: draftSnapshot, patch, initializeNew, markServerSynced, pause: pauseAutosave, resume: resumeAutosave } = autosave
   const {
     saveStatus,
     lastSavedAt,
@@ -279,6 +279,7 @@ export default function NewPostPage() {
     if (!validatePostLimits()) return
     trackEditor(EditorEvents.PublishStart, { editorType, pageType: PAGE_TYPE })
     setPublishing(true)
+    pauseAutosave()
     try {
       await autosave.forceSave()
       const tags = parseTags()
@@ -306,6 +307,7 @@ export default function NewPostPage() {
       captureError(e, { component: 'NewPostPage.handlePublish', editorType, pageType: PAGE_TYPE })
       trackEditor(EditorEvents.PublishError, { editorType, pageType: PAGE_TYPE, error: e instanceof Error ? e.message : String(e) })
       toast.error(e instanceof ApiError ? e.message : '发布失败，请重试')
+      resumeAutosave()
     } finally {
       setPublishing(false)
     }

@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, AlertCircle, CloudOff } from 'lucide-react'
+import { CheckCircle2, Loader2, AlertCircle, CloudOff, RefreshCw } from 'lucide-react'
 import type { SaveStatus } from '@/lib/draft-storage'
 import { formatSaveTime } from '@/lib/draft-storage'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ const STATUS_CONFIG: Record<SaveStatus, { icon: typeof CheckCircle2; label: stri
   saving: { icon: Loader2, label: '保存中…', tone: 'text-muted-foreground' },
   saved: { icon: CheckCircle2, label: '已保存', tone: 'text-emerald-600 dark:text-emerald-400' },
   error: { icon: AlertCircle, label: '保存失败', tone: 'text-destructive' },
+  retrying: { icon: RefreshCw, label: '保存中（重试）…', tone: 'text-muted-foreground' },
 }
 
 export function SaveStatusIndicator({
@@ -39,7 +40,7 @@ export function SaveStatusIndicator({
       )}
       title={errorMessage || (dirty ? '内容有本地改动，尚未写入本地草稿' : undefined)}
     >
-      <Icon className={cn('size-3.5', status === 'saving' && 'animate-spin')} />
+      <Icon className={cn('size-3.5', (status === 'saving' || status === 'retrying') && 'animate-spin')} />
       <span className="truncate">
         {(dirty && status === 'saved') ? '本地改动未保存' : cfg.label}
         {showTime && !dirty ? ` · ${formatSaveTime(lastSavedAt)}` : ''}

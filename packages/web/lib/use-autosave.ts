@@ -79,8 +79,12 @@ export interface AutosaveApi {
   markServerSynced: (serverUpdatedAt?: string) => Promise<void>
   /** 丢弃本次草稿（比如用户点击“放弃”） */
   discardLocalDraft: () => Promise<void>
-  /** 草稿 → 页面表单回填字段（草稿字段始终是最终真值） */
+  /** 草稿 -> 页面表单回填字段（草稿字段始终是最终真值） */
   snapshot: DraftData | null
+  /** 暂停自动保存（发布期间调用） */
+  pause: () => void
+  /** 恢复自动保存 */
+  resume: () => void
 }
 
 function editorTypeFromDraft(d: DraftData | undefined): 'markdown' | 'rich-text' {
@@ -88,6 +92,8 @@ function editorTypeFromDraft(d: DraftData | undefined): 'markdown' | 'rich-text'
   if (d.contentDoc && (d.contentDoc.content?.length ?? 0) > 0) return 'rich-text'
   return 'markdown'
 }
+
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 30000]
 
 export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
   const { userId, page, postId, serverPostUpdatedAt, debounceMs = 1200, disabled, editorType } = opts
@@ -103,6 +109,9 @@ export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
   const draftRef = useRef(draft)
   const flushTimerRef = useRef<number | null>(null)
   const initializedRef = useRef(false)
+  const pausedRef = useRef(false)
+  const retryCountRef = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { draftRef.current = draft }, [draft])
 
@@ -113,7 +122,7 @@ export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
   )
 
   const performSave = useCallback(async () => {
-    if (disabled) return
+    if (disabled || pausedRef.current) return
     const acc = accRef.current
     const now = Date.now()
     const current = draftRef.current
@@ -131,6 +140,7 @@ export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
       setDraft(nextDraft)
       setLastSavedAt(nextDraft.updatedAt)
       setSaveStatus((s: SaveStatus) => transitionSaveStatus(s, 'save_success'))
+      retryCountRef.current = 0
     } catch (e) {
       captureError(e, {
         component: 'useAutosave.performSave',
@@ -149,7 +159,7 @@ export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
 
   // 防抖调度
   const scheduleFlush = useCallback(() => {
-    if (disabled) return
+    if (disabled || pausedRef.current) return
     setSaveStatus((s: SaveStatus) => transitionSaveStatus(s, 'edit'))
     if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current)
     flushTimerRef.current = window.setTimeout(() => {
@@ -368,6 +378,50 @@ export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
     }
   }, [])
 
+  // 14. 离线重试：监听 online 事件
+  useEffect(() => {
+    const handleOnline = () => {
+      if (saveStatus === 'error' && retryCountRef.current > 0 && !pausedRef.current) {
+        retryCountRef.current = 0
+        void performSave()
+      }
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [saveStatus, performSave])
+
+  // 14. 离线重试：指数退避
+  useEffect(() => {
+    if (saveStatus !== 'error' || pausedRef.current || disabled) return
+    if (retryTimerRef.current) return
+    const delay = RETRY_DELAYS[Math.min(retryCountRef.current, RETRY_DELAYS.length - 1)]
+    retryCountRef.current += 1
+    setSaveStatus((s: SaveStatus) => transitionSaveStatus(s, 'start_retry'))
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null
+      void performSave()
+    }, delay)
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+    }
+  }, [saveStatus, performSave, disabled])
+
+  // 12. 发布锁：暂停/恢复
+  const pause = useCallback(() => {
+    pausedRef.current = true
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+  }, [])
+
+  const resume = useCallback(() => {
+    pausedRef.current = false
+  }, [])
+
   // 初始化入口（根据 page 类型分别处理）：页面实际调用 initialize / initializeNew
   // 这里只是在 serverPostUpdatedAt 变化时，重新校验一次冲突（例如发布成功后后端返回新时间戳）
   useEffect(() => {
@@ -414,6 +468,8 @@ export function useAutosave(opts: UseAutosaveOptions): AutosaveApi {
     markServerSynced,
     discardLocalDraft,
     snapshot,
+    pause,
+    resume,
   }
 }
 

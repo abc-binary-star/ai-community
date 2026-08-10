@@ -2,11 +2,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   acceptCandidate,
+  applyReadyAiDiffBlocks,
   computeDiffStats,
   createAiDiffBlocks,
   createInitialWorkflowState,
   decideAllAiDiffBlocks,
   failPolishRequest,
+  hashAiDiffSource,
   mergeEnrichResults,
   pendingAiDiffBlockCount,
   receivePolishCandidate,
@@ -44,6 +46,48 @@ test('逐块 Diff 支持全部决策和待审计数', () => {
   const rejected = decideAllAiDiffBlocks(blocks, 'rejected')
   assert.equal(pendingAiDiffBlockCount(rejected), 0)
   assert.ok(rejected.every((block) => block.status === 'rejected'))
+})
+
+test('hashAiDiffSource 相同内容返回相同摘要', () => {
+  assert.equal(hashAiDiffSource('hello'), hashAiDiffSource('hello'))
+  assert.notEqual(hashAiDiffSource('hello'), hashAiDiffSource('world'))
+})
+
+test('applyReadyAiDiffBlocks 部分成功模型', () => {
+  const blocks = createAiDiffBlocks([
+    { blockId: 'blk_a', originalMarkdown: 'A' },
+    { blockId: 'blk_b', originalMarkdown: 'B' },
+    { blockId: 'blk_c', originalMarkdown: 'C' },
+  ])
+  // blk_a 和 blk_b 进入 ready，blk_c 保持 pending
+  let current = updateAiDiffBlock(blocks, 'blk_a', { polishedMarkdown: '润色A', status: 'ready' })
+  current = updateAiDiffBlock(current, 'blk_b', { polishedMarkdown: '润色B', status: 'ready' })
+
+  // blk_a 成功，blk_b 失败
+  const summary = applyReadyAiDiffBlocks(current, (block) =>
+    block.blockId === 'blk_a' ? 'accepted' : 'failed',
+  )
+  assert.equal(summary.succeeded, 1)
+  assert.equal(summary.failed, 1)
+  assert.equal(summary.skipped, 1)
+  const accepted = summary.blocks.find((b) => b.blockId === 'blk_a')
+  const failed = summary.blocks.find((b) => b.blockId === 'blk_b')
+  const skipped = summary.blocks.find((b) => b.blockId === 'blk_c')
+  assert.equal(accepted?.status, 'accepted')
+  assert.equal(failed?.status, 'failed')
+  assert.equal(skipped?.status, 'pending')
+})
+
+test('decideAllAiDiffBlocks accepted 时跳过非 ready 块', () => {
+  const blocks = createAiDiffBlocks([
+    { blockId: 'blk_a', originalMarkdown: 'A' },
+    { blockId: 'blk_b', originalMarkdown: 'B' },
+  ])
+  let current = updateAiDiffBlock(blocks, 'blk_a', { polishedMarkdown: '润色A', status: 'ready' })
+  current = decideAllAiDiffBlocks(current, 'accepted')
+  // blk_a 应变为 accepted，blk_b 仍为 pending
+  assert.equal(current[0].status, 'accepted')
+  assert.equal(current[1].status, 'pending')
 })
 
 test('computeDiffStats: 等长插入删除统计', () => {

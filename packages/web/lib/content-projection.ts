@@ -8,6 +8,7 @@ import TaskList from '@tiptap/extension-task-list'
 import StarterKit from '@tiptap/starter-kit'
 import { marked } from 'marked'
 import { BLOCK_ID_ATTR, ensureBlockIdAttrs, generateBlockId, isValidBlockId } from './block-id'
+import { BLOCK_ID_TYPES } from './anchorable-blocks'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -58,12 +59,9 @@ const BlockIdGlobalExtension = Extension.create({
         () =>
         ({ tr, state, dispatch }) => {
           if (!dispatch) return true
-          const BLOCK_TYPES = new Set([
-            'paragraph', 'heading', 'blockquote', 'codeBlock', 'horizontalRule', 'image',
-          ])
           const nodesToUpdate: Array<{ pos: number; node: { type: { name: string }; attrs: Record<string, unknown> } }> = []
           state.doc.nodesBetween(0, state.doc.nodeSize, (node, pos) => {
-            if (node.isBlock && BLOCK_TYPES.has(node.type.name)) {
+            if (node.isBlock && BLOCK_ID_TYPES.has(node.type.name)) {
               if (!isValidBlockId(node.attrs.blockId)) nodesToUpdate.push({ pos, node })
             }
           })
@@ -92,18 +90,47 @@ export function createBlockIdAwareExtensions(): Extensions {
 export const contentExtensions: Extensions = createBlockIdAwareExtensions()
 
 export function ensureDocBlockIds(doc: JSONContent): JSONContent {
-  const BLOCK_TYPES = new Set([
-    'paragraph', 'heading', 'blockquote', 'codeBlock', 'horizontalRule', 'image',
-  ])
   const visit = (node: JSONContent): JSONContent => {
     const next: JSONContent = { ...node }
-    if (BLOCK_TYPES.has(node.type ?? '')) {
+    if (BLOCK_ID_TYPES.has(node.type ?? '')) {
       next.attrs = ensureBlockIdAttrs(node.attrs ?? {})
     }
     if (next.content) next.content = next.content.map(visit)
     return next
   }
   return visit(doc)
+}
+
+/**
+ * 修复 contentDoc 中的重复和非法 blockId。
+ * - 保留第一次出现的合法 ID。
+ * - 后续重复 ID 重新生成。
+ * - 非法 ID 重新生成。
+ * - 缺失 ID 自动补齐。
+ * 返回修复后的 doc 和是否发生过修复。
+ */
+export function sanitizeDocBlockIds(doc: JSONContent): { doc: JSONContent; repaired: boolean } {
+  const seenIds = new Set<string>()
+  let repaired = false
+
+  const visit = (node: JSONContent): JSONContent => {
+    const next: JSONContent = { ...node }
+    if (BLOCK_ID_TYPES.has(node.type ?? '')) {
+      const rawId = (node.attrs?.blockId) as unknown
+      if (isValidBlockId(rawId) && !seenIds.has(rawId)) {
+        seenIds.add(rawId)
+      } else {
+        const newId = generateBlockId()
+        seenIds.add(newId)
+        next.attrs = { ...(node.attrs ?? {}), blockId: newId }
+        repaired = true
+      }
+    }
+    if (next.content) next.content = next.content.map(visit)
+    return next
+  }
+
+  return { doc: visit(doc), repaired }
 }
 
 export const emptyContentDoc: JSONContent = { type: 'doc', content: [{ type: 'paragraph', attrs: { blockId: generateBlockId() } }] }

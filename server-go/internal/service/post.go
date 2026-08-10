@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -33,6 +34,7 @@ var (
 	ErrPostNotFound_Post = &PostError{Msg: "帖子不存在", Code: 404}
 	ErrPostForbidden     = &PostError{Msg: "无权操作他人的帖子", Code: 403}
 	ErrPostInvalidInput  = &PostError{Msg: "输入不合法", Code: 400}
+	ErrPostConflict      = &PostError{Msg: "帖子已被其他会话修改，请刷新后重试", Code: 409}
 )
 
 func validChannel(ctx context.Context, ch string) bool {
@@ -436,7 +438,7 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 		}
 	}
 	var existing model.Post
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status", "content_doc_enabled", "editor_downgraded", "content_digest").First(&existing, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status", "content_doc_enabled", "editor_downgraded", "content_digest", "updated_at").First(&existing, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound_Post
 		}
@@ -445,6 +447,15 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	}
 	if existing.AuthorID != userID {
 		return nil, ErrPostForbidden
+	}
+	// 13. 乐观锁：客户端期望的更新时间与服务端不一致时返回 409
+	if req.ExpectedUpdatedAt != nil && *req.ExpectedUpdatedAt != "" {
+		expected, err := time.Parse(time.RFC3339Nano, *req.ExpectedUpdatedAt)
+		if err == nil {
+			if !existing.UpdatedAt.Equal(expected) {
+				return nil, ErrPostConflict
+			}
+		}
 	}
 
 	contentDocEnabledChange := req.ContentDocEnabled != nil

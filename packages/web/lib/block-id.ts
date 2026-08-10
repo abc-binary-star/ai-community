@@ -62,6 +62,7 @@ export function extractBlocksFromDoc(doc: {
       if (n.content) for (const c of n.content) visit(c, n.type)
       return
     }
+    // 容器节点：递归子节点，自身不作为批注单元
     const isContainer =
       n.type === 'bulletList' ||
       n.type === 'orderedList' ||

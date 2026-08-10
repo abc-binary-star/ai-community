@@ -114,6 +114,9 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     discardLocal,
     useLocalVersion: applyLocalVersion,
     acceptServerVersion,
+    pause,
+    resume,
+    clearDraftAfterPublish,
   } = useDraftAutoSave({
     userId,
     postId: params.id,
@@ -296,6 +299,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         coverUrl: cover,
         contentDocEnabled: syncContentDoc,
         editorDowngraded: editorType === 'markdown' && isRichTextEditorEnabled(),
+        expectedUpdatedAt: serverPost?.updatedAt,
       })
       if (draft) {
         const synced = markDraftSynced(draft, new Date(resp.updatedAt))
@@ -314,7 +318,12 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     } catch (e) {
       captureError(e, { component: 'EditPostPage.handleSave', editorType, pageType: PAGE_TYPE, extra: { postId: params.id, targetStatus } })
       trackEditor(EditorEvents.SaveDraftError, { editorType, pageType: PAGE_TYPE, postId: params.id, error: e instanceof Error ? e.message : String(e) })
-      toast.error(e instanceof ApiError ? e.message : '保存失败')
+      if (e instanceof ApiError && e.status === 409) {
+        toast.error('帖子已被其他会话修改，请刷新后重试')
+        setConflictDialogOpen(true)
+      } else {
+        toast.error(e instanceof ApiError ? e.message : '保存失败')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -332,6 +341,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     if (!validatePostLimits()) return
     trackEditor(EditorEvents.PublishStart, { editorType, pageType: PAGE_TYPE, postId: params.id })
     setSubmitting(true)
+    pause()
     try {
       await flushSave()
       const tags = parseTags()
@@ -350,18 +360,22 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
         coverUrl: cover,
         contentDocEnabled: syncContentDoc,
         editorDowngraded: editorType === 'markdown' && isRichTextEditorEnabled(),
+        expectedUpdatedAt: serverPost?.updatedAt,
       })
-      if (draft) {
-        const synced = markDraftSynced(draft, new Date(resp.updatedAt))
-        await deleteDraftFromDB(synced.id)
-      }
+      await clearDraftAfterPublish()
       trackEditor(EditorEvents.PublishSuccess, { editorType, pageType: PAGE_TYPE, postId: params.id })
       toast.success('发布成功')
       router.push(`/community/post/${params.id}`)
     } catch (e) {
       captureError(e, { component: 'EditPostPage.handlePublish', editorType, pageType: PAGE_TYPE, extra: { postId: params.id } })
       trackEditor(EditorEvents.PublishError, { editorType, pageType: PAGE_TYPE, postId: params.id, error: e instanceof Error ? e.message : String(e) })
-      toast.error(e instanceof ApiError ? e.message : '发布失败')
+      if (e instanceof ApiError && e.status === 409) {
+        toast.error('帖子已被其他会话修改，请刷新后重试')
+        setConflictDialogOpen(true)
+      } else {
+        toast.error(e instanceof ApiError ? e.message : '发布失败')
+      }
+      resume()
     } finally {
       setSubmitting(false)
     }

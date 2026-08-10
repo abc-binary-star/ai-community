@@ -237,7 +237,7 @@ export function TileDetailDialog({
     }
   }, [detail, fallbackTile])
 
-  const records: TileRecord[] = detail?.records ?? []
+  const records: TileRecord[] = useMemo(() => detail?.records ?? [], [detail])
 
   // 书单记录：共享活动下跨队公开，本队优先、其次按轮次倒序（PRD 8.2）
   const bookRecords = useMemo(
