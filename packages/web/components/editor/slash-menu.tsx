@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
   Braces, CheckSquare, Code2, Heading1, Heading2, Heading3,
@@ -210,6 +210,26 @@ export function SlashMenu({ editor, onInsertImageFiles }: SlashMenuProps) {
     }
   }, [editor, isComposing])
 
+  const runItem = useCallback((item: SlashItem) => {
+    if (!editor || !slashRange) return
+    const chain = editor.chain().focus().insertContentAt(slashRange, '')
+    chain.run()
+    if (item.key === 'image') {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/jpeg,image/png,image/webp,image/gif'
+      input.multiple = true
+      input.onchange = () => {
+        const files = Array.from(input.files ?? [])
+        if (files.length > 0) onInsertImageFiles?.(files)
+      }
+      input.click()
+    } else {
+      item.run(editor)
+    }
+    setOpen(false)
+  }, [editor, slashRange, onInsertImageFiles])
+
   useEffect(() => {
     if (!editor || !open) return
     const onKey = (e: KeyboardEvent) => {
@@ -232,7 +252,7 @@ export function SlashMenu({ editor, onInsertImageFiles }: SlashMenuProps) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [editor, open, items, active])
+  }, [editor, open, items, active, runItem])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -240,26 +260,6 @@ export function SlashMenu({ editor, onInsertImageFiles }: SlashMenuProps) {
       el?.scrollIntoView({ block: 'nearest' })
     }
   }, [active])
-
-  const runItem = (item: SlashItem) => {
-    if (!editor || !slashRange) return
-    const chain = editor.chain().focus().insertContentAt(slashRange, '')
-    chain.run()
-    if (item.key === 'image') {
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = 'image/jpeg,image/png,image/webp,image/gif'
-      input.multiple = true
-      input.onchange = () => {
-        const files = Array.from(input.files ?? [])
-        if (files.length > 0) onInsertImageFiles?.(files)
-      }
-      input.click()
-    } else {
-      item.run(editor)
-    }
-    setOpen(false)
-  }
 
   if (!open || !pos || !editor) return null
 
