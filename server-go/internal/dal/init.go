@@ -103,6 +103,9 @@ func Init(cfg *conf.Config) {
 		log.Printf("Warning: 补全 post_tags.created_at 列失败: %v", err)
 	}
 
+	// 编辑器升级迁移：为 post 补齐 content_format/content_doc_enabled/editor_downgraded/content_doc 列 + 索引 + 存量回填
+	migratePostEditorFlags()
+
 	// 初始化默认频道数据
 	seedDefaultChannels()
 

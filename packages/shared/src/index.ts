@@ -30,6 +30,8 @@ export interface Post {
   id: string
   title: string
   content: string
+  contentDoc?: Record<string, unknown>
+  contentFormat?: 'markdown' | 'richtext'
   channel: string
   status: 'published' | 'draft'
   authorId: string
@@ -45,6 +47,8 @@ export interface Post {
   aiSummary?: string
   font?: string
   coverUrl?: string
+  contentDocEnabled: boolean
+  editorDowngraded: boolean
   tags: string[]
   createdAt: string
   updatedAt: string
@@ -279,6 +283,19 @@ export interface Annotation {
   paragraphSnapshot: string
   body: string
   visibility: 'public' | 'private'
+  /**
+   * 锚点格式（客户端计算/服务端可选回填）：
+   * - block：使用 blockId 的稳定锚点（富文本首选）
+   * - markdown：使用 Markdown 字符偏移（旧帖子/纯 markdown 兜底）
+   * - whole：整篇讨论锚点
+   * 注意：字段为可选；缺失时前端可通过 anchor 前缀自行判定（向后兼容存量帖子）。
+   */
+  anchorFormat?: 'block' | 'markdown' | 'whole'
+  /**
+   * 当 anchorFormat = block 时，提取出的稳定 blockId。
+   * 用于段落计数 & UI 快速定位（无需再次解析 anchor）。缺失时由客户端自行解析。
+   */
+  blockId?: string
   anchorStatus: 'attached' | 'orphaned'
   status: 'active' | 'deleted' | 'moderated'
   edited: boolean

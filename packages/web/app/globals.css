@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+.tiptap-editor {
+  min-height: 100%;
+}
+
+.tiptap-editor p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap-editor img {
+  display: block;
+  max-width: 100%;
+  margin: 1.25rem auto;
+  border-radius: 0.75rem;
+}
+
+.tiptap-editor ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap-editor ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.tiptap-editor ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
 /* ============================================================
    Commons · Marginalia 主题
    中性纸底 + 克制墨色 + 单一珊瑚强调 + 低饱和同色系频道序列
@@ -11,6 +45,12 @@
 
 @layer base {
   :root {
+    /* iOS/移动端安全区域（env fallback 0 方便桌面端不报错） */
+    --sat: env(safe-area-inset-top, 0);
+    --sar: env(safe-area-inset-right, 0);
+    --sab: env(safe-area-inset-bottom, 0);
+    --sal: env(safe-area-inset-left, 0);
+
     /* 底色：冷中性近白，带极轻蓝灰，科技感的干净底 */
     --background: 220 24% 98%;
     /* 文字：近黑的冷墨色 */
@@ -115,20 +155,64 @@
   }
   html {
     scroll-behavior: smooth;
+    /* 避免 iOS 橡皮筋效果影响 safe-area */
+    overscroll-behavior-y: contain;
   }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'kern' 1, 'liga' 1, 'cv11' 1;
     -webkit-font-smoothing: antialiased;
+    /* 移动端 safe-area 下留白，内容不被 Home Indicator 遮 */
+    padding-left: var(--sal);
+    padding-right: var(--sar);
   }
 
   ::selection {
     background: hsl(var(--primary) / 0.16);
     color: hsl(var(--foreground));
   }
+
+  /* IME 输入法组合态下的文本视觉：稍降透明度，提示正在输入 */
+  :lang(zh) [contenteditable]:focus,
+  :lang(ja) [contenteditable]:focus,
+  :lang(ko) [contenteditable]:focus {
+    caret-color: hsl(var(--primary));
+  }
 }
 
 @layer utilities {
+  /* ============================================================
+     Safe Area / 移动端键盘工具栏与 IME 适配工具类
+     ============================================================ */
+  .pb-safe-bottom {
+    padding-bottom: var(--sab);
+  }
+  .pt-safe-top {
+    padding-top: var(--sat);
+  }
+  .mb-safe-bottom {
+    margin-bottom: var(--sab);
+  }
+  .bottom-safe-bottom {
+    bottom: var(--sab);
+  }
+
+  /* 固定在底部的编辑器附加栏（移动端键盘上方） */
+  .keyboard-above-bar {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: calc(var(--sab) + 0.25rem);
+    background: hsl(var(--card));
+    transform: translateZ(0);
+    z-index: 30;
+  }
+
+  /* IME 组合期间不显示闪烁光标外的动画干扰 */
+  .ime-composing {
+    transition: none !important;
+    animation: none !important;
+  }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 8px;
     height: 8px;

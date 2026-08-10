@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -33,6 +34,7 @@ var (
 	ErrPostNotFound_Post = &PostError{Msg: "帖子不存在", Code: 404}
 	ErrPostForbidden     = &PostError{Msg: "无权操作他人的帖子", Code: 403}
 	ErrPostInvalidInput  = &PostError{Msg: "输入不合法", Code: 400}
+	ErrPostConflict      = &PostError{Msg: "帖子已被其他会话修改，请刷新后重试", Code: 409}
 )
 
 func validChannel(ctx context.Context, ch string) bool {
@@ -114,7 +116,7 @@ func mapPostsToDTOs(ctx context.Context, posts []model.Post, userID string) []ty
 	items := make([]types.Post, 0, len(posts))
 	for _, p := range posts {
 		tagNames := mapper.ExtractTagNames(p.Tags)
-		items = append(items, mapper.PostToDTO(&p, commentCounts[p.ID], likedSet[p.ID], bookmarkedSet[p.ID], tagNames))
+		items = append(items, mapper.PostToListDTO(&p, commentCounts[p.ID], likedSet[p.ID], bookmarkedSet[p.ID], tagNames))
 	}
 	return items
 }
@@ -293,45 +295,59 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 	return &dto, nil
 }
 
-// replacePostTags 全量替换帖子的标签关联
-func replacePostTags(ctx context.Context, postID string, rawTags []string) error {
-	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 删除旧关联
-		if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
-			return err
+func replacePostTagsTx(tx *gorm.DB, postID string, rawTags []string) error {
+	if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
+		return err
+	}
+	seen := make(map[string]bool)
+	for _, rawTag := range rawTags {
+		tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
+		if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
+			continue
 		}
-		seen := make(map[string]bool)
-		for _, rawTag := range rawTags {
-			tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
-			if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
-				continue
-			}
-			seen[tagName] = true
+		seen[tagName] = true
 
-			var tag model.Tag
-			if err := tx.Where("name = ?", tagName).First(&tag).Error; err != nil {
-				if err == gorm.ErrRecordNotFound {
-					tag = model.Tag{Name: tagName}
-					if err := tx.Create(&tag).Error; err != nil {
-						return err
-					}
-				} else {
+		var tag model.Tag
+		if err := tx.Where("name = ?", tagName).First(&tag).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				tag = model.Tag{Name: tagName}
+				if err := tx.Create(&tag).Error; err != nil {
 					return err
 				}
-			}
-			if err := tx.Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
+			} else {
 				return err
 			}
 		}
-		return nil
-	})
+		if err := tx.Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreatePost 创建帖子（支持 tags）
 func (s *PostService) CreatePost(ctx context.Context, userID string, req types.CreatePostReq) (*types.Post, error) {
+	if err := validateCreatePostInputPair(req); err != nil {
+		return nil, err
+	}
+	contentDocEnabled := true
+	if req.ContentDocEnabled != nil {
+		contentDocEnabled = *req.ContentDocEnabled
+	}
+	editorDowngraded := false
+	if req.EditorDowngraded != nil {
+		editorDowngraded = *req.EditorDowngraded
+	}
+	if !contentDocEnabled {
+		req.ContentDoc = nil
+	}
 	channel := "general"
 	if req.Channel != nil && validChannel(ctx, *req.Channel) {
 		channel = *req.Channel
+	}
+	contentFormat := "markdown"
+	if contentDocEnabled && len(req.ContentDoc) > 0 {
+		contentFormat = "richtext"
 	}
 
 	var created model.Post
@@ -341,15 +357,19 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			status = "published"
 		}
 		post := &model.Post{
-			Title:         req.Title,
-			Content:       req.Content,
-			Channel:       channel,
-			AuthorID:      userID,
-			Status:        status,
-			AiSummary:     req.AiSummary,
-			Font:          req.Font,
-			CoverURL:      req.CoverURL,
-			ContentDigest: digest.NormHash("post-content", req.Content),
+			Title:             req.Title,
+			Content:           req.Content,
+			ContentDoc:        append([]byte(nil), req.ContentDoc...),
+			ContentFormat:     contentFormat,
+			Channel:           channel,
+			AuthorID:          userID,
+			Status:            status,
+			AiSummary:         req.AiSummary,
+			Font:              req.Font,
+			CoverURL:          req.CoverURL,
+			ContentDocEnabled: contentDocEnabled,
+			EditorDowngraded:  editorDowngraded,
+			ContentDigest:     digest.NormHash("post-content", req.Content),
 		}
 		if err := tx.Create(post).Error; err != nil {
 			log.Printf("[CreatePost] 创建帖子失败, userID=%s, title=%s, err=%v", userID, req.Title, err)
@@ -409,8 +429,16 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 
 // UpdatePost 更新帖子
 func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req types.UpdatePostReq) (*types.Post, error) {
+	if err := validateUpdatePostInputPair(req); err != nil {
+		return nil, err
+	}
+	if req.ContentDoc != nil {
+		if err := validatePostContentDoc(*req.ContentDoc); err != nil {
+			return nil, err
+		}
+	}
 	var existing model.Post
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status").First(&existing, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status", "content_doc_enabled", "editor_downgraded", "content_digest", "updated_at").First(&existing, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound_Post
 		}
@@ -420,8 +448,31 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	if existing.AuthorID != userID {
 		return nil, ErrPostForbidden
 	}
+	// 13. 乐观锁：客户端期望的更新时间与服务端不一致时返回 409
+	if req.ExpectedUpdatedAt != nil && *req.ExpectedUpdatedAt != "" {
+		expected, err := time.Parse(time.RFC3339Nano, *req.ExpectedUpdatedAt)
+		if err == nil {
+			if !existing.UpdatedAt.Equal(expected) {
+				return nil, ErrPostConflict
+			}
+		}
+	}
 
-	// 字段长度校验：草稿允许标题/内容为空
+	contentDocEnabledChange := req.ContentDocEnabled != nil
+	contentDocEnabledFromReq := contentDocEnabledChange && *req.ContentDocEnabled
+	if req.Content != nil {
+		docEnabled := existing.ContentDocEnabled
+		if contentDocEnabledChange {
+			docEnabled = contentDocEnabledFromReq
+		}
+		if docEnabled && req.ContentDoc == nil {
+			return nil, ErrPostInvalidInput
+		}
+		if !docEnabled {
+			req.ContentDoc = nil
+		}
+	}
+
 	isDraft := existing.Status == "draft" || (req.Status != nil && *req.Status == "draft")
 	if req.Title != nil {
 		titleLen := len([]rune(*req.Title))
@@ -442,6 +493,30 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	}
 	if req.Content != nil {
 		updates["content"] = *req.Content
+		if req.ContentDoc != nil {
+			updates["content_doc"] = append([]byte(nil), (*req.ContentDoc)...)
+		} else {
+			updates["content_doc"] = nil
+		}
+		updates["content_digest"] = digest.NormHash("post-content", *req.Content)
+		// content_format 始终随 content 重算一次，保证与 content_doc_enabled/content_doc 一致
+		{
+			docEnabled := existing.ContentDocEnabled
+			if contentDocEnabledChange {
+				docEnabled = contentDocEnabledFromReq
+			}
+			if docEnabled && req.ContentDoc != nil && len(*req.ContentDoc) > 0 {
+				updates["content_format"] = "richtext"
+			} else {
+				updates["content_format"] = "markdown"
+			}
+		}
+	}
+	if contentDocEnabledChange {
+		updates["content_doc_enabled"] = *req.ContentDocEnabled
+	}
+	if req.EditorDowngraded != nil {
+		updates["editor_downgraded"] = *req.EditorDowngraded
 	}
 	if req.Status != nil {
 		updates["status"] = *req.Status
@@ -455,28 +530,29 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	if req.CoverURL != nil {
 		updates["cover_url"] = *req.CoverURL
 	}
-	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
-		log.Printf("[UpdatePost] 更新帖子失败, postID=%s, err=%v", postID, err)
+	var updated model.Post
+	if err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Post{}).Where("id = ? AND author_id = ?", postID, userID).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrPostForbidden
+		}
+		if req.Tags != nil {
+			if err := replacePostTagsTx(tx, postID, *req.Tags); err != nil {
+				return err
+			}
+		}
+		return tx.Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error
+	}); err != nil {
+		log.Printf("[UpdatePost] 原子更新帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
 	// 内容变更后重算段落想法锚点（无法可靠定位的降级为 orphaned，不静默挂错段落）
 	if req.Content != nil {
-		(&AnnotationService{}).ReconcileAnchors(ctx, postID, *req.Content)
-	}
-
-	// 标签更新：全量替换
-	if req.Tags != nil {
-		if err := replacePostTags(ctx, postID, *req.Tags); err != nil {
-			log.Printf("[UpdatePost] 更新标签失败, postID=%s, err=%v", postID, err)
-			return nil, err
-		}
-	}
-
-	var updated model.Post
-	if err := dal.DB.WithContext(ctx).Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error; err != nil {
-		log.Printf("[UpdatePost] 重新加载帖子失败, postID=%s, err=%v", postID, err)
-		return nil, err
+		(&AnnotationService{}).ReconcileAnchors(ctx, postID, existing.ContentDigest, *req.Content)
 	}
 
 	// @提及通知
@@ -759,14 +835,14 @@ func (s *PostService) SuggestTags(ctx context.Context, userID, title, content st
 	d := digest.For(content, digest.BudgetTags)
 	truncatedContent := d.Text
 
-	systemPrompt := `你是一个社区分类标签助手。根据帖子标题和内容，为其分配 2-5 个分类标签，让帖子能被归到合适的类别下方便检索。
+	systemPrompt := `你是社区分类标签助手。根据帖子标题和内容，为其分配 2-5 个分类标签，让帖子能被归到合适的类别下方便检索。
 
 要求：
-1. 标签是分类名称，不是内容关键词或人名
-2. 每个标签 2-6 个字
-3. 不要加 # 号或引号
-4. 只返回标签，用逗号分隔
-5. 无论内容长短，必须返回至少 2 个分类标签
+- 标签是分类名称，不是内容关键词或人名
+- 每个标签 2-6 个字
+- 不加 # 号或引号
+- 只返回标签，用逗号分隔
+- 无论内容长短，必须返回至少 2 个分类标签
 
 分类参考：技术（前端、后端、AI、移动端、数据库、运维）、游戏（手游、端游、主机、攻略、赛事）、设计（UI、UX、平面、插画）、生活（美食、旅行、健身、宠物）、文化（文学、历史、电影、音乐、读书）、职场（求职、面试、副业、管理）、学术（数学、物理、论文）、其他
 

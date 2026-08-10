@@ -97,7 +97,6 @@ export function MyCheckInsPanel() {
           <button
             key={t.key}
             type="button"
-            aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={cn(
               'h-8 flex-1 rounded-md text-xs font-bold transition-colors',

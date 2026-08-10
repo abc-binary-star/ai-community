@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "description": "用 AI 与智能体作为基础设施层重构兴趣社区体验",
-  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -13,8 +12,15 @@
     "dev:all": "bash scripts/dev.sh",
     "dev:restart": "bash scripts/dev.sh --restart",
     "build": "pnpm --filter web build && cd server-go && go build -o bin/server ./cmd/server",
-    "lint": "pnpm -r run lint",
-    "typecheck": "pnpm -r run typecheck",
+    "format:check": "prettier --check package.json packages/*/package.json .github/workflows/*.yml",
+    "lint:web": "pnpm --filter web lint",
+    "lint:go": "test -z \"$(gofmt -l server-go)\" && cd server-go && go vet ./...",
+    "lint": "pnpm lint:web && pnpm lint:go",
+    "typecheck": "pnpm --filter web typecheck && pnpm --filter shared typecheck",
+    "test:web": "pnpm --filter web test",
+    "test:go": "cd server-go && go test ./...",
+    "test": "pnpm test:web && pnpm test:go",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "infra:up": "docker compose -f services/docker-compose.yml up -d",
     "infra:down": "docker compose -f services/docker-compose.yml down"
   },

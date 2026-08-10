@@ -4,3 +4,6 @@ packages:
   - "packages/shared"
   # 后端已迁移至 server-go/（Go + Hertz + GORM），不纳入 pnpm 工作区
   # Python 包通过各自 pyproject.toml 管理，不纳入 pnpm 工作区
+allowBuilds:
+  esbuild: set this to true or false
+  unrs-resolver: set this to true or false

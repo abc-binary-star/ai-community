@@ -1,5 +1,7 @@
 package types
 
+import "encoding/json"
+
 // --- 请求 DTO ---
 
 type RegisterReq struct {
@@ -18,24 +20,36 @@ type RefreshReq struct {
 }
 
 type CreatePostReq struct {
-	Title     string   `json:"title" vd:"len($)<=300"`      // 100中文字符=300字节
-	Content   string   `json:"content" vd:"len($)<=120000"` // 40000中文字符=120000字节
-	Channel   *string  `json:"channel"`
-	Tags      []string `json:"tags"`
-	Status    string   `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
-	AiSummary *string  `json:"aiSummary"`                                   // AI 生成的帖子摘要，可选
-	Font      string   `json:"font"`                                        // 全文字体 key，默认 default
-	CoverURL  *string  `json:"coverUrl"`
+	Title      string          `json:"title" vd:"len($)<=300"`      // 100中文字符=300字节
+	Content    string          `json:"content" vd:"len($)<=120000"` // 40000中文字符=120000字节
+	ContentDoc json.RawMessage `json:"contentDoc"`
+	Channel    *string         `json:"channel"`
+	Tags       []string        `json:"tags"`
+	Status     string          `json:"status" vd:"in($, '', 'published', 'draft')"` // 空或 published=发布，draft=草稿
+	AiSummary  *string         `json:"aiSummary"`                                   // AI 生成的帖子摘要，可选
+	Font       string          `json:"font"`                                        // 全文字体 key，默认 default
+	CoverURL   *string         `json:"coverUrl"`
+	// ContentDocEnabled 富文本 contentDoc 是否同步到后端，false 时后端只保存 content（markdown）
+	ContentDocEnabled *bool `json:"contentDocEnabled"`
+	// EditorDowngraded 用户是否从富文本编辑器回退到 Markdown 编辑器（富文本开启但用户降级使用）
+	EditorDowngraded *bool `json:"editorDowngraded"`
 }
 
 type UpdatePostReq struct {
-	Title     *string   `json:"title"`
-	Content   *string   `json:"content"`
-	Status    *string   `json:"status"`
-	Tags      *[]string `json:"tags"`
-	AiSummary *string   `json:"aiSummary"`
-	Font      *string   `json:"font"`
-	CoverURL  *string   `json:"coverUrl"`
+	Title      *string          `json:"title"`
+	Content    *string          `json:"content"`
+	ContentDoc *json.RawMessage `json:"contentDoc"`
+	Status     *string          `json:"status"`
+	Tags       *[]string        `json:"tags"`
+	AiSummary  *string          `json:"aiSummary"`
+	Font       *string          `json:"font"`
+	CoverURL   *string          `json:"coverUrl"`
+	// ContentDocEnabled 富文本 contentDoc 是否同步到后端，false 时后端只保存 content（markdown）
+	ContentDocEnabled *bool `json:"contentDocEnabled"`
+	// EditorDowngraded 用户是否从富文本编辑器回退到 Markdown 编辑器
+	EditorDowngraded *bool `json:"editorDowngraded"`
+	// ExpectedUpdatedAt 乐观锁：客户端期望的服务端更新时间，不一致时返回 409
+	ExpectedUpdatedAt *string `json:"expectedUpdatedAt"`
 }
 
 type CreateCommentReq struct {
@@ -242,27 +256,31 @@ type PublicUser struct {
 }
 
 type Post struct {
-	ID           string     `json:"id"`
-	Title        string     `json:"title"`
-	Content      string     `json:"content"`
-	Channel      string     `json:"channel"`
-	Status       string     `json:"status"`
-	AuthorID     string     `json:"authorId"`
-	Author       PublicUser `json:"author"`
-	CommentCount int        `json:"commentCount"`
-	LikeCount    int        `json:"likeCount"`
-	ViewCount    int        `json:"viewCount"`
-	Liked        bool       `json:"liked"`
-	Bookmarked   bool       `json:"bookmarked"`
-	Edited       bool       `json:"edited"`
-	IsPinned     bool       `json:"isPinned"`
-	IsFeatured   bool       `json:"isFeatured"`
-	AiSummary    *string    `json:"aiSummary,omitempty"`
-	Font         string     `json:"font,omitempty"`
-	CoverURL     *string    `json:"coverUrl,omitempty"`
-	Tags         []string   `json:"tags"`
-	CreatedAt    string     `json:"createdAt"`
-	UpdatedAt    string     `json:"updatedAt"`
+	ID                string          `json:"id"`
+	Title             string          `json:"title"`
+	Content           string          `json:"content"`
+	ContentDoc        json.RawMessage `json:"contentDoc,omitempty"`
+	ContentFormat     string          `json:"contentFormat"`
+	Channel           string          `json:"channel"`
+	Status            string          `json:"status"`
+	AuthorID          string          `json:"authorId"`
+	Author            PublicUser      `json:"author"`
+	CommentCount      int             `json:"commentCount"`
+	LikeCount         int             `json:"likeCount"`
+	ViewCount         int             `json:"viewCount"`
+	Liked             bool            `json:"liked"`
+	Bookmarked        bool            `json:"bookmarked"`
+	Edited            bool            `json:"edited"`
+	IsPinned          bool            `json:"isPinned"`
+	IsFeatured        bool            `json:"isFeatured"`
+	AiSummary         *string         `json:"aiSummary,omitempty"`
+	Font              string          `json:"font,omitempty"`
+	CoverURL          *string         `json:"coverUrl,omitempty"`
+	ContentDocEnabled bool            `json:"contentDocEnabled"`
+	EditorDowngraded  bool            `json:"editorDowngraded"`
+	Tags              []string        `json:"tags"`
+	CreatedAt         string          `json:"createdAt"`
+	UpdatedAt         string          `json:"updatedAt"`
 }
 
 type Comment struct {
@@ -527,6 +545,8 @@ type Annotation struct {
 	ParentAnnotationID *string           `json:"parentAnnotationId,omitempty"`
 	Scope              string            `json:"scope"`
 	Anchor             string            `json:"anchor"`
+	AnchorFormat       string            `json:"anchorFormat,omitempty"`
+	BlockID            string            `json:"blockId,omitempty"`
 	StartOffset        int               `json:"startOffset"`
 	EndOffset          int               `json:"endOffset"`
 	SelectedText       string            `json:"selectedText"`

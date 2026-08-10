@@ -30,13 +30,13 @@ type SearchUserItem struct {
 
 // AdminUserSearchItem 角色管理用搜索项（仅管理员可见，含邮箱便于区分同名用户）
 type AdminUserSearchItem struct {
-	ID          string     `json:"id"`
-	Username    string     `json:"username"`
-	Avatar      *string    `json:"avatar"`
-	DisplayName *string    `json:"displayName"`
-	Email       string     `json:"email"`
-	Role        string     `json:"role"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	Avatar      *string   `json:"avatar"`
+	DisplayName *string   `json:"displayName"`
+	Email       string    `json:"email"`
+	Role        string    `json:"role"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // ServiceError 业务错误，携带 HTTP 状态码
@@ -913,7 +913,7 @@ func (s *UserService) mapPostsToDTO(ctx context.Context, posts []model.Post, cur
 	items := make([]types.Post, 0, len(posts))
 	for i := range posts {
 		p := &posts[i]
-		dto := mapper.PostToDTO(
+		dto := mapper.PostToListDTO(
 			p,
 			commentCountMap[p.ID],
 			likedSet[p.ID],

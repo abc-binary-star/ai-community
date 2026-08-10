@@ -1,9 +1,9 @@
 'use client'
 
-import { useRef, useState, useCallback, useImperativeHandle, forwardRef, useMemo, type TextareaHTMLAttributes } from 'react'
+import { useRef, useState, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react'
 import {
-  Bold, Code, Code2, Eraser, Eye, EyeOff, FileText, Heading, Image as ImageIcon, Link2,
-  List, ListOrdered, ListChecks, Mic, Quote, Sparkles, Loader2, Strikethrough,
+  Bold, Check, Code, Code2, Eraser, Eye, EyeOff, FileText, Heading, Image as ImageIcon, Link2,
+  List, ListOrdered, ListChecks, Mic, Plus, Quote, Sparkles, Loader2, Strikethrough,
   Table as TableIcon, Type, Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,7 +12,9 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -22,6 +24,9 @@ import { extractExternalImageUrls, hasMdImage, normalizeMdImages } from '@/lib/m
 import { convertDocxToMarkdown, isDocxFile, isLegacyDocFile } from '@/lib/docx-import'
 import { FONT_OPTIONS, fontFamily } from '@/lib/font-options'
 import { VoiceComposer } from '@/app/community/components/voice-composer'
+import { DiffPreview } from '@/components/diff-preview'
+import { POLISH_STYLES, polishStyleLabel, type PolishStyleKey } from '@/lib/polish-styles'
+import type { SelectionRange } from '@/lib/text-diff'
 
 export const MAX_POST_CHARS = 40000
 export const MAX_POST_IMAGES = 100
@@ -249,14 +254,17 @@ function insertLinePrefix(
   })
 }
 
-const TOOLBAR: ToolbarBtn[] = [
-  {
-    icon: <Heading className="size-4" />, label: '标题',
-    action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '## '),
-  },
+const TOOLBAR_INLINE: ToolbarBtn[] = [
   {
     icon: <Bold className="size-4" />, label: '粗体',
     action: (ta, v, cb) => insertText(ta, v, cb, '**', '**', '粗体文本'),
+  },
+]
+
+const TOOLBAR_TEXT_STYLE: ToolbarBtn[] = [
+  {
+    icon: <Heading className="size-4" />, label: '标题',
+    action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '## '),
   },
   {
     icon: <Strikethrough className="size-4" />, label: '删除线',
@@ -274,14 +282,9 @@ const TOOLBAR: ToolbarBtn[] = [
     icon: <Code2 className="size-4" />, label: '代码块',
     action: (ta, v, cb) => insertText(ta, v, cb, '```ts\n', '\n```', '// code here'),
   },
-  {
-    icon: <Link2 className="size-4" />, label: '链接',
-    action: (ta, v, cb) => insertText(ta, v, cb, '[', '](https://)', '链接文字'),
-  },
-  {
-    icon: <ImageIcon className="size-4" />, label: '图片',
-    action: (ta, v, cb) => insertText(ta, v, cb, '![', '](https://)', '图片描述'),
-  },
+]
+
+const TOOLBAR_LIST: ToolbarBtn[] = [
   {
     icon: <List className="size-4" />, label: '无序列表',
     action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '- '),
@@ -294,11 +297,58 @@ const TOOLBAR: ToolbarBtn[] = [
     icon: <ListChecks className="size-4" />, label: '任务列表',
     action: (ta, v, cb) => insertLinePrefix(ta, v, cb, '- [ ] '),
   },
+]
+
+const TOOLBAR_INSERT: ToolbarBtn[] = [
+  {
+    icon: <Link2 className="size-4" />, label: '链接',
+    action: (ta, v, cb) => insertText(ta, v, cb, '[', '](https://)', '链接文字'),
+  },
+  {
+    icon: <ImageIcon className="size-4" />, label: '图片',
+    action: (ta, v, cb) => insertText(ta, v, cb, '![', '](https://)', '图片描述'),
+  },
   {
     icon: <TableIcon className="size-4" />, label: '表格',
     action: (ta, v, cb) => insertText(ta, v, cb, '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| ', ' |  |  |\n', '内容'),
   },
 ]
+
+function MarkdownToolbarGroupDropdown({
+  triggerIcon,
+  triggerLabel,
+  items,
+  onAction,
+}: {
+  triggerIcon: React.ReactNode
+  triggerLabel: string
+  items: ToolbarBtn[]
+  onAction: (btn: ToolbarBtn) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 shrink-0 gap-1 px-2 text-xs"
+          onMouseDown={(e) => e.preventDefault()}
+          title={triggerLabel}
+          aria-label={triggerLabel}
+        >
+          {triggerIcon}
+          {triggerLabel}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        {items.map((btn) => (
+          <DropdownMenuItem key={btn.label} onSelect={() => onAction(btn)}>{btn.icon}{btn.label}</DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 // 全文字体选项见 lib/font-options.ts（免费可商用字体，SIL OFL / 免费商用授权）
 
@@ -325,10 +375,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   // 流式润色进度：done 为已完成段数，total 为总段数
   const [polishProgress, setPolishProgress] = useState<{ done: number; total: number } | null>(null)
   const [preview, setPreview] = useState(false)
-  // 记录采纳前的原始内容，支持「恢复原稿」
+  // 一次Undo事务：记录采纳前的原始内容（整次润色作为一个事务）
   const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null)
   // 语音输入浮层
   const [voiceOpen, setVoiceOpen] = useState(false)
+  // 润色风格
+  const [polishStyle, setPolishStyle] = useState<PolishStyleKey>('natural')
+  // 候选缓冲：AI 润色完成后先暂存，等用户采纳再写入正文
+  const [candidate, setCandidate] = useState<{
+    polished: string
+    original: string
+    selection?: SelectionRange
+    style: PolishStyleKey
+  } | null>(null)
 
   // 字数统计：按 Unicode 字符计数，与后端 len([]rune) 一致
   const charCount = [...value].length
@@ -692,49 +751,33 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     void mirrorExternalImages(newValue)
   }, [onChange, mirrorExternalImages])
 
-  // AI 润色：有选区时走单次请求；全文按块流式返回，先到的段落先展示
-  // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
-  const handlePolish = async () => {
-    const ta = textareaRef.current
-    if (!ta) return
-
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
-    const selection = start !== end ? value.slice(start, end) : ''
-
-    if (!selection && !value.trim()) {
-      toast.error('请先输入内容')
-      return
-    }
-    if (selection && selection.trim().length < 2) {
-      toast.error('选段内容太短')
-      return
-    }
-
-    setPolishing(true)
-    try {
-      setOriginalSnapshot(value)
+  const runPolishRequest = useCallback(
+    async (style: PolishStyleKey, selection?: SelectionRange) => {
+      const styleValue = style === 'natural' ? '' : style
       if (selection) {
-        // 只传选段前后各 200 字的上下文窗口，而非整篇正文。
-        // 服务端用它让润色在衔接处更自然；传全文对结果没有额外帮助，纯属浪费带宽。
+        const start = selection.start
+        const end = selection.end
+        const selectionText = value.slice(start, end)
         const CONTEXT_CHARS = 200
         const contextWindow = value.slice(
           Math.max(0, start - CONTEXT_CHARS),
-          Math.min(value.length, end + CONTEXT_CHARS)
+          Math.min(value.length, end + CONTEXT_CHARS),
         )
         const data = await api.post<{ result: string }>('/ai/rewrite', {
           content: contextWindow,
-          selection,
-          style: '',
+          selection: selectionText,
+          style: styleValue,
         })
-        onChange(value.slice(0, start) + data.result + value.slice(end))
-        toast.success('已应用 AI 润色，可点「恢复原稿」撤销')
-        return
+        return {
+          polished: data.result,
+          original: value,
+          selection,
+          style,
+        }
       }
-
       const response = await apiFetchStream('/ai/rewrite-stream', {
         method: 'POST',
-        body: JSON.stringify({ content: value, style: '' }),
+        body: JSON.stringify({ content: value, style: styleValue }),
       })
       if (!response.body) throw new Error('流式响应不可用')
 
@@ -751,12 +794,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         for (const event of events) {
           const line = event.split('\n').find((item) => item.startsWith('data: '))
           if (!line) continue
-          const data = JSON.parse(line.slice(6)) as { result?: string; error?: string; index?: number; total?: number }
+          const data = JSON.parse(line.slice(6)) as { result?: string; error?: string; index?: number; total?: number; done?: boolean }
           if (data.error) throw new Error(data.error)
+          if (data.done) continue
           if (!data.result) continue
           result += (received > 0 ? '\n\n' : '') + data.result
           received += 1
-          onChange(result)
           setPolishProgress({ done: received, total: data.total ?? received })
         }
       }
@@ -768,7 +811,37 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       }
       consume(decoder.decode())
       if (!result) throw new Error('AI 未返回润色结果')
-      toast.success('已完成 AI 润色，可点「恢复原稿」撤销')
+      return { polished: result, original: value, style }
+    },
+    [value],
+  )
+
+  // AI 润色：先生成候选缓冲，用户在 diff 视图中决定是否采纳
+  // onMouseDown preventDefault 阻止 textarea 失焦，onClick 时选区仍然有效
+  const handlePolish = async () => {
+    const ta = textareaRef.current
+    if (!ta) return
+
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const selectionText = start !== end ? value.slice(start, end) : ''
+
+    if (!selectionText && !value.trim()) {
+      toast.error('请先输入内容')
+      return
+    }
+    if (selectionText && selectionText.trim().length < 2) {
+      toast.error('选段内容太短')
+      return
+    }
+
+    setPolishing(true)
+    setCandidate(null)
+    try {
+      const selection = start !== end ? { start, end } : undefined
+      const result = await runPolishRequest(polishStyle, selection)
+      setCandidate(result)
+      toast.success('AI 润色完成，请在下方预览并选择是否采纳', { description: `风格：${polishStyleLabel(result.style)}` })
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'AI 润色失败')
     } finally {
@@ -777,12 +850,47 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }
   }
 
-  // 恢复原稿
+  const handleAcceptCandidate = () => {
+    if (!candidate) return
+    setOriginalSnapshot(candidate.original)
+    if (candidate.selection) {
+      onChange(candidate.original.slice(0, candidate.selection.start) + candidate.polished + candidate.original.slice(candidate.selection.end))
+    } else {
+      onChange(candidate.polished)
+    }
+    setCandidate(null)
+    toast.success('已采纳润色结果，可点「恢复原稿」一次性撤销整次润色')
+  }
+
+  const handleRejectCandidate = () => {
+    setCandidate(null)
+    toast.info('已放弃润色候选')
+  }
+
+  const handleChangeCandidateStyle = async (style: PolishStyleKey) => {
+    if (!candidate) return
+    if (style === candidate.style) return
+    setPolishing(true)
+    setPolishStyle(style)
+    try {
+      const result = await runPolishRequest(style, candidate.selection)
+      setCandidate(result)
+      toast.success(`已切换风格为「${polishStyleLabel(style)}」`)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : e instanceof Error ? e.message : '换风格失败')
+    } finally {
+      setPolishing(false)
+      setPolishProgress(null)
+    }
+  }
+
+  // 一次Undo事务：恢复原稿就是整次撤销
   const handleRestore = () => {
     if (originalSnapshot === null) return
     onChange(originalSnapshot)
     setOriginalSnapshot(null)
-    toast.success('已恢复原稿')
+    setCandidate(null)
+    toast.success('已恢复原稿（整次润色已撤销）')
   }
 
   return (
@@ -790,7 +898,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       <div className="rounded-lg border border-input bg-card overflow-hidden">
         {/* 工具栏 */}
         <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/50 p-1.5 [&_button]:max-sm:size-10">
-          {TOOLBAR.map((btn) => (
+          {TOOLBAR_INLINE.map((btn) => (
             <Button
               key={btn.label}
               type="button"
@@ -804,6 +912,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               {btn.icon}
             </Button>
           ))}
+          <MarkdownToolbarGroupDropdown triggerIcon={<Heading className="size-4" />} triggerLabel="样式" items={TOOLBAR_TEXT_STYLE} onAction={handleAction} />
+          <MarkdownToolbarGroupDropdown triggerIcon={<List className="size-4" />} triggerLabel="列表" items={TOOLBAR_LIST} onAction={handleAction} />
+          <MarkdownToolbarGroupDropdown triggerIcon={<Plus className="size-4" />} triggerLabel="插入" items={TOOLBAR_INSERT} onAction={handleAction} />
           {/* 全文字体：选择后全文统一应用，实时生效并随发布保存 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -876,26 +987,65 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           >
             <Mic className="size-4" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-primary"
-            disabled={polishing}
-            onMouseDown={(e) => {
-              // 阻止默认行为：防止 textarea 失焦，保持选区有效
-              e.preventDefault()
-            }}
-            onClick={handlePolish}
-            title="选中文字后点击只润色选段，未选中润色全文"
-          >
-            {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            {polishing
-              ? polishProgress
-                ? `润色中 ${Math.round((polishProgress.done / polishProgress.total) * 100)}%`
-                : '润色中…'
-              : 'AI 润色'}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 rounded-r-none border-r border-border/60 pr-2 text-xs text-primary"
+              disabled={polishing}
+              onMouseDown={(e) => {
+                e.preventDefault()
+              }}
+              onClick={handlePolish}
+              title="选中文字后点击只润色选段，未选中润色全文"
+            >
+              {polishing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+              <span className="hidden sm:inline">
+                {polishing
+                  ? polishProgress
+                    ? `润色 ${Math.round((polishProgress.done / polishProgress.total) * 100)}%`
+                    : '润色中'
+                  : 'AI 润色'}
+              </span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-7 rounded-l-none border-l-0 px-0 text-primary hover:text-primary"
+                  disabled={polishing}
+                  title={`当前风格：${polishStyleLabel(polishStyle)}，点击切换默认润色风格`}
+                >
+                  <span className="text-[10px] font-medium uppercase tracking-wide">{polishStyleLabel(polishStyle).slice(0, 2)}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+                  默认润色风格（发起润色前可切换）
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {POLISH_STYLES.map((style) => {
+                  const active = style.key === polishStyle
+                  return (
+                    <DropdownMenuItem
+                      key={style.key}
+                      onSelect={() => setPolishStyle(style.key)}
+                      className={cn('flex-col items-start gap-0.5', active && 'bg-accent')}
+                    >
+                      <span className={cn('text-sm', active && 'font-medium')}>
+                        {style.label}
+                        {active && <Check className="ml-1.5 inline size-3" />}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">{style.hint}</span>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -1014,12 +1164,25 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           />
         )}
       </div>
-      {/* 已应用润色：轻量状态条 */}
-      {originalSnapshot !== null && (
+      {candidate && (
+        <div className="fixed inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom duration-200 md:inset-auto md:bottom-4 md:right-4 md:w-[480px] md:max-w-[calc(100vw-2rem)] md:animate-in md:fade-in md:zoom-in-95">
+          <DiffPreview
+            original={candidate.selection ? candidate.original.slice(candidate.selection.start, candidate.selection.end) : candidate.original}
+            polished={candidate.polished}
+            currentStyle={candidate.style}
+            loading={polishing}
+            onAccept={handleAcceptCandidate}
+            onReject={handleRejectCandidate}
+            onChangeStyle={handleChangeCandidateStyle}
+            className="max-h-[70vh] overflow-y-auto rounded-none border-0 shadow-2xl md:rounded-2xl md:border"
+          />
+        </div>
+      )}
+      {!candidate && originalSnapshot !== null && (
         <div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
           <span className="flex items-center gap-1.5 text-xs text-primary">
             <Sparkles className="size-3" />
-            已应用 AI 润色
+            已应用 AI 润色（可一次性撤销整次操作）
           </span>
           <Button
             type="button"
