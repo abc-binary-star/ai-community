@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"strings"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -64,29 +65,47 @@ func PostToDTO(p *model.Post, commentCount int, liked, bookmarked bool, tagNames
 	if tags == nil {
 		tags = []string{}
 	}
-	return types.Post{
-		ID:           p.ID,
-		Title:        p.Title,
-		Content:      p.Content,
-		Channel:      p.Channel,
-		Status:       p.Status,
-		AuthorID:     p.AuthorID,
-		Author:       AuthorToDTO(&p.Author),
-		CommentCount: commentCount,
-		LikeCount:    p.LikeCount,
-		ViewCount:    p.ViewCount,
-		Liked:        liked,
-		Bookmarked:   bookmarked,
-		Edited:       p.Edited,
-		IsPinned:     p.IsPinned,
-		IsFeatured:   p.IsFeatured,
-		AiSummary:    p.AiSummary,
-		Font:         p.Font,
-		CoverURL:     p.CoverURL,
-		Tags:         tags,
-		CreatedAt:    p.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    p.UpdatedAt.Format(time.RFC3339),
+	contentFormat := p.ContentFormat
+	if contentFormat == "" {
+		if p.ContentDocEnabled && len(p.ContentDoc) > 0 {
+			contentFormat = "richtext"
+		} else {
+			contentFormat = "markdown"
+		}
 	}
+	return types.Post{
+		ID:                p.ID,
+		Title:             p.Title,
+		Content:           p.Content,
+		ContentDoc:        append([]byte(nil), p.ContentDoc...),
+		ContentFormat:     contentFormat,
+		Channel:           p.Channel,
+		Status:            p.Status,
+		AuthorID:          p.AuthorID,
+		Author:            AuthorToDTO(&p.Author),
+		CommentCount:      commentCount,
+		LikeCount:         p.LikeCount,
+		ViewCount:         p.ViewCount,
+		Liked:             liked,
+		Bookmarked:        bookmarked,
+		Edited:            p.Edited,
+		IsPinned:          p.IsPinned,
+		IsFeatured:        p.IsFeatured,
+		AiSummary:         p.AiSummary,
+		Font:              p.Font,
+		CoverURL:          p.CoverURL,
+		ContentDocEnabled: p.ContentDocEnabled,
+		EditorDowngraded:  p.EditorDowngraded,
+		Tags:              tags,
+		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         p.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+func PostToListDTO(p *model.Post, commentCount int, liked, bookmarked bool, tagNames []string) types.Post {
+	dto := PostToDTO(p, commentCount, liked, bookmarked, tagNames)
+	dto.ContentDoc = nil
+	return dto
 }
 
 // CommentToDTO 将 Comment model 转为 Comment DTO
@@ -136,17 +155,47 @@ func ExtractTagNames(tags []model.Tag) []string {
 	return names
 }
 
+func annotationAnchorMeta(anchor, scope string) (format, blockID string) {
+	if scope == model.AnnotationScopeWhole || anchor == model.AnnotationWholeAnchor {
+		return "whole", ""
+	}
+	const blockPrefix = "blk:block:"
+	if strings.HasPrefix(anchor, blockPrefix) {
+		tail := strings.TrimPrefix(anchor, blockPrefix)
+		blockID = strings.SplitN(tail, ":", 2)[0]
+		if strings.HasPrefix(blockID, "blk_") {
+			return "block", blockID
+		}
+	}
+	if strings.HasPrefix(anchor, "md:range:") {
+		return "markdown", ""
+	}
+	if strings.HasPrefix(anchor, "blk_") {
+		return "block", anchor
+	}
+	return "markdown", ""
+}
+
 // AnnotationToDTO 将 Annotation model 转为 Annotation DTO。
-// liked/folded/replies 由调用方设置。删除/审核状态下隐藏正文（不泄露原内容）。
+// liked/folded/replies 由调用方设置。删除/审核状态下隐藏正文及原文定位信息。
 func AnnotationToDTO(a *model.Annotation, liked, folded bool, replies []types.AnnotationReply) types.Annotation {
 	if replies == nil {
 		replies = []types.AnnotationReply{}
 	}
 	body := a.Body
-	// deleted 根占位与 moderated 下架：正文不下发
+	selectedText := a.SelectedText
+	prefix := a.Prefix
+	suffix := a.Suffix
+	paragraphSnapshot := a.ParagraphSnapshot
+	// deleted 根占位与 moderated 下架：正文及原文定位信息不下发
 	if a.Status != model.AnnotationStatusActive {
 		body = ""
+		selectedText = ""
+		prefix = ""
+		suffix = ""
+		paragraphSnapshot = ""
 	}
+	anchorFormat, blockID := annotationAnchorMeta(a.Anchor, a.Scope)
 	return types.Annotation{
 		ID:                 a.ID,
 		PostID:             a.PostID,
@@ -155,12 +204,14 @@ func AnnotationToDTO(a *model.Annotation, liked, folded bool, replies []types.An
 		ParentAnnotationID: a.ParentAnnotationID,
 		Scope:              a.Scope,
 		Anchor:             a.Anchor,
+		AnchorFormat:       anchorFormat,
+		BlockID:            blockID,
 		StartOffset:        a.StartOffset,
 		EndOffset:          a.EndOffset,
-		SelectedText:       a.SelectedText,
-		Prefix:             a.Prefix,
-		Suffix:             a.Suffix,
-		ParagraphSnapshot:  a.ParagraphSnapshot,
+		SelectedText:       selectedText,
+		Prefix:             prefix,
+		Suffix:             suffix,
+		ParagraphSnapshot:  paragraphSnapshot,
 		Body:               body,
 		Visibility:         a.Visibility,
 		AnchorStatus:       a.AnchorStatus,

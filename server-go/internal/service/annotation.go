@@ -83,8 +83,35 @@ func postContentDigest(post *model.Post) string {
 	return digest.NormHash("post-content", post.Content)
 }
 
+func normalizeAnnotationAnchor(req *types.CreateAnnotationReq) bool {
+	anchorValue := strings.TrimSpace(req.Anchor)
+	if req.Scope == model.AnnotationScopeWhole {
+		req.Anchor = model.AnnotationWholeAnchor
+		return true
+	}
+	if strings.HasPrefix(anchorValue, "blk:block:") {
+		tail := strings.TrimPrefix(anchorValue, "blk:block:")
+		blockID := strings.SplitN(tail, ":", 2)[0]
+		if !strings.HasPrefix(blockID, "blk_") || len(blockID) < len("blk_")+6 {
+			return false
+		}
+		req.Anchor = anchorValue
+		return true
+	}
+	if strings.HasPrefix(anchorValue, "md:range:") || strings.HasPrefix(anchorValue, "blk_") {
+		req.Anchor = anchorValue
+		return true
+	}
+	// 兼容旧 Markdown 段落指纹锚点：不改写，只按原值存储。
+	req.Anchor = anchorValue
+	return anchorValue != ""
+}
+
 // CreateAnnotation 创建段落想法
 func (s *AnnotationService) CreateAnnotation(ctx context.Context, postID, userID string, req types.CreateAnnotationReq) (*types.Annotation, error) {
+	if !normalizeAnnotationAnchor(&req) {
+		return nil, ErrAnnotationInvalidInput
+	}
 	// 校验选区范围
 	if req.Scope == model.AnnotationScopeSelection && req.EndOffset <= req.StartOffset {
 		return nil, ErrAnnotationInvalidInput
@@ -648,19 +675,20 @@ func (s *AnnotationService) UnlikeAnnotation(ctx context.Context, annotationID, 
 
 // ReconcileAnchors 在帖子内容变更后重算该帖想法的锚点状态。
 // 归一化内容未变则跳过；否则按 L1->L4 阶梯重定位，无法可靠定位的标记为 orphaned。
-// 系统不得静默把想法挂到相似但不确定的段落（对齐 PRD 6.7）。
-func (s *AnnotationService) ReconcileAnchors(ctx context.Context, postID, newContent string) error {
+// oldDigest 必须是更新前摘要，避免帖子先写入新摘要后错误短路。
+func (s *AnnotationService) ReconcileAnchors(ctx context.Context, postID, oldDigest, newContent string) error {
 	newDigest := digest.NormHash("post-content", newContent)
 
+	if oldDigest == newDigest && newDigest != "" {
+		return nil
+	}
+
 	var post model.Post
-	if err := dal.DB.WithContext(ctx).Select("id", "content_digest").First(&post, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id").First(&post, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil
 		}
 		return err
-	}
-	if post.ContentDigest == newDigest && newDigest != "" {
-		return nil // 内容未变，跳过重算
 	}
 
 	paras := anchor.ExtractParagraphs(newContent)
@@ -678,6 +706,8 @@ func (s *AnnotationService) ReconcileAnchors(ctx context.Context, postID, newCon
 		if a.Scope == model.AnnotationScopeWhole {
 			continue
 		}
+		// 新版富文本锚点的 blockId 是稳定身份；服务端 Markdown 投影没有 block attrs，
+		// 因此用 selectedText + quote context 验证内容仍存在，避免误报 attached。
 		sel := anchor.Selector{Exact: a.SelectedText, Prefix: a.Prefix, Suffix: a.Suffix}
 		_, lvl := anchor.Locate(paras, sel, a.ParagraphSnapshot)
 		want := model.AnnotationAnchorAttached

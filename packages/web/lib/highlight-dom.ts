@@ -54,11 +54,13 @@ export function clearHighlights(container: HTMLElement) {
   })
 }
 
-// 为所有 [data-block] 块填充 data-block-anchor（段落首部文本指纹）
+// 为所有可批注块填充 data-block-anchor。富文本优先使用稳定 blockId，旧 Markdown 回退文本指纹。
 export function refreshAnchors(container: HTMLElement) {
   container.querySelectorAll('[data-block]').forEach((el) => {
     const e = el as HTMLElement
-    e.setAttribute('data-block-anchor', blockText(e).trim().slice(0, ANCHOR_LEN))
+    const blockId = e.getAttribute('data-block-id')
+    const anchor = blockId ? `blk:block:${blockId}` : blockText(e).trim().slice(0, ANCHOR_LEN)
+    e.setAttribute('data-block-anchor', anchor)
   })
 }
 

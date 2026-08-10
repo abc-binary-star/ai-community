@@ -384,7 +384,12 @@ export function PostDetailView({ id }: { id: string }) {
               </div>
             ) : (
               <>
-                <HighlightableContent postId={post.id} content={post.content} fontFamily={fontFamily(post.font)} />
+                <HighlightableContent
+                  postId={post.id}
+                  content={post.content}
+                  contentDoc={(post.contentDoc as import('@tiptap/core').JSONContent | undefined) ?? null}
+                  fontFamily={fontFamily(post.font)}
+                />
                 {isLongContent && (
                   <div className="mt-3 flex items-center justify-center">
                     <Button

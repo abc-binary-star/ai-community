@@ -913,7 +913,7 @@ func (s *UserService) mapPostsToDTO(ctx context.Context, posts []model.Post, cur
 	items := make([]types.Post, 0, len(posts))
 	for i := range posts {
 		p := &posts[i]
-		dto := mapper.PostToDTO(
+		dto := mapper.PostToListDTO(
 			p,
 			commentCountMap[p.ID],
 			likedSet[p.ID],

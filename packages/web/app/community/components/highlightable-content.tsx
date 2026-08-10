@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { JSONContent } from '@tiptap/core'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, MessageCircle, MessageSquarePlus, Share2, Trash2 } from 'lucide-react'
@@ -50,6 +51,7 @@ function centerDelta(el: HTMLElement, scroller: HTMLElement | null): number {
 interface Props {
   postId: string
   content: string
+  contentDoc?: JSONContent | null
   fontFamily?: string
 }
 
@@ -62,7 +64,7 @@ interface PanelState {
 const EMPTY_HIGHLIGHTS: Highlight[] = []
 const EMPTY_ANCHOR_COUNTS: AnnotationAnchorCount[] = []
 
-export function HighlightableContent({ postId, content, fontFamily }: Props) {
+export function HighlightableContent({ postId, content, contentDoc, fontFamily }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -441,7 +443,13 @@ export function HighlightableContent({ postId, content, fontFamily }: Props) {
 
   return (
     <div className="relative">
-      <MarkdownRenderer ref={containerRef} content={content} fontFamily={fontFamily} enableBlocks />
+      <MarkdownRenderer
+        ref={containerRef}
+        content={content}
+        contentDoc={contentDoc}
+        fontFamily={fontFamily}
+        enableBlocks
+      />
 
       {/* 页边批注记号（marginalia）：想法长在页边。
           有想法的段落 → 一道细竖线 + 衬线数字，像手稿旁的批注计数；

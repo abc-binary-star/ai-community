@@ -4,19 +4,30 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { FileText, Loader2, PenLine, Trash2 } from 'lucide-react'
+import { FileText, Loader2, PenLine, Trash2, HardDrive, Database } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import type { Post } from 'shared'
+import {
+  listUserNewDrafts,
+  deleteDraftFromDB,
+  type LocalDraft,
+} from '@/lib/draft-storage'
 
 export default function DraftsPage() {
   const router = useRouter()
   const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   const hasHydrated = useAuthStore((s) => s._hasHydrated)
   const [drafts, setDrafts] = useState<Post[]>([])
+  const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingLocal, setLoadingLocal] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingLocalId, setDeletingLocalId] = useState<string | null>(null)
+
+  const userId = user?.id ?? ''
 
   useEffect(() => {
     if (hasHydrated && !token) {
@@ -31,6 +42,14 @@ export default function DraftsPage() {
       .finally(() => setLoading(false))
   }, [hasHydrated, token, router])
 
+  useEffect(() => {
+    if (!userId) return
+    listUserNewDrafts(userId)
+      .then((list) => setLocalDrafts(list))
+      .catch(() => setLocalDrafts([]))
+      .finally(() => setLoadingLocal(false))
+  }, [userId])
+
   const handleDelete = async (id: string) => {
     if (!window.confirm('确定删除这篇草稿吗？此操作不可撤销。')) return
     setDeletingId(id)
@@ -42,6 +61,21 @@ export default function DraftsPage() {
       toast.error(e instanceof ApiError ? e.message : '删除失败')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleDeleteLocal = async (id: string) => {
+    if (!window.confirm('确定删除这篇本地草稿吗？仅删除本地副本。')) return
+    setDeletingLocalId(id)
+    try {
+      await deleteDraftFromDB(id)
+      setLocalDrafts((prev) => prev.filter((d) => d.id !== id))
+      sessionStorage.removeItem(`new-draft:${userId}`)
+      toast.success('本地草稿已删除')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '删除失败')
+    } finally {
+      setDeletingLocalId(null)
     }
   }
 
@@ -68,46 +102,116 @@ export default function DraftsPage() {
         </Button>
       </div>
 
-      {drafts.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center text-sm text-muted-foreground">
-          <FileText className="mx-auto mb-2 size-8 opacity-50" />
-          还没有草稿，写一半的内容可以先存草稿
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {drafts.map((d) => (
-            <li
-              key={d.id}
-              className="group flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 transition-colors hover:border-primary/30"
-            >
-              <Link href={`/community/post/${d.id}/edit`} className="min-w-0 flex-1">
-                <p className="truncate font-medium">
-                  {d.title.trim() ? d.title : <span className="text-muted-foreground">无标题草稿</span>}
-                </p>
-                <p className="truncate text-sm text-muted-foreground">{d.content}</p>
-                <p className="mt-1 text-xs text-muted-foreground/70">更新于 {new Date(d.updatedAt).toLocaleString()}</p>
-              </Link>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button asChild variant="ghost" size="icon" className="size-8" title="继续编辑">
-                  <Link href={`/community/post/${d.id}/edit`}>
-                    <PenLine className="size-4" />
-                  </Link>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground hover:text-destructive"
-                  title="删除草稿"
-                  disabled={deletingId === d.id}
-                  onClick={() => handleDelete(d.id)}
+      {localDrafts.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Database className="size-4" />
+            <span>本地草稿（未同步服务器）</span>
+          </div>
+          {loadingLocal ? (
+            <div className="rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+              <Loader2 className="mx-auto mb-2 size-6 animate-spin opacity-50" />
+              正在加载本地草稿…
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {localDrafts.map((d) => (
+                <li
+                  key={d.id}
+                  className="group flex items-center justify-between gap-3 rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-3 transition-colors hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/5 dark:hover:border-amber-500/40"
                 >
-                  {deletingId === d.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                  <Link href="/community/post/new" className="min-w-0 flex-1">
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <HardDrive className="size-3 text-amber-600 dark:text-amber-400" />
+                      <p className="truncate font-medium">
+                        {d.title.trim() ? d.title : <span className="text-muted-foreground">无标题本地草稿</span>}
+                      </p>
+                    </div>
+                    <p className="truncate text-sm text-muted-foreground">{d.content}</p>
+                    <p className="mt-1 text-xs text-muted-foreground/70">
+                      更新于 {new Date(d.updatedAt).toLocaleString()}
+                    </p>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      title="继续编辑（会恢复本地草稿）"
+                    >
+                      <Link href="/community/post/new">
+                        <PenLine className="size-4" />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      title="删除本地草稿"
+                      disabled={deletingLocalId === d.id}
+                      onClick={() => handleDeleteLocal(d.id)}
+                    >
+                      {deletingLocalId === d.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
+
+      <section>
+        <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <FileText className="size-4" />
+          <span>服务器草稿</span>
+        </div>
+        {drafts.length === 0 ? (
+          <div className="rounded-xl border border-dashed py-16 text-center text-sm text-muted-foreground">
+            <FileText className="mx-auto mb-2 size-8 opacity-50" />
+            还没有草稿，写一半的内容可以先存草稿
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {drafts.map((d) => (
+              <li
+                key={d.id}
+                className="group flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 transition-colors hover:border-primary/30"
+              >
+                <Link href={`/community/post/${d.id}/edit`} className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {d.title.trim() ? d.title : <span className="text-muted-foreground">无标题草稿</span>}
+                  </p>
+                  <p className="truncate text-sm text-muted-foreground">{d.content}</p>
+                  <p className="mt-1 text-xs text-muted-foreground/70">更新于 {new Date(d.updatedAt).toLocaleString()}</p>
+                </Link>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button asChild variant="ghost" size="icon" className="size-8" title="继续编辑">
+                    <Link href={`/community/post/${d.id}/edit`}>
+                      <PenLine className="size-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-destructive"
+                    title="删除草稿"
+                    disabled={deletingId === d.id}
+                    onClick={() => handleDelete(d.id)}
+                  >
+                    {deletingId === d.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

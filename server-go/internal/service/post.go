@@ -114,7 +114,7 @@ func mapPostsToDTOs(ctx context.Context, posts []model.Post, userID string) []ty
 	items := make([]types.Post, 0, len(posts))
 	for _, p := range posts {
 		tagNames := mapper.ExtractTagNames(p.Tags)
-		items = append(items, mapper.PostToDTO(&p, commentCounts[p.ID], likedSet[p.ID], bookmarkedSet[p.ID], tagNames))
+		items = append(items, mapper.PostToListDTO(&p, commentCounts[p.ID], likedSet[p.ID], bookmarkedSet[p.ID], tagNames))
 	}
 	return items
 }
@@ -293,45 +293,59 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 	return &dto, nil
 }
 
-// replacePostTags 全量替换帖子的标签关联
-func replacePostTags(ctx context.Context, postID string, rawTags []string) error {
-	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 删除旧关联
-		if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
-			return err
+func replacePostTagsTx(tx *gorm.DB, postID string, rawTags []string) error {
+	if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
+		return err
+	}
+	seen := make(map[string]bool)
+	for _, rawTag := range rawTags {
+		tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
+		if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
+			continue
 		}
-		seen := make(map[string]bool)
-		for _, rawTag := range rawTags {
-			tagName := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawTag), "#"))
-			if tagName == "" || len([]rune(tagName)) > 20 || seen[tagName] {
-				continue
-			}
-			seen[tagName] = true
+		seen[tagName] = true
 
-			var tag model.Tag
-			if err := tx.Where("name = ?", tagName).First(&tag).Error; err != nil {
-				if err == gorm.ErrRecordNotFound {
-					tag = model.Tag{Name: tagName}
-					if err := tx.Create(&tag).Error; err != nil {
-						return err
-					}
-				} else {
+		var tag model.Tag
+		if err := tx.Where("name = ?", tagName).First(&tag).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				tag = model.Tag{Name: tagName}
+				if err := tx.Create(&tag).Error; err != nil {
 					return err
 				}
-			}
-			if err := tx.Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
+			} else {
 				return err
 			}
 		}
-		return nil
-	})
+		if err := tx.Create(&model.PostTag{PostID: postID, TagID: tag.ID}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CreatePost 创建帖子（支持 tags）
 func (s *PostService) CreatePost(ctx context.Context, userID string, req types.CreatePostReq) (*types.Post, error) {
+	if err := validateCreatePostInputPair(req); err != nil {
+		return nil, err
+	}
+	contentDocEnabled := true
+	if req.ContentDocEnabled != nil {
+		contentDocEnabled = *req.ContentDocEnabled
+	}
+	editorDowngraded := false
+	if req.EditorDowngraded != nil {
+		editorDowngraded = *req.EditorDowngraded
+	}
+	if !contentDocEnabled {
+		req.ContentDoc = nil
+	}
 	channel := "general"
 	if req.Channel != nil && validChannel(ctx, *req.Channel) {
 		channel = *req.Channel
+	}
+	contentFormat := "markdown"
+	if contentDocEnabled && len(req.ContentDoc) > 0 {
+		contentFormat = "richtext"
 	}
 
 	var created model.Post
@@ -341,15 +355,19 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 			status = "published"
 		}
 		post := &model.Post{
-			Title:         req.Title,
-			Content:       req.Content,
-			Channel:       channel,
-			AuthorID:      userID,
-			Status:        status,
-			AiSummary:     req.AiSummary,
-			Font:          req.Font,
-			CoverURL:      req.CoverURL,
-			ContentDigest: digest.NormHash("post-content", req.Content),
+			Title:             req.Title,
+			Content:           req.Content,
+			ContentDoc:        append([]byte(nil), req.ContentDoc...),
+			ContentFormat:     contentFormat,
+			Channel:           channel,
+			AuthorID:          userID,
+			Status:            status,
+			AiSummary:         req.AiSummary,
+			Font:              req.Font,
+			CoverURL:          req.CoverURL,
+			ContentDocEnabled: contentDocEnabled,
+			EditorDowngraded:  editorDowngraded,
+			ContentDigest:     digest.NormHash("post-content", req.Content),
 		}
 		if err := tx.Create(post).Error; err != nil {
 			log.Printf("[CreatePost] 创建帖子失败, userID=%s, title=%s, err=%v", userID, req.Title, err)
@@ -409,8 +427,16 @@ func (s *PostService) CreatePost(ctx context.Context, userID string, req types.C
 
 // UpdatePost 更新帖子
 func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req types.UpdatePostReq) (*types.Post, error) {
+	if err := validateUpdatePostInputPair(req); err != nil {
+		return nil, err
+	}
+	if req.ContentDoc != nil {
+		if err := validatePostContentDoc(*req.ContentDoc); err != nil {
+			return nil, err
+		}
+	}
 	var existing model.Post
-	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status").First(&existing, "id = ?", postID).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id", "author_id", "status", "content_doc_enabled", "editor_downgraded", "content_digest").First(&existing, "id = ?", postID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrPostNotFound_Post
 		}
@@ -421,7 +447,21 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 		return nil, ErrPostForbidden
 	}
 
-	// 字段长度校验：草稿允许标题/内容为空
+	contentDocEnabledChange := req.ContentDocEnabled != nil
+	contentDocEnabledFromReq := contentDocEnabledChange && *req.ContentDocEnabled
+	if req.Content != nil {
+		docEnabled := existing.ContentDocEnabled
+		if contentDocEnabledChange {
+			docEnabled = contentDocEnabledFromReq
+		}
+		if docEnabled && req.ContentDoc == nil {
+			return nil, ErrPostInvalidInput
+		}
+		if !docEnabled {
+			req.ContentDoc = nil
+		}
+	}
+
 	isDraft := existing.Status == "draft" || (req.Status != nil && *req.Status == "draft")
 	if req.Title != nil {
 		titleLen := len([]rune(*req.Title))
@@ -442,6 +482,30 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	}
 	if req.Content != nil {
 		updates["content"] = *req.Content
+		if req.ContentDoc != nil {
+			updates["content_doc"] = append([]byte(nil), (*req.ContentDoc)...)
+		} else {
+			updates["content_doc"] = nil
+		}
+		updates["content_digest"] = digest.NormHash("post-content", *req.Content)
+		// content_format 始终随 content 重算一次，保证与 content_doc_enabled/content_doc 一致
+		{
+			docEnabled := existing.ContentDocEnabled
+			if contentDocEnabledChange {
+				docEnabled = contentDocEnabledFromReq
+			}
+			if docEnabled && req.ContentDoc != nil && len(*req.ContentDoc) > 0 {
+				updates["content_format"] = "richtext"
+			} else {
+				updates["content_format"] = "markdown"
+			}
+		}
+	}
+	if contentDocEnabledChange {
+		updates["content_doc_enabled"] = *req.ContentDocEnabled
+	}
+	if req.EditorDowngraded != nil {
+		updates["editor_downgraded"] = *req.EditorDowngraded
 	}
 	if req.Status != nil {
 		updates["status"] = *req.Status
@@ -455,28 +519,29 @@ func (s *PostService) UpdatePost(ctx context.Context, postID, userID string, req
 	if req.CoverURL != nil {
 		updates["cover_url"] = *req.CoverURL
 	}
-	if err := dal.DB.WithContext(ctx).Model(&model.Post{}).Where("id = ?", postID).Updates(updates).Error; err != nil {
-		log.Printf("[UpdatePost] 更新帖子失败, postID=%s, err=%v", postID, err)
+	var updated model.Post
+	if err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Post{}).Where("id = ? AND author_id = ?", postID, userID).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrPostForbidden
+		}
+		if req.Tags != nil {
+			if err := replacePostTagsTx(tx, postID, *req.Tags); err != nil {
+				return err
+			}
+		}
+		return tx.Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error
+	}); err != nil {
+		log.Printf("[UpdatePost] 原子更新帖子失败, postID=%s, err=%v", postID, err)
 		return nil, err
 	}
 
 	// 内容变更后重算段落想法锚点（无法可靠定位的降级为 orphaned，不静默挂错段落）
 	if req.Content != nil {
-		(&AnnotationService{}).ReconcileAnchors(ctx, postID, *req.Content)
-	}
-
-	// 标签更新：全量替换
-	if req.Tags != nil {
-		if err := replacePostTags(ctx, postID, *req.Tags); err != nil {
-			log.Printf("[UpdatePost] 更新标签失败, postID=%s, err=%v", postID, err)
-			return nil, err
-		}
-	}
-
-	var updated model.Post
-	if err := dal.DB.WithContext(ctx).Preload("Author").Preload("Tags").First(&updated, "id = ?", postID).Error; err != nil {
-		log.Printf("[UpdatePost] 重新加载帖子失败, postID=%s, err=%v", postID, err)
-		return nil, err
+		(&AnnotationService{}).ReconcileAnchors(ctx, postID, existing.ContentDigest, *req.Content)
 	}
 
 	// @提及通知
