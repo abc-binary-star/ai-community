@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "description": "用 AI 与智能体作为基础设施层重构兴趣社区体验",
-  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20.0.0"
   },
