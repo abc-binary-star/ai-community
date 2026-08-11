@@ -8,7 +8,6 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
 	"github.com/abc-binary-star/ai-community/server-go/internal/service"
-	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
@@ -55,22 +54,10 @@ func ListReplies(ctx context.Context, c *app.RequestContext) {
 }
 
 // CreateComment 创建评论或回复
+// 已下线：讨论模型收口后，新讨论统一走整篇/段落想法（Annotation），
+// 旧评论仅历史只读。此接口保留路由并返回 410 Gone，明确告知调用方。
 func CreateComment(ctx context.Context, c *app.RequestContext) {
-	var req types.CreateCommentReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "输入不合法")
-		return
-	}
-
-	postID := c.Param("id")
-	userID := middleware.GetCurrentUserID(c)
-
-	comment, err := commentService.CreateComment(ctx, postID, userID, req)
-	if err != nil {
-		handleCommentError(c, err)
-		return
-	}
-	response.Created(c, comment)
+	response.Error(c, consts.StatusGone, "评论已下线，新讨论请使用想法（Annotation）")
 }
 
 // LikeComment 点赞评论

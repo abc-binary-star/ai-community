@@ -24,6 +24,9 @@ type Notification struct {
 	Annotation   *Annotation `gorm:"foreignKey:AnnotationID;constraint:OnDelete:SET NULL" json:"-"`
 	Content      *string     `json:"content"`
 	Read         bool        `gorm:"default:false;index" json:"read"`
+	// Suppressed 免打扰时段抑制触达（仍入库）；等待 DeliverableAt 后可补推
+	Suppressed   bool       `gorm:"default:false;index" json:"suppressed"`
+	DeliverableAt *time.Time `gorm:"index" json:"deliverableAt"`
 	CreatedAt    time.Time   `json:"createdAt"`
 }
 

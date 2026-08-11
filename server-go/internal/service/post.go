@@ -15,6 +15,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/sanction"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"gorm.io/gorm"
 )
@@ -131,6 +132,16 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 
 	query := dal.DB.WithContext(ctx).Model(&model.Post{})
 
+	// 状态过滤：草稿仅本人可见，公开列表使用统一可见性作用域
+	if status == "draft" {
+		if userID == "" {
+			return &types.Paginated[types.Post]{Items: []types.Post{}, Total: 0, Page: page, PageSize: pageSize, TotalPages: 0}, nil
+		}
+		query = query.Where("status = ? AND author_id = ?", "draft", userID)
+	} else {
+		query = postPublishedScope(ctx, query, userID)
+	}
+
 	// 关注动态流：只显示当前用户关注用户的帖子，需登录
 	if feed == "following" {
 		if userID == "" {
@@ -138,23 +149,6 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		}
 		query = query.Where("author_id IN (?)",
 			dal.DB.Model(&model.Follow{}).Select("following_id").Where("follower_id = ?", userID))
-	}
-
-	// 状态过滤：草稿仅本人可见，公开列表只显示已发布
-	if status == "draft" {
-		if userID == "" {
-			return &types.Paginated[types.Post]{Items: []types.Post{}, Total: 0, Page: page, PageSize: pageSize, TotalPages: 0}, nil
-		}
-		query = query.Where("status = ? AND author_id = ?", "draft", userID)
-	} else {
-		query = query.Where("status = ?", "published")
-	}
-
-	// 过滤当前用户屏蔽的作者
-	if userID != "" && status != "draft" {
-		if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
-			query = query.Where("author_id NOT IN ?", blocked)
-		}
 	}
 
 	if q != "" {
@@ -182,6 +176,13 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		Preload("Author").
 		Preload("Tags")
 
+	// 状态过滤同步到 dbQuery
+	if status == "draft" {
+		dbQuery = dbQuery.Where("status = ? AND author_id = ?", "draft", userID)
+	} else {
+		dbQuery = postPublishedScope(ctx, dbQuery, userID)
+	}
+
 	// 关注动态流同步到 dbQuery
 	if feed == "following" {
 		if userID == "" {
@@ -189,20 +190,6 @@ func (s *PostService) ListPosts(ctx context.Context, channel, sortParam, q, tag,
 		}
 		dbQuery = dbQuery.Where("author_id IN (?)",
 			dal.DB.Model(&model.Follow{}).Select("following_id").Where("follower_id = ?", userID))
-	}
-
-	// 过滤当前用户屏蔽的作者
-	if userID != "" && status != "draft" {
-		if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
-			dbQuery = dbQuery.Where("author_id NOT IN ?", blocked)
-		}
-	}
-
-	// 状态过滤同步到 dbQuery
-	if status == "draft" {
-		dbQuery = dbQuery.Where("status = ? AND author_id = ?", "draft", userID)
-	} else {
-		dbQuery = dbQuery.Where("status = ?", "published")
 	}
 
 	// 复用相同的 where 条件
@@ -345,6 +332,9 @@ func replacePostTagsTx(tx *gorm.DB, postID string, rawTags []string) error {
 
 // CreatePost 创建帖子（支持 tags）
 func (s *PostService) CreatePost(ctx context.Context, userID string, req types.CreatePostReq) (*types.Post, error) {
+	if err := sanction.CanWrite(ctx, userID); err != nil {
+		return nil, &PostError{Msg: err.Error(), Code: 403}
+	}
 	if err := validateCreatePostInputPair(req); err != nil {
 		return nil, err
 	}

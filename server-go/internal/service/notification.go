@@ -310,9 +310,9 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 	// 可复用的 where 条件构建器：每次调用返回独立的 *gorm.DB 查询链
 	// 确保 count 和 find 使用完全相同的过滤条件
 
-	// Post: title / content / author.username 命中关键词
+	// Post: title / content / author.username 命中关键词，使用统一可见性作用域
 	postWhere := func() *gorm.DB {
-		w := dal.DB.WithContext(ctx).Model(&model.Post{}).
+		w := postPublishedScope(ctx, dal.DB.WithContext(ctx), userID).
 			Where("title ILIKE ? OR content ILIKE ? OR author_id IN (?)",
 				like, like,
 				dal.DB.Model(&model.User{}).Select("id").Where("username ILIKE ?", like))
@@ -332,22 +332,28 @@ func (s *SearchService) Search(ctx context.Context, q, scope, channel, author, f
 		return w
 	}
 
-	// Comment: content 命中关键词
+	// Comment: content 命中关键词，继承父帖子可见性并应用屏蔽
 	commentWhere := func() *gorm.DB {
-		w := dal.DB.WithContext(ctx).Model(&model.Comment{}).Where("content ILIKE ?", like)
+		w := commentVisibleScope(ctx, dal.DB.WithContext(ctx), userID).
+			Where("comments.content ILIKE ?", like)
 		if hasFrom {
-			w = w.Where("created_at >= ?", fromTime)
+			w = w.Where("comments.created_at >= ?", fromTime)
 		}
 		if hasTo {
-			w = w.Where("created_at <= ?", toTime)
+			w = w.Where("comments.created_at <= ?", toTime)
 		}
 		return w
 	}
 
-	// User: username / displayName 命中关键词
+	// User: username / displayName 命中关键词，应用屏蔽
 	userWhere := func() *gorm.DB {
 		w := dal.DB.WithContext(ctx).Model(&model.User{}).
 			Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+		if userID != "" {
+			if blocked := blockedIDList(ctx, userID); len(blocked) > 0 {
+				w = w.Where("id NOT IN ?", blocked)
+			}
+		}
 		if hasFrom {
 			w = w.Where("created_at >= ?", fromTime)
 		}

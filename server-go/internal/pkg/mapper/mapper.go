@@ -132,6 +132,11 @@ func CommentToDTO(c *model.Comment, liked bool, replies []types.Comment, replyCo
 
 // NotificationToDTO 将 Notification model 转为 Notification DTO
 func NotificationToDTO(n *model.Notification, actorName *string) types.Notification {
+	var deliverableAt *string
+	if n.DeliverableAt != nil {
+		v := n.DeliverableAt.Format(time.RFC3339)
+		deliverableAt = &v
+	}
 	return types.Notification{
 		ID:           n.ID,
 		Type:         n.Type,
@@ -142,6 +147,8 @@ func NotificationToDTO(n *model.Notification, actorName *string) types.Notificat
 		AnnotationID: n.AnnotationID,
 		Content:      n.Content,
 		Read:         n.Read,
+		Suppressed:   n.Suppressed,
+		DeliverableAt: deliverableAt,
 		CreatedAt:    n.CreatedAt.Format(time.RFC3339),
 	}
 }

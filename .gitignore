@@ -29,6 +29,8 @@ out/
 *.sqlite
 *.db
 services/*/data/
+apps/*/storage/
+apps/*/*.orig
 
 # 日志
 *.log

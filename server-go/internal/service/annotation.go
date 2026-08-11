@@ -19,6 +19,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/sanction"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"gorm.io/gorm"
 )
@@ -109,6 +110,9 @@ func normalizeAnnotationAnchor(req *types.CreateAnnotationReq) bool {
 
 // CreateAnnotation 创建段落想法
 func (s *AnnotationService) CreateAnnotation(ctx context.Context, postID, userID string, req types.CreateAnnotationReq) (*types.Annotation, error) {
+	if err := sanction.CanWrite(ctx, userID); err != nil {
+		return nil, &AnnotationError{Msg: err.Error(), Code: 403}
+	}
 	if !normalizeAnnotationAnchor(&req) {
 		return nil, ErrAnnotationInvalidInput
 	}
@@ -426,6 +430,9 @@ func (s *AnnotationService) DeleteAnnotation(ctx context.Context, postID, annota
 
 // CreateReply 回复公开想法（仅一级结构）
 func (s *AnnotationService) CreateReply(ctx context.Context, postID, annotationID, userID string, req types.CreateAnnotationReplyReq) (*types.AnnotationReply, error) {
+	if err := sanction.CanWrite(ctx, userID); err != nil {
+		return nil, &AnnotationError{Msg: err.Error(), Code: 403}
+	}
 	body := strings.TrimSpace(req.Body)
 	if body == "" || len([]rune(body)) > 500 {
 		return nil, ErrAnnotationInvalidInput

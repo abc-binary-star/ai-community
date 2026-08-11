@@ -98,11 +98,20 @@ func (s *AppealService) HandleAppeal(ctx context.Context, appealID, handlerID st
 		return nil, err
 	}
 
-	// 若接受申诉且该用户处于封禁状态，则自动解封
+	// 若接受申诉且该用户存在生效处罚，则撤销处罚并恢复账号
 	if req.Status == "resolved" {
+		var activeActions []model.ModerationAction
+		dal.DB.WithContext(ctx).
+			Where("user_id = ? AND status = ?", appeal.UserID, model.ModerationActionActive).
+			Find(&activeActions)
+		for i := range activeActions {
+			(&SanctionService{}).RevokeSanction(ctx, activeActions[i].ID, handlerID)
+		}
+		// 兼容历史裸改数据：直接恢复任何受限状态
 		dal.DB.WithContext(ctx).Model(&model.User{}).
-			Where("id = ? AND status = 'banned'", appeal.UserID).
-			Update("status", "active")
+			Where("id = ? AND status IN ?", appeal.UserID,
+				[]string{model.UserStatusMuted, model.UserStatusSuspended, model.UserStatusBanned}).
+			Update("status", model.UserStatusActive)
 	}
 
 	dal.DB.WithContext(ctx).Preload("User").Preload("Handler").First(&appeal, "id = ?", appealID)

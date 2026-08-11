@@ -457,3 +457,147 @@ export interface Announcement extends AnnouncementSummary {
 export interface AnnouncementBanner {
   item: AnnouncementSummary | null
 }
+
+// --- AI 资产卡（B1-B5）---
+
+export type AssetType = 'prompt' | 'agent' | 'workflow'
+export type AssetStatus = 'draft' | 'published' | 'archived'
+export type AssetVisibility = 'public' | 'unlisted' | 'private'
+export type AssetRunStatus = 'success' | 'failed'
+export type AssetRunVisibility = 'private' | 'public'
+
+export interface AssetInputVariable {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'select'
+  label?: string
+  description?: string
+  required?: boolean
+  default?: unknown
+  options?: unknown[]
+}
+
+export interface AssetDefaultParams {
+  model?: string
+  maxTokens?: number
+  temperature?: number
+}
+
+export interface Asset {
+  id: string
+  type: AssetType
+  name: string
+  version: string
+  description: string
+  promptTemplate: string
+  inputVariables: AssetInputVariable[]
+  defaultParams: AssetDefaultParams
+  authorId: string
+  author: PublicUser
+  parentId?: string
+  status: AssetStatus
+  visibility: AssetVisibility
+  runCount: number
+  forkCount: number
+  likeCount: number
+  liked: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateAssetInput {
+  type?: AssetType
+  name: string
+  version?: string
+  description?: string
+  promptTemplate: string
+  inputVariables?: AssetInputVariable[]
+  defaultParams?: AssetDefaultParams
+  parentId?: string
+  status?: AssetStatus
+  visibility?: AssetVisibility
+}
+
+export interface UpdateAssetInput {
+  name?: string
+  version?: string
+  description?: string
+  promptTemplate?: string
+  inputVariables?: AssetInputVariable[]
+  defaultParams?: AssetDefaultParams
+  status?: AssetStatus
+  visibility?: AssetVisibility
+}
+
+export interface PostAsset {
+  id: string
+  postId: string
+  assetId: string
+  asset: Asset
+  sortOrder: number
+  creatorId: string
+  createdAt: string
+}
+
+export interface BindPostAssetInput {
+  assetId: string
+  sortOrder?: number
+}
+
+// --- 资产试玩（B3）---
+
+export interface RunAssetInput {
+  inputs: Record<string, unknown>
+  params?: AssetDefaultParams
+}
+
+export interface RunUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
+export interface RunAssetResult {
+  output: string
+  model: string
+  params: AssetDefaultParams
+  usage: RunUsage
+  durationMs: number
+  runId: string
+}
+
+// --- 运行快照（B4）---
+
+export interface AssetSummary {
+  id: string
+  name: string
+  type: AssetType
+  version: string
+}
+
+export interface AssetRun {
+  id: string
+  assetId: string
+  asset?: AssetSummary
+  userId: string
+  user: PublicUser
+  inputs: Record<string, unknown>
+  params: AssetDefaultParams
+  output: string
+  model: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  durationMs: number
+  status: AssetRunStatus
+  errorMessage: string
+  visibility: AssetRunVisibility
+  postId?: string
+  createdAt: string
+}
+
+// --- B5：Remix ---
+
+export interface RemixFromRunInput {
+  name?: string
+  description?: string
+}

@@ -188,8 +188,38 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.GET("/api/appeals", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.ListAppeals)
 	h.PUT("/api/appeals/:id", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.HandleAppeal)
 
+	// --- 账号处罚路由（警告/禁言/停用/封禁，admin/moderator）---
+	h.POST("/api/moderation/sanctions", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.ApplySanction)
+	h.POST("/api/moderation/sanctions/:id/revoke", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.RevokeSanction)
+	h.GET("/api/moderation/sanctions", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.ListSanctions)
+
 	// --- 发现页路由 ---
 	h.GET("/api/discover", middleware.OptionalAuth(), handler.Discover)
+
+	// --- AI 资产卡路由（B1）---
+	// 静态段 /me、/runs 必须在 :id 参数路由之前注册（Hertz 静态段优先匹配）
+	h.GET("/api/assets/me", middleware.Auth(), handler.ListMyAssets)
+	h.GET("/api/assets/runs/me", middleware.Auth(), handler.ListMyRuns)
+	h.GET("/api/assets/runs/:runId", middleware.OptionalAuth(), handler.GetRun)
+	h.PUT("/api/assets/runs/:runId/visibility", middleware.Auth(), handler.UpdateRunVisibility)
+	// B5：复现走 AI 限流（与正常 Run 一致），避免公开快照被刷量
+	h.POST("/api/assets/runs/:runId/replay", middleware.Auth(), middleware.AILimit(ailimit.FeatureAssetRun), handler.ReplayRun)
+	// B5：派生资产仅写库一次，不调 LLM，无需 AI 限流
+	h.POST("/api/assets/runs/:runId/remix", middleware.Auth(), handler.RemixFromRun)
+	h.GET("/api/assets", middleware.OptionalAuth(), handler.ListAssets)
+	h.POST("/api/assets", middleware.Auth(), handler.CreateAsset)
+	h.GET("/api/assets/:id", middleware.OptionalAuth(), handler.GetAsset)
+	h.PUT("/api/assets/:id", middleware.Auth(), handler.UpdateAsset)
+	h.DELETE("/api/assets/:id", middleware.Auth(), handler.DeleteAsset)
+	// 资产试玩（B3）：受 AI 限流，免旁路刷量
+	h.POST("/api/assets/:id/run", middleware.Auth(), middleware.AILimit(ailimit.FeatureAssetRun), handler.RunAsset)
+	// 资产运行快照列表（B4）
+	h.GET("/api/assets/:id/runs", middleware.OptionalAuth(), handler.ListAssetRuns)
+
+	// --- 帖子-资产绑定路由（B2）---
+	h.GET("/api/posts/:id/assets", middleware.OptionalAuth(), handler.ListPostAssets)
+	h.POST("/api/posts/:id/assets", middleware.Auth(), handler.BindPostAsset)
+	h.DELETE("/api/posts/:id/assets/:assetId", middleware.Auth(), handler.UnbindPostAsset)
 
 	// --- 私信路由 ---
 	h.GET("/api/messages/unread-count", middleware.Auth(), handler.UnreadMessageCount)

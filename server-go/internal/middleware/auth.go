@@ -8,6 +8,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/response"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/sanction"
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
@@ -27,14 +28,12 @@ func Auth() app.HandlerFunc {
 			c.Abort()
 			return
 		}
-		// 检查用户是否被封禁
-		var user model.User
-		if err := dal.DB.WithContext(ctx).Select("status").First(&user, "id = ?", claims.UserID).Error; err == nil {
-			if user.Status == "banned" {
-				response.Forbidden(c, "账号已被封禁")
-				c.Abort()
-				return
-			}
+		// 检查账号状态：banned/suspended 拦截所有访问（含到期的懒刷新）
+		status, err := sanction.EffectiveStatus(ctx, claims.UserID)
+		if err == nil && (status == model.UserStatusBanned || status == model.UserStatusSuspended) {
+			response.Forbidden(c, "账号已被停用")
+			c.Abort()
+			return
 		}
 		c.Set("userId", claims.UserID)
 		c.Set("username", claims.Username)

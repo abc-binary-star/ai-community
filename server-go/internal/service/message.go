@@ -10,6 +10,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/mapper"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/sanction"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"gorm.io/gorm"
 )
@@ -226,6 +227,9 @@ func (s *MessageService) ListMessages(ctx context.Context, userID, conversationI
 
 // SendMessage 发送消息并更新会话最后一条消息
 func (s *MessageService) SendMessage(ctx context.Context, userID, conversationID, content string) (*types.Message, error) {
+	if err := sanction.CanWrite(ctx, userID); err != nil {
+		return nil, &MessageError{Msg: err.Error(), Code: 403}
+	}
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, &MessageError{Msg: "消息内容不能为空", Code: 400}

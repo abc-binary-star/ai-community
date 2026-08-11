@@ -9,6 +9,7 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/jwt"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/notification"
+	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/sanction"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -70,7 +71,12 @@ func (s *AuthService) Login(ctx context.Context, req types.LoginReq) (*types.Aut
 		return nil, ErrInvalidCredentials
 	}
 
-	if user.Status == "banned" {
+	status, err := sanction.EffectiveStatus(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	// banned/suspended 禁止登录；muted 禁言用户仍可登录浏览，仅限制发布
+	if status == model.UserStatusBanned || status == model.UserStatusSuspended {
 		return nil, ErrUserBanned
 	}
 

@@ -419,33 +419,46 @@ func (s *UserService) ResetPassword(ctx context.Context, username, newPassword s
 	return nil
 }
 
-// BanUser 封禁或解禁用户。action="ban" 封禁，action="unban" 解禁。
+// BanUser 封禁或解禁用户。action="ban" 永久封禁，action="unban" 解除生效处罚并恢复。
+// 为兼容旧接口保留签名；实际处罚委托 SanctionService 落审计记录，不再裸改状态。
 func (s *UserService) BanUser(ctx context.Context, username, action, handlerID string) (string, error) {
+	ss := &SanctionService{}
+	if action == "ban" {
+		if _, err := ss.ApplySanction(ctx, types.ApplySanctionReq{
+			Username: username,
+			Action:   model.ModerationActionBan,
+		}, handlerID); err != nil {
+			return "", err
+		}
+		return model.UserStatusBanned, nil
+	}
+
 	var user model.User
-	if err := dal.DB.WithContext(ctx).Select("id", "role", "status").Where("username = ?", username).First(&user).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Select("id").Where("username = ?", username).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return "", ErrUserNotFound
 		}
 		return "", err
 	}
-
-	if user.Role == "admin" {
-		return "", &ServiceError{Msg: "不能封禁管理员", Code: 403}
+	var rec model.ModerationAction
+	err := dal.DB.WithContext(ctx).
+		Where("user_id = ? AND action = ? AND status = ?", user.ID, model.ModerationActionBan, model.ModerationActionActive).
+		Order("created_at DESC").
+		First(&rec).Error
+	if err == gorm.ErrRecordNotFound {
+		// 无生效封禁记录时也恢复账号状态，兼容历史裸改数据
+		if err := dal.DB.WithContext(ctx).Model(&model.User{}).Where("id = ?", user.ID).Update("status", model.UserStatusActive).Error; err != nil {
+			return "", err
+		}
+		return model.UserStatusActive, nil
 	}
-
-	newStatus := "active"
-	if action == "ban" {
-		newStatus = "banned"
-	}
-
-	if err := dal.DB.WithContext(ctx).Model(&model.User{}).
-		Where("id = ?", user.ID).
-		Update("status", newStatus).Error; err != nil {
+	if err != nil {
 		return "", err
 	}
-
-	log.Printf("[User/BanUser] %s 用户 %s (%s), handler=%s", action, username, user.ID, handlerID)
-	return newStatus, nil
+	if _, err := ss.RevokeSanction(ctx, rec.ID, handlerID); err != nil {
+		return "", err
+	}
+	return model.UserStatusActive, nil
 }
 
 // ========== Follow Module ==========

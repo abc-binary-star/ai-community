@@ -34,6 +34,8 @@ const (
 	FeatureTranscribe    Feature = "transcribe"
 	// FeatureEnrich 标题、摘要、标签三产物合并生成
 	FeatureEnrich Feature = "enrich"
+	// FeatureAssetRun 资产试玩：在帖子详情页/资产详情页运行 Prompt 资产（B3）
+	FeatureAssetRun Feature = "asset_run"
 )
 
 // 套餐标识
@@ -91,6 +93,7 @@ func DefaultConfig() Config {
 					FeatureThreadSummary: {MaxPerMinute: 2, MaxPerDay: 5},
 					FeatureTranscribe:    {MaxPerMinute: 2, MaxPerDay: 5},
 					FeatureEnrich:        {MaxPerMinute: 5, MaxPerDay: 10},
+					FeatureAssetRun:      {MaxPerMinute: 5, MaxPerDay: 20},
 				},
 			},
 			PlanPro: {
@@ -108,6 +111,7 @@ func DefaultConfig() Config {
 					FeatureThreadSummary: {MaxPerMinute: 5, MaxPerDay: 30},
 					FeatureTranscribe:    {MaxPerMinute: 5, MaxPerDay: 30},
 					FeatureEnrich:        {MaxPerMinute: 10, MaxPerDay: 100},
+					FeatureAssetRun:      {MaxPerMinute: 10, MaxPerDay: 50},
 				},
 			},
 			PlanAdmin: {

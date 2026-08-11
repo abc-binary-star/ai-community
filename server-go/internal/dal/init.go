@@ -55,6 +55,7 @@ func Init(cfg *conf.Config) {
 		&model.Notification{},
 		&model.Report{},
 		&model.Appeal{},
+		&model.ModerationAction{},
 		&model.Channel{},
 		&model.ChannelCategory{},
 		&model.Block{},
@@ -78,6 +79,10 @@ func Init(cfg *conf.Config) {
 		&model.AnnotationEmbedding{},
 		&model.Announcement{},
 		&model.AnnouncementRead{},
+		// AI 资产卡（B1-B5）：资产 + 帖子绑定 + 运行快照
+		&model.Asset{},
+		&model.PostAsset{},
+		&model.AssetRun{},
 		// 活动「无限循环读书地狱」，表统一带 activity_ 前缀与社区业务解耦
 		&model.ActivityTile{},
 		&model.ActivityTeam{},

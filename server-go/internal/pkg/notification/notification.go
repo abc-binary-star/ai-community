@@ -29,14 +29,27 @@ type CreateInput struct {
 
 // Create 创建一条通知。
 // - 跳过自己给自己的通知
-// - 遵循接收者的通知偏好（类型开关 + 免打扰时段）
+// - 类型开关（comment/like/follow 等）关闭时丢弃：用户明确选择不接收该类型
+// - 免打扰只抑制触达，不阻止落库：通知始终入库，标记 Suppressed 等待补推
 // - like/follow 类型检查是否已存在，防重复
 // - 失败仅记日志，不阻断主流程
 func Create(ctx context.Context, input CreateInput) {
 	if input.ActorID == input.UserID {
 		return
 	}
-	if !allowsPreference(ctx, input.UserID, input.Type) {
+
+	var pref model.NotificationPreference
+	prefExists := false
+	err := dal.DB.WithContext(ctx).Where("user_id = ?", input.UserID).First(&pref).Error
+	if err == nil {
+		prefExists = true
+	} else if err != gorm.ErrRecordNotFound {
+		// 查询偏好失败不阻断主流程，按默认（允许）处理
+		log.Printf("查询通知偏好失败: userID=%s, err=%v", input.UserID, err)
+	}
+
+	// 类型开关：关闭的类型直接丢弃
+	if prefExists && !allowsType(&pref, input.Type) {
 		return
 	}
 
@@ -86,6 +99,17 @@ func Create(ctx context.Context, input CreateInput) {
 		AnnotationID: annotationID,
 		Content:      content,
 	}
+
+	// 免打扰时段：通知照常落库，仅标记抑制与可补推时间
+	if prefExists && pref.DoNotDisturb {
+		now := time.Now()
+		if inQuietWindow(now, pref.QuietStartHour, pref.QuietEndHour) {
+			notif.Suppressed = true
+			end := quietEndTime(now, pref.QuietStartHour, pref.QuietEndHour)
+			notif.DeliverableAt = &end
+		}
+	}
+
 	if err := dal.DB.WithContext(ctx).Create(notif).Error; err != nil {
 		log.Printf("创建通知失败: %v", err)
 	}
@@ -151,54 +175,42 @@ func createMentionNotifications(ctx context.Context, content, actorID, postID, c
 	}
 }
 
-// allowsPreference 检查接收者是否允许接收该类型通知（类型开关 + 免打扰时段）
-func allowsPreference(ctx context.Context, userID, notifType string) bool {
-	var pref model.NotificationPreference
-	err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error
-	if err != nil {
-		// 未设置偏好或查询失败：默认允许，不阻断主流程
-		return true
-	}
-
-	// 类型开关
+// allowsType 检查接收者是否允许接收该类型通知（仅类型开关）。
+// 关闭类型意味着用户明确不接收，通知直接丢弃。
+func allowsType(pref *model.NotificationPreference, notifType string) bool {
 	switch notifType {
 	case "comment":
-		if !pref.Comment {
-			return false
-		}
+		return pref.Comment
 	case "reply":
-		if !pref.Reply {
-			return false
-		}
+		return pref.Reply
 	case "like":
-		if !pref.Like {
-			return false
-		}
+		return pref.Like
 	case "follow":
-		if !pref.Follow {
-			return false
-		}
+		return pref.Follow
 	case "mention":
-		if !pref.Mention {
-			return false
-		}
-	}
-
-	// 免打扰时段（支持跨午夜，如 22:00-08:00）
-	if pref.DoNotDisturb {
-		hour := time.Now().Hour()
-		start, end := pref.QuietStartHour, pref.QuietEndHour
-		if start < end {
-			if hour >= start && hour < end {
-				return false
-			}
-		} else {
-			if hour >= start || hour < end {
-				return false
-			}
-		}
+		return pref.Mention
 	}
 	return true
+}
+
+// inQuietWindow 判断当前时刻是否处于免打扰时段（支持跨午夜，如 22:00-08:00）
+func inQuietWindow(now time.Time, start, end int) bool {
+	if start < end {
+		return now.Hour() >= start && now.Hour() < end
+	}
+	return now.Hour() >= start || now.Hour() < end
+}
+
+// quietEndTime 返回当前免打扰时段结束的可补推时间。
+// 当天窗口（如 01:00-05:00）：结束在当天 end 时；
+// 跨午夜窗口（如 22:00-08:00）：凌晨时段结束在当天 end 时，深夜时段结束在次日 end 时。
+func quietEndTime(now time.Time, start, end int) time.Time {
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if start >= end && now.Hour() >= start {
+		// 跨午夜且当前处于 start 之后（22:00-24:00），补推在次日
+		return day.AddDate(0, 0, 1).Add(time.Duration(end) * time.Hour)
+	}
+	return day.Add(time.Duration(end) * time.Hour)
 }
 
 // IsUniqueConstraintError 判断是否为唯一约束冲突（PostgreSQL error code 23505）

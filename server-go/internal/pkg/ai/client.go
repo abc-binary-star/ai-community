@@ -144,21 +144,36 @@ func SetMaxConcurrent(n int) {
 // 限制检查（频率/配额/全局token上限）在调用前自动执行，
 // 调用方无需手动接入限制模块。
 func Chat(ctx context.Context, req ChatRequest) (string, error) {
+	content, _, _, err := chatInternal(ctx, req)
+	return content, err
+}
+
+// ChatDetailed 与 Chat 一致，但额外返回 token 用量与使用的模型名。
+// 用于资产试玩（B3）等需要把单次运行元数据回传给前端的场景。
+func ChatDetailed(ctx context.Context, req ChatRequest) (string, UsageInfo, string, error) {
+	return chatInternal(ctx, req)
+}
+
+// CurrentModel 返回当前配置的模型名（供需要展示模型名的接口使用）
+func CurrentModel() string { return model }
+
+// chatInternal 是 Chat / ChatDetailed 共用的实现。
+func chatInternal(ctx context.Context, req ChatRequest) (string, UsageInfo, string, error) {
 	if !Enabled() {
-		return "", fmt.Errorf("DEEPSEEK_API_KEY 未配置")
+		return "", UsageInfo{}, "", fmt.Errorf("DEEPSEEK_API_KEY 未配置")
 	}
 
 	// 强制检查：默认模式（非 tokens_only / system）下执行配额预检
 	mode := QuotaMode(ctx)
 	if preCheckHook != nil && mode == "" {
 		if req.UserID == "" {
-			return "", fmt.Errorf("ai.Chat: UserID 不能为空，请从 handler 传入用户 ID")
+			return "", UsageInfo{}, "", fmt.Errorf("ai.Chat: UserID 不能为空，请从 handler 传入用户 ID")
 		}
 		if req.Feature == "" {
-			return "", fmt.Errorf("ai.Chat: Feature 不能为空，请在 ailimit 包中注册功能标识")
+			return "", UsageInfo{}, "", fmt.Errorf("ai.Chat: Feature 不能为空，请在 ailimit 包中注册功能标识")
 		}
 		if err := preCheckHook(ctx, req.UserID, req.Feature); err != nil {
-			return "", err
+			return "", UsageInfo{}, "", err
 		}
 	}
 
@@ -168,7 +183,7 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 	if acquireHook != nil {
 		release, err := acquireHook(ctx, req.UserID)
 		if err != nil {
-			return "", err
+			return "", UsageInfo{}, "", err
 		}
 		defer release()
 	} else if concurrentSem != nil {
@@ -176,7 +191,7 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 		case concurrentSem <- struct{}{}:
 			defer func() { <-concurrentSem }()
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return "", UsageInfo{}, "", ctx.Err()
 		}
 	}
 
@@ -205,12 +220,12 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 		"temperature": temperature,
 	})
 	if err != nil {
-		return "", err
+		return "", UsageInfo{}, "", err
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", UsageInfo{}, "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
@@ -218,7 +233,7 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
-		return "", fmt.Errorf("AI 服务请求失败: %v", err)
+		return "", UsageInfo{}, "", fmt.Errorf("AI 服务请求失败: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -226,7 +241,7 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 		respBody, _ := io.ReadAll(resp.Body)
 		err := fmt.Errorf("AI 服务请求失败 (%d): %s", resp.StatusCode, string(respBody))
 		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
-		return "", err
+		return "", UsageInfo{}, "", err
 	}
 
 	var data struct {
@@ -243,12 +258,12 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
-		return "", err
+		return "", UsageInfo{}, "", err
 	}
 	if len(data.Choices) == 0 {
 		err := fmt.Errorf("AI 返回内容为空")
 		invokeUsageHook(ctx, req, UsageInfo{}, start, err)
-		return "", err
+		return "", UsageInfo{}, "", err
 	}
 
 	usage := UsageInfo{
@@ -258,7 +273,7 @@ func Chat(ctx context.Context, req ChatRequest) (string, error) {
 	}
 	invokeUsageHook(ctx, req, usage, start, nil)
 
-	return strings.TrimSpace(data.Choices[0].Message.Content), nil
+	return strings.TrimSpace(data.Choices[0].Message.Content), usage, model, nil
 }
 
 // invokeUsageHook 安全调用用量钩子（若已设置）

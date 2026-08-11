@@ -22,6 +22,7 @@ import { NotesPanel } from './notes-panel'
 import { fontFamily } from '@/lib/font-options'
 import { getChannelLabel, type Post, type ThreadSummary } from 'shared'
 import { WholeDiscussion } from './whole-discussion'
+import { AssetPanel } from './asset-panel'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { ShareButton } from './share-button'
@@ -430,6 +431,8 @@ export function PostDetailView({ id }: { id: string }) {
       </Card>
 
       <WholeDiscussion postId={id} />
+
+      <AssetPanel post={post} />
 
       {notesOpen && (
         <NotesPanel

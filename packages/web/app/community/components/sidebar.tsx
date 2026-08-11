@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Bookmark,
+  Box,
   ChevronRight,
   Code2,
   Compass,
@@ -39,6 +40,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'gamepad-2': Gamepad2,
   'leaf': Leaf,
   'compass': Compass,
+  'box': Box,
   'sparkles': Sparkles,
   'file-text': FileText,
   'bookmark': Bookmark,
@@ -297,6 +299,15 @@ function SidebarContent({
           icon="compass"
           href="/community/discover"
           active={isDiscover}
+          onNavigate={onNavigate}
+        />
+
+        {/* 固定项：AI 资产 */}
+        <ChannelItem
+          label="AI 资产"
+          icon="box"
+          href="/community/assets"
+          active={pathname === '/community/assets' || pathname.startsWith('/community/assets/')}
           onNavigate={onNavigate}
         />
 
