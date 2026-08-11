@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>译著 · EpubTranslate AI</title>
+  <meta name="description" content="AI Agent 驱动的 EPUB 书籍翻译工具" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/css/style.css" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235662F5'/%3E%3Cpath d='M9 22V10l7 4 7-4v12l-7-4z' fill='white'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app-bg" aria-hidden="true">
+    <div class="app-bg-glow app-bg-glow--primary"></div>
+    <div class="app-bg-glow app-bg-glow--cyan"></div>
+  </div>
+
+  <!-- ===== 顶部导航 ===== -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">
+          <svg viewBox="0 0 32 32" width="18" height="18" aria-hidden="true">
+            <path d="M8 23V9l8 4.5L24 9v14l-8-4.5z" fill="currentColor" />
+          </svg>
+        </span>
+        <span class="brand-name">译著</span>
+        <span class="brand-sub">EpubTranslate AI</span>
+      </a>
+
+      <div class="topbar-right">
+        <div class="health" id="healthStatus">
+          <span class="health-dot"></span>
+          <span class="health-text">服务在线</span>
+        </div>
+        <button class="icon-btn" id="themeToggle" type="button" aria-label="切换主题" title="切换主题">
+          <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== 主工作区 ===== -->
+  <main class="workspace">
+    <section class="workspace-main">
+      <!-- 上传面板 -->
+      <div class="panel upload-panel" id="uploadPanel">
+        <div class="panel-heading">
+          <h1 class="panel-title">开始翻译一本书</h1>
+          <p class="panel-desc">上传 EPUB 文件，AI Agent 将分章解析、保持版式，输出简体中文版。</p>
+        </div>
+
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="上传 EPUB 文件">
+          <input type="file" id="fileInput" accept=".epub,application/epub+zip" hidden />
+          <div class="dropzone-icon" id="dropzoneIcon">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="M17 8l-5-5-5 5" />
+              <path d="M12 3v12" />
+            </svg>
+          </div>
+          <p class="dropzone-main" id="dropzoneMain">拖入 EPUB 文件</p>
+          <p class="dropzone-sub" id="dropzoneSub">或点击选择 · 支持 .epub 格式</p>
+          <p class="dropzone-file" id="dropzoneFile" hidden></p>
+        </div>
+
+        <!-- 翻译参数 -->
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">源语言</span>
+            <span class="select-wrap">
+              <select id="sourceLang">
+                <option value="auto" selected>自动检测</option>
+                <option value="en">英语</option>
+                <option value="ja">日语</option>
+                <option value="fr">法语</option>
+                <option value="de">德语</option>
+                <option value="es">西班牙语</option>
+                <option value="ru">俄语</option>
+                <option value="ko">韩语</option>
+                <option value="zh">中文</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">目标语言</span>
+            <span class="select-wrap">
+              <select id="targetLang">
+                <option value="zh-CN" selected>简体中文</option>
+                <option value="en">英语</option>
+                <option value="ja">日语</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field field--full">
+            <span class="field-label">翻译模型</span>
+            <span class="select-wrap">
+              <select id="modelSelect">
+                <option value="doubao-pro-128k" selected>豆包 Doubao-Pro · 128K（长上下文 · 推荐）</option>
+                <option value="doubao-seed-1.6">豆包 Doubao-Seed 1.6</option>
+                <option value="doubao-pro-32k">豆包 Doubao-Pro · 32K（快速）</option>
+              </select>
+            </span>
+          </label>
+        </div>
+
+        <button class="btn-primary" id="translateBtn" type="button" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14" />
+            <path d="M12 5l7 7-7 7" />
+          </svg>
+          <span id="translateBtnText">开始翻译</span>
+        </button>
+      </div>
+
+      <!-- 任务列表 -->
+      <div class="panel tasks-panel">
+        <div class="panel-heading panel-heading--row">
+          <div>
+            <h2 class="panel-title panel-title--sm">翻译任务</h2>
+            <p class="panel-desc" id="tasksMeta">暂无进行中的任务</p>
+          </div>
+          <button class="ghost-btn" id="refreshBtn" type="button" title="刷新任务列表">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            <span>刷新</span>
+          </button>
+        </div>
+
+        <div class="task-list" id="taskList">
+          <div class="empty-state" id="emptyState">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M8 13h8M8 17h5" />
+            </svg>
+            <p>还没有翻译任务</p>
+            <span>上传一本书，开始你的第一本译著</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== 轻提示 ===== -->
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="/assets/js/app.js"></script>
+</body>
+</html>

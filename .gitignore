@@ -58,3 +58,4 @@ server-go/server
 server-go/*.exe
 server-go/coverage.out
 server-go/coverage.html
+*.hertz.gz

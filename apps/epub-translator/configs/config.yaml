@@ -1,0 +1,56 @@
+# 服务配置
+server:
+  host: "0.0.0.0"
+  port: 8888
+  mode: "debug"   # debug / release
+  read_timeout: 60s
+  write_timeout: 600s
+
+# 豆包火山方舟 API 配置
+llm:
+  provider: "ark"
+  api_key: "${ARK_API_KEY}"
+  base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  model: "doubao-pro-128k"   # 翻译主模型
+  review_model: "doubao-pro-32k" # 审校模型，可用更轻量
+  timeout: 600s
+  max_retries: 3
+  temperature: 0.3   # 翻译要求低随机性
+
+# EPUB 处理配置
+epub:
+  # 每个翻译 Chunk 的 Token 预算（留一半给 prompt+上下文）
+  chunk_max_tokens: 1500
+  # 局部滑动窗口字符数（上一段末尾/下一段开头）
+  context_left_chars: 300
+  context_right_chars: 100
+  # 段落重叠句子数
+  overlap_sentences: 5
+
+# 并发配置
+concurrency:
+  # 全局同时处理的任务数
+  max_tasks: 2
+  # 单任务内同时翻译的 Chunk 数（过大可能触发限流）
+  max_chunks_per_task: 5
+
+# 存储配置
+storage:
+  type: "local"   # local / s3 / oss
+  local:
+    upload_dir: "./storage/uploads"
+    output_dir: "./storage/outputs"
+    temp_dir: "./storage/temp"
+
+# 数据库配置
+database:
+  driver: "sqlite"   # sqlite / postgres
+  sqlite:
+    path: "./storage/translator.db"
+
+# 日志配置
+log:
+  level: "debug"   # trace / debug / info / warn / error / fatal
+  format: "text"   # text / json
+  output: "stdout" # stdout / file
+  file_path: "./storage/logs/app.log"
