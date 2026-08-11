@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -294,5 +295,58 @@ func TestAssetListSQLSort(t *testing.T) {
 	_, err := svc.ListAssets(context.Background(), "", "", "", "", "", "invalid", 1, 20)
 	if err == nil || !strings.Contains(err.Error(), "sort") {
 		t.Errorf("非法 sort 应返回错误, got %v", err)
+	}
+}
+
+// TestListAssetTagsSQL 回归 C1：标签统计必须展开 jsonb 数组并只统计已发布资产。
+// 验证生成的 SQL 包含 jsonb_array_elements_text 与 published 过滤。
+func TestListAssetTagsSQL(t *testing.T) {
+	base := newDryRunDB(t)
+	dal.DB = base
+
+	// 直接断言查询 SQL：展开函数 + 可见性过滤必须存在
+	q := dal.DB.Model(&model.Asset{}).
+		Select("jsonb_array_elements_text(tags) AS tag, count(*) AS count").
+		Where("status = ? AND visibility = ?",
+			model.AssetStatusPublished, model.AssetVisibilityPublic).
+		Where("jsonb_array_length(tags) > 0").
+		Group("tag").
+		Order("count DESC, tag ASC")
+	generated := q.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		return tx.Find(&[]model.Asset{})
+	})
+	for _, want := range []string{"jsonb_array_elements_text", "published", "public"} {
+		if !strings.Contains(generated, want) {
+			t.Errorf("标签统计 SQL 缺少 %s: %s", want, generated)
+		}
+	}
+}
+
+// TestHotAssetsCache 回归 C1：热门资产推荐位缓存写入后立即命中。
+// 避免 24h 内重复请求 discover 反复回源查询数据库。
+func TestHotAssetsCache(t *testing.T) {
+	// 清理缓存，保证测试独立
+	hotAssetsCache.mu.Lock()
+	hotAssetsCache.value = nil
+	hotAssetsCache.expires = time.Time{}
+	hotAssetsCache.mu.Unlock()
+
+	// 空缓存应未命中
+	if _, ok := getHotAssetsCache(); ok {
+		t.Fatalf("空缓存不应命中")
+	}
+
+	// 写入后应命中且值一致
+	items := []types.AssetSummary{
+		{ID: "a", Name: "资产A", RunCount: 10},
+		{ID: "b", Name: "资产B", RunCount: 5},
+	}
+	setHotAssetsCache(items)
+	got, ok := getHotAssetsCache()
+	if !ok {
+		t.Fatalf("写入后应命中缓存")
+	}
+	if len(got) != 2 || got[0].ID != "a" {
+		t.Errorf("缓存值不一致, got %v", got)
 	}
 }

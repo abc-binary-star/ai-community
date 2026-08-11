@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"log"
+	"strconv"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -84,6 +85,23 @@ func ListMyAssets(ctx context.Context, c *app.RequestContext) {
 	page, pageSize := pagination.Parse(c)
 
 	result, err := assetService.ListAssetsByUser(ctx, viewerID, viewerID, page, pageSize)
+	if err != nil {
+		handleAssetError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
+// ListAssetTags 热门资产标签统计（可选登录）
+// GET /api/assets/tags?limit=20
+func ListAssetTags(ctx context.Context, c *app.RequestContext) {
+	limit := 20
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	result, err := assetService.ListAssetTags(ctx, limit)
 	if err != nil {
 		handleAssetError(c, err)
 		return

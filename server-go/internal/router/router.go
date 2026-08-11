@@ -208,6 +208,8 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/assets/runs/:runId/remix", middleware.Auth(), handler.RemixFromRun)
 	h.GET("/api/assets", middleware.OptionalAuth(), handler.ListAssets)
 	h.POST("/api/assets", middleware.Auth(), handler.CreateAsset)
+	// 静态段 /tags 必须在 :id 参数路由之前注册（Hertz 静态段优先匹配）
+	h.GET("/api/assets/tags", middleware.OptionalAuth(), handler.ListAssetTags)
 	h.GET("/api/assets/:id", middleware.OptionalAuth(), handler.GetAsset)
 	h.PUT("/api/assets/:id", middleware.Auth(), handler.UpdateAsset)
 	h.DELETE("/api/assets/:id", middleware.Auth(), handler.DeleteAsset)

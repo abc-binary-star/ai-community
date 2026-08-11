@@ -515,6 +515,39 @@ func (s *AssetService) IncrementRunCount(ctx context.Context, id string) {
 	}
 }
 
+// ListAssetTags 热门资产标签统计（C1）。
+// 仅统计 published + public 的资产，按标签出现次数倒序，取 top limit 个。
+// 用 jsonb_array_elements_text 把 tags jsonb 数组展开为行后聚合。
+func (s *AssetService) ListAssetTags(ctx context.Context, limit int) ([]types.AssetTagStat, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	type tagRow struct {
+		Tag   string
+		Count int64
+	}
+	var rows []tagRow
+	err := dal.DB.WithContext(ctx).Model(&model.Asset{}).
+		Select("jsonb_array_elements_text(tags) AS tag, count(*) AS count").
+		Where("status = ? AND visibility = ?",
+			model.AssetStatusPublished, model.AssetVisibilityPublic).
+		// jsonb_array_length(NULL) 返回 NULL，WHERE 判定为 FALSE 被过滤，空标签数组同样被排除
+		Where("jsonb_array_length(tags) > 0").
+		Group("tag").
+		Order("count DESC, tag ASC").
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		log.Printf("[Asset/ListAssetTags] 标签统计失败, err=%v", err)
+		return nil, err
+	}
+	items := make([]types.AssetTagStat, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, types.AssetTagStat{Tag: r.Tag, Count: r.Count})
+	}
+	return items, nil
+}
+
 // loadDTO 查询并映射为 DTO
 func (s *AssetService) loadDTO(ctx context.Context, id, viewerID string) (*types.Asset, error) {
 	var rec model.Asset

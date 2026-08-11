@@ -340,6 +340,8 @@ type DiscoverResponse struct {
 	HotPosts         []Post                   `json:"hotPosts"`
 	TrendingTags     []map[string]interface{} `json:"trendingTags"`
 	RecommendedUsers []PublicUser             `json:"recommendedUsers"`
+	// HotAssets 热门 AI 资产推荐位（C1 新增，按运行次数取 top N）
+	HotAssets []AssetSummary `json:"hotAssets"`
 }
 
 type Notification struct {
@@ -958,12 +960,20 @@ type AssetRun struct {
 	CreatedAt        string             `json:"createdAt"`
 }
 
-// AssetSummary 资产摘要（用于快照列表/分享卡，避免重复下发完整模板）
+// AssetSummary 资产摘要（用于快照列表/分享卡/发现页推荐位，避免重复下发完整模板）
 type AssetSummary struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Version string `json:"version"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Version   string `json:"version"`
+	RunCount  int64  `json:"runCount"`
+	ForkCount int64  `json:"forkCount"`
+}
+
+// AssetTagStat 资产标签统计（C1：GET /api/assets/tags）
+type AssetTagStat struct {
+	Tag   string `json:"tag"`
+	Count int64  `json:"count"`
 }
 
 // UpdateRunVisibilityReq 修改运行快照可见范围（用于「发布结果」/「撤回分享」）

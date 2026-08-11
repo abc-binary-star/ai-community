@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -18,7 +20,22 @@ const hotPostLimit = 10
 // RecommendedUserLimit 推荐用户条数
 const recommendedUserLimit = 8
 
-// Discover 聚合发现页数据：跨频道热门帖子 + 趋势话题 + 推荐用户
+// hotAssetLimit 发现页热门资产推荐位条数
+const hotAssetLimit = 3
+
+// hotAssetsCacheTTL 热门资产推荐位缓存有效期。
+// 资产运行次数变化频率极低，24h 内复用同一结果可显著降低 discover 查询成本。
+const hotAssetsCacheTTL = 24 * time.Hour
+
+// hotAssetsCache 热门资产推荐位的进程内缓存（mutex + 过期时间）。
+// 设计上仅存小数组（≤3 条 AssetSummary），直接缓存结构体而非 JSON 字符串。
+var hotAssetsCache = struct {
+	mu      sync.Mutex
+	value   []types.AssetSummary
+	expires time.Time
+}{}
+
+// Discover 聚合发现页数据：跨频道热门帖子 + 趋势话题 + 推荐用户 + 热门 AI 资产
 func (s *DiscoverService) Discover(ctx context.Context, currentUserID string) (*types.DiscoverResponse, error) {
 	// 跨频道热门帖子（复用 ListPosts 的 hot 排序）
 	hotPosts, err := (&PostService{}).ListPosts(ctx, "all", "hot", "", "", "", "", currentUserID, 1, hotPostLimit)
@@ -41,11 +58,71 @@ func (s *DiscoverService) Discover(ctx context.Context, currentUserID string) (*
 		return nil, err
 	}
 
+	// 热门 AI 资产（C1 新增）
+	hotAssets, err := s.HotAssets(ctx, hotAssetLimit)
+	if err != nil {
+		log.Printf("[Discover/Discover] failed to get hot assets, currentUserID=%s, err=%v", currentUserID, err)
+		return nil, err
+	}
+
 	return &types.DiscoverResponse{
 		HotPosts:         hotPosts.Items,
 		TrendingTags:     tags,
 		RecommendedUsers: users,
+		HotAssets:        hotAssets,
 	}, nil
+}
+
+// HotAssets 取运行次数最高的已发布资产（C1）。
+// 仅统计 published + public；先查 24h 缓存，未命中时回源查询并写入缓存。
+func (s *DiscoverService) HotAssets(ctx context.Context, limit int) ([]types.AssetSummary, error) {
+	if items, ok := getHotAssetsCache(); ok {
+		return items, nil
+	}
+
+	var rows []model.Asset
+	if err := dal.DB.WithContext(ctx).
+		Select("id", "name", "type", "version", "run_count", "fork_count").
+		Where("status = ? AND visibility = ?",
+			model.AssetStatusPublished, model.AssetVisibilityPublic).
+		Order("run_count DESC, created_at DESC").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
+		log.Printf("[Discover/HotAssets] 查询热门资产失败, err=%v", err)
+		return nil, err
+	}
+
+	items := make([]types.AssetSummary, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, types.AssetSummary{
+			ID:        r.ID,
+			Name:      r.Name,
+			Type:      r.Type,
+			Version:   r.Version,
+			RunCount:  r.RunCount,
+			ForkCount: r.ForkCount,
+		})
+	}
+	setHotAssetsCache(items)
+	return items, nil
+}
+
+// getHotAssetsCache 读取缓存；命中且未过期返回 true
+func getHotAssetsCache() ([]types.AssetSummary, bool) {
+	hotAssetsCache.mu.Lock()
+	defer hotAssetsCache.mu.Unlock()
+	if hotAssetsCache.value != nil && time.Now().Before(hotAssetsCache.expires) {
+		return hotAssetsCache.value, true
+	}
+	return nil, false
+}
+
+// setHotAssetsCache 写入缓存并刷新过期时间
+func setHotAssetsCache(items []types.AssetSummary) {
+	hotAssetsCache.mu.Lock()
+	defer hotAssetsCache.mu.Unlock()
+	hotAssetsCache.value = items
+	hotAssetsCache.expires = time.Now().Add(hotAssetsCacheTTL)
 }
 
 // RecommendedUsers 推荐用户：优先按粉丝数排序，无关注数据时按发帖量兜底
