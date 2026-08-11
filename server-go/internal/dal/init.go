@@ -35,6 +35,7 @@ func Init(cfg *conf.Config) {
 	sqlDB.SetMaxOpenConns(25)
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	// 告知 GORM many2many 连接表的真实结构
 	if err := DB.SetupJoinTable(&model.Post{}, "Tags", &model.PostTag{}); err != nil {

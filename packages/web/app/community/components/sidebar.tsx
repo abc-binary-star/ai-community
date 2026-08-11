@@ -10,6 +10,7 @@ import {
   Code2,
   Compass,
   FileText,
+  Flame,
   Gamepad2,
   Hash,
   Leaf,
@@ -42,6 +43,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'leaf': Leaf,
   'compass': Compass,
   'box': Box,
+  'flame': Flame,
   'sparkles': Sparkles,
   'file-text': FileText,
   'bookmark': Bookmark,
@@ -319,6 +321,15 @@ function SidebarContent({
           icon="wrench"
           href="/community/tools"
           active={pathname === '/community/tools' || pathname.startsWith('/community/tools/')}
+          onNavigate={onNavigate}
+        />
+
+        {/* 固定项：读书地狱活动 */}
+        <ChannelItem
+          label="读书地狱"
+          icon="flame"
+          href="/activity/hell-board"
+          active={pathname === '/activity/hell-board' || pathname.startsWith('/activity/hell-board/')}
           onNavigate={onNavigate}
         />
 
