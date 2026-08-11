@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Box, GitFork, Play, Trash2 } from 'lucide-react'
+import { Box, GitFork, Play, Tag, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { cn, formatRelativeTime, getInitials } from '@/lib/utils'
+import { formatRelativeTime, getInitials } from '@/lib/utils'
 import { useDeleteAsset } from '@/lib/use-assets'
 import { useAuthStore } from '@/lib/store'
 import type { Asset } from 'shared'
@@ -64,6 +64,19 @@ export function AssetCard({ asset, showRunEntry = true }: AssetCardProps) {
           <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {asset.description || '暂无描述'}
           </div>
+          {asset.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {asset.tags.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                >
+                  <Tag className="h-2.5 w-2.5" />
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
             <span className="flex items-center gap-1">
               <Box className="h-3 w-3" />

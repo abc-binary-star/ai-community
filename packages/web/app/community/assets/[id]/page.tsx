@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, Box, GitFork, Loader2, Play, Trash2 } from 'lucide-react'
+import { ArrowLeft, Box, GitFork, Loader2, Play, Tag, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -122,6 +122,19 @@ export default function AssetDetailPage({ params }: { params: { id: string } }) 
             </div>
             {asset.description && (
               <p className="text-sm text-muted-foreground mt-2">{asset.description}</p>
+            )}
+            {asset.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {asset.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                  >
+                    <Tag className="h-3 w-3" />
+                    {t}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
           {isAuthor && (

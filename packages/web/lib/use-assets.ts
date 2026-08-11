@@ -5,6 +5,7 @@ import { api } from './api'
 import type {
   Asset,
   AssetRun,
+  AssetTagStat,
   BindPostAssetInput,
   CreateAssetInput,
   Paginated,
@@ -22,20 +23,32 @@ export const assetsKey = ['assets'] as const
 export function useAssetsQuery(params?: {
   authorId?: string
   type?: string
+  tag?: string
   keyword?: string
+  sort?: 'latest' | 'hot' | 'forks'
   page?: number
   pageSize?: number
 }) {
   const qs = new URLSearchParams()
   if (params?.authorId) qs.set('authorId', params.authorId)
   if (params?.type) qs.set('type', params.type)
+  if (params?.tag) qs.set('tag', params.tag)
   if (params?.keyword) qs.set('keyword', params.keyword)
+  if (params?.sort) qs.set('sort', params.sort)
   if (params?.page) qs.set('page', String(params.page))
   if (params?.pageSize) qs.set('pageSize', String(params.pageSize))
   const query = qs.toString()
   return useQuery({
     queryKey: [...assetsKey, 'list', params ?? {}],
     queryFn: () => api.get<Paginated<Asset>>(`/assets${query ? `?${query}` : ''}`),
+  })
+}
+
+// 热门资产标签统计（C1：GET /api/assets/tags）
+export function useAssetTagsQuery(limit = 20) {
+  return useQuery({
+    queryKey: [...assetsKey, 'tags', limit],
+    queryFn: () => api.get<AssetTagStat[]>(`/assets/tags?limit=${limit}`),
   })
 }
 

@@ -88,6 +88,8 @@ export interface DiscoverResponse {
   hotPosts: Post[]
   trendingTags: { name: string; postCount: number }[]
   recommendedUsers: PublicUser[]
+  /** 热门 AI 资产推荐位（C1） */
+  hotAssets: AssetSummary[]
 }
 
 export interface Tag {
@@ -491,6 +493,8 @@ export interface Asset {
   promptTemplate: string
   inputVariables: AssetInputVariable[]
   defaultParams: AssetDefaultParams
+  /** 资产分类标签，1-5 个（C1） */
+  tags: string[]
   authorId: string
   author: PublicUser
   parentId?: string
@@ -512,6 +516,7 @@ export interface CreateAssetInput {
   promptTemplate: string
   inputVariables?: AssetInputVariable[]
   defaultParams?: AssetDefaultParams
+  tags?: string[]
   parentId?: string
   status?: AssetStatus
   visibility?: AssetVisibility
@@ -572,6 +577,14 @@ export interface AssetSummary {
   name: string
   type: AssetType
   version: string
+  runCount: number
+  forkCount: number
+}
+
+/** 资产标签统计（C1：GET /api/assets/tags） */
+export interface AssetTagStat {
+  tag: string
+  count: number
 }
 
 export interface AssetRun {

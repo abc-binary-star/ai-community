@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Hash, Loader2, PenLine, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react'
+import { Box, ChevronLeft, ChevronRight, GitFork, Hash, Loader2, PenLine, Play, Sparkles, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card'
 import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { getInitials } from '@/lib/utils'
-import type { DiscoverResponse, Paginated, Post, PublicUser } from 'shared'
+import type { AssetSummary, DiscoverResponse, Paginated, Post, PublicUser } from 'shared'
 import { DiscoverFeed } from '../components/discover-feed'
 import { SortTabs } from '../components/sort-tabs'
 import { TagBadge } from '../components/tag-badge'
@@ -80,6 +80,35 @@ function RecommendedUserItem({ user }: { user: PublicUser }) {
   )
 }
 
+function HotAssetItem({ asset }: { asset: AssetSummary }) {
+  return (
+    <Link
+      href={`/community/assets/${asset.id}#run`}
+      className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2.5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.06]"
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Box className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium group-hover:underline">
+          {asset.name}
+        </p>
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-0.5">
+            <Play className="size-3" />
+            {asset.runCount}
+          </span>
+          <span className="flex items-center gap-0.5">
+            <GitFork className="size-3" />
+            {asset.forkCount}
+          </span>
+          <span>v{asset.version}</span>
+        </p>
+      </div>
+    </Link>
+  )
+}
+
 function DiscoverPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -136,6 +165,7 @@ function DiscoverPageInner() {
   const posts = postsQuery.data.items
   const trendingTags = discoverQuery.data?.trendingTags ?? []
   const recommendedUsers = discoverQuery.data?.recommendedUsers ?? []
+  const hotAssets = discoverQuery.data?.hotAssets ?? []
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -239,6 +269,29 @@ function DiscoverPageInner() {
               ) : (
                 recommendedUsers.map((u) => <RecommendedUserItem key={u.id} user={u} />)
               )}
+            </div>
+          </Card>
+
+          {/* 热门 AI 资产（C1） */}
+          <Card className="overflow-hidden border-primary/15 bg-card/80 shadow-sm">
+            <div className="border-b border-primary/10 bg-primary/[0.04] px-4 py-3">
+              <h2 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Box className="size-4" />
+                </span>
+                热门 AI 资产
+                <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">playground</span>
+              </h2>
+            </div>
+            <div className="space-y-2 p-3">
+              {hotAssets.length === 0 ? (
+                <p className="px-1 py-2 text-sm text-muted-foreground">暂无热门资产</p>
+              ) : (
+                hotAssets.map((a) => <HotAssetItem key={a.id} asset={a} />)
+              )}
+              <Button asChild variant="ghost" size="sm" className="w-full rounded-full text-xs text-muted-foreground">
+                <Link href="/community/assets">浏览全部资产 →</Link>
+              </Button>
             </div>
           </Card>
         </div>
