@@ -151,6 +151,23 @@ func FallbackAdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
+// ManualAdvanceActivityTeam 队长常驻手动移动：不依赖打卡审核，任意时刻点亮当前格并前进指定格数
+// POST /api/activity/hell-board/advance/manual
+func ManualAdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityAdvanceReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	result, err := activityService.ManualAdvanceTeam(ctx, userID, req.Steps)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
 // GetActivityJudgement 读取当前判定会话
 // GET /api/activity/hell-board/judgement
 func GetActivityJudgement(ctx context.Context, c *app.RequestContext) {

@@ -130,6 +130,8 @@ interface ActivityState {
   selectTile: (index: number | null) => void
   rollDice: () => Promise<void>
   advanceTeam: (steps: number) => Promise<RollResult | undefined>
+  /** 队长常驻手动移动：任意时刻点亮当前格并前进，无需等待打卡审核 */
+  manualAdvance: (steps: number) => Promise<RollResult | undefined>
   fallbackAdvance: (steps?: number) => Promise<void>
   rollJudgement: () => Promise<void>
   submitCheckIn: (tileIndex: number, books: CheckInDraftBook[], evidenceUrl?: string) => Promise<void>
@@ -294,6 +296,23 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       return result
     } catch (err) {
       set({ error: errMessage(err, '前进失败') })
+      throw err
+    } finally {
+      set({ rolling: false })
+    }
+  },
+
+  /** 队长常驻手动移动：任意时刻点亮当前格并前进，无需等待打卡审核。成功后刷新棋盘并返回结果 */
+  manualAdvance: async (steps: number) => {
+    if (get().rolling) return
+    set({ rolling: true, error: null })
+    try {
+      const result = await api.manualAdvance(steps)
+      set({ lastRoll: result.value })
+      await get().refresh()
+      return result
+    } catch (err) {
+      set({ error: errMessage(err, '手动移动失败') })
       throw err
     } finally {
       set({ rolling: false })

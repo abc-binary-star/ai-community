@@ -28,6 +28,7 @@ import { EnrollWizard } from './components/enroll-wizard'
 import { FallbackAdvanceDialog } from './components/fallback-advance-dialog'
 import { MyCheckInsPanel } from './components/my-checkins-panel'
 import { MyProfileDialog } from './components/my-profile-dialog'
+import { ManualMoveDialog } from './components/manual-move-dialog'
 import { RankingPanel } from './components/ranking-panel'
 import { TeamInitDialog } from './components/team-init-dialog'
 import { TeamManageDialog } from './components/team-manage-dialog'
@@ -171,6 +172,8 @@ export function HellBoardView() {
   const [showAdvance, setShowAdvance] = useState(false)
   // 保底前进：消耗 40 本保底计数，可摇骰或自选步数
   const [showFallbackAdvance, setShowFallbackAdvance] = useState(false)
+  // 常驻手动移动：无需打卡审核，随时点亮当前格并前进
+  const [showManualMove, setShowManualMove] = useState(false)
 
   useEffect(() => {
     void loadAll()
@@ -325,6 +328,7 @@ export function HellBoardView() {
                   onOpenCheckIn={() => setShowCheckInForm(true)}
                   onOpenAdvance={() => setShowAdvance(true)}
                   onOpenFallbackAdvance={() => setShowFallbackAdvance(true)}
+                  onOpenManualMove={() => setShowManualMove(true)}
                 />
               ) : (
                 <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
@@ -437,6 +441,10 @@ export function HellBoardView() {
 
       {showFallbackAdvance && currentTeam && (
         <FallbackAdvanceDialog onClose={() => setShowFallbackAdvance(false)} />
+      )}
+
+      {showManualMove && currentTeam && (
+        <ManualMoveDialog onClose={() => setShowManualMove(false)} />
       )}
 
       {showMyProfile && <MyProfileDialog onClose={() => setShowMyProfile(false)} />}

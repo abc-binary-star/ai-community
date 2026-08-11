@@ -205,6 +205,14 @@ export function fallbackAdvance(steps: number = 0): Promise<RollResult> {
   })
 }
 
+/** 队长常驻手动移动：不依赖打卡审核，任意时刻点亮当前格并前进指定格数（1–6）。步数由队长选择，服务端校验 */
+export function manualAdvance(steps: number): Promise<RollResult> {
+  return apiFetch<RollResult>(`${BASE}/advance/manual`, {
+    method: 'POST',
+    body: JSON.stringify({ steps }),
+  })
+}
+
 // --- 反馈（bug / 需求） ---
 
 /** 提交活动反馈：进入管理员监督台（审批台）的待处理列表 */

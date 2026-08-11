@@ -39,7 +39,7 @@ func (s *ActivityService) RollDice(ctx context.Context, userID string) (*types.A
 			return err
 		}
 		value := hellboard.RollDice()
-		return s.moveTeamTx(tx, &team, me, value, now, &out)
+		return s.moveTeamTx(tx, &team, me, value, now, &out, "")
 	})
 	if err != nil {
 		return nil, err
@@ -76,7 +76,58 @@ func (s *ActivityService) AdvanceTeam(ctx context.Context, userID string, steps 
 		if err := s.checkRollableTx(tx, &team, now); err != nil {
 			return err
 		}
-		return s.moveTeamTx(tx, &team, me, steps, now, &out)
+		return s.moveTeamTx(tx, &team, me, steps, now, &out, "")
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ManualAdvanceTeam 队长常驻手动移动：不依赖打卡审核，任意时刻点亮当前格并前进。
+//
+// 供线下推进进度的队伍使用（大家不在网站上打卡，由队长手动同步棋盘）：
+// 当前格按「队长手动移动」点亮（reason=manual），随后前进队长自选步数。
+// 与普通前进共用 moveTeamTx，落点 / 计时 / 轮次 / 完成判定规则完全一致；
+// 仅校验队长身份、步数 1–6 与计时 / 完成状态，不做「任务已达成」前置要求。
+func (s *ActivityService) ManualAdvanceTeam(ctx context.Context, userID string, steps int) (*types.ActivityRollResultDTO, error) {
+	now := time.Now()
+	if err := s.requireWritable(now); err != nil {
+		return nil, err
+	}
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !me.IsCaptain {
+		return nil, ErrActivityNotCaptain
+	}
+	if steps < 1 || steps > hellboard.DiceFaces {
+		return nil, ErrActivityInvalidInput
+	}
+
+	var out types.ActivityRollResultDTO
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var team model.ActivityTeam
+		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", me.TeamID).Error; err != nil {
+			return err
+		}
+		// 计时到期先结算；结算后仍在计时中则拒绝（惩罚不可通过手动移动跳过）
+		if hellboard.TimerExpired(&team, now) {
+			if err := s.settleTimerTx(tx, &team, now); err != nil {
+				return err
+			}
+			if err := tx.First(&team, "id = ?", team.ID).Error; err != nil {
+				return err
+			}
+		}
+		if team.Status == model.TeamStatusTimerRunning {
+			return ErrActivityTimerRunning
+		}
+		if team.Status == model.TeamStatusCompleted {
+			return ErrActivityCompleted
+		}
+		return s.moveTeamTx(tx, &team, me, steps, now, &out, model.LitReasonManual)
 	})
 	if err != nil {
 		return nil, err
@@ -138,7 +189,7 @@ func (s *ActivityService) FallbackAdvance(ctx context.Context, userID string, st
 		}
 		// 先按保底前进：moveTeamTx 内部此时 FallbackCount 仍 ≥ 40，
 		// LitReasonFor 会把离开格记为「保底完成」点亮；随后再消耗计数。
-		if err := s.moveTeamTx(tx, &team, me, steps, now, &out); err != nil {
+		if err := s.moveTeamTx(tx, &team, me, steps, now, &out, ""); err != nil {
 			return err
 		}
 		team.FallbackCount -= hellboard.FallbackThreshold
@@ -184,9 +235,11 @@ func (s *ActivityService) checkRollableTx(tx *gorm.DB, team *model.ActivityTeam,
 }
 
 // moveTeamTx 队伍前进公共逻辑：点亮离开格 → 前进 steps 步 → 处理计时 / 轮次 / 状态。
-// 掷骰（RollDice）与手动前进（AdvanceTeam）共用，保证两条路径状态机一致。
-// 前置条件：队伍已锁定且通过 checkRollableTx 校验。
-func (s *ActivityService) moveTeamTx(tx *gorm.DB, team *model.ActivityTeam, me *model.ActivityMember, steps int, now time.Time, out *types.ActivityRollResultDTO) error {
+// 掷骰（RollDice）与手动前进（AdvanceTeam）共用，保证各路径状态机一致。
+// litReason 非空时强制用该点亮方式（队长常驻手动移动传 manual）；为空时由
+// LitReasonFor 按任务达成 / 保底完成自动判定。
+// 前置条件：队伍已锁定且通过对应前进路径的前置校验。
+func (s *ActivityService) moveTeamTx(tx *gorm.DB, team *model.ActivityTeam, me *model.ActivityMember, steps int, now time.Time, out *types.ActivityRollResultDTO, litReason string) error {
 	leavingTile, err := s.getTileTx(tx, team.Position)
 	if err != nil {
 		return err
@@ -199,6 +252,9 @@ func (s *ActivityService) moveTeamTx(tx *gorm.DB, team *model.ActivityTeam, me *
 	}
 	_, alreadyLit := litBefore[team.Position]
 	reason := hellboard.LitReasonFor(team, leavingTile)
+	if litReason != "" {
+		reason = litReason
+	}
 	if err := s.markLitTx(tx, team, team.Position, reason, now); err != nil {
 		return err
 	}
@@ -264,8 +320,11 @@ func (s *ActivityService) moveTeamTx(tx *gorm.DB, team *model.ActivityTeam, me *
 	// 时间线留痕（PRD 10.3）
 	if out.LitTile != 0 {
 		label := "任务达成"
-		if reason == model.LitReasonFallback {
+		switch reason {
+		case model.LitReasonFallback:
 			label = "保底完成"
+		case model.LitReasonManual:
+			label = "队长手动移动"
 		}
 		if err := s.addEvent(tx, team.ID, model.EventTypeLit,
 			fmt.Sprintf("第 %d 格已点亮（%s）", from, label)); err != nil {

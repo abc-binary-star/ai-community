@@ -61,6 +61,7 @@ export function CurrentTaskPanel({
   onOpenCheckIn,
   onOpenAdvance,
   onOpenFallbackAdvance,
+  onOpenManualMove,
 }: {
   team: Team
   isCaptain: boolean
@@ -71,6 +72,8 @@ export function CurrentTaskPanel({
   onOpenAdvance: () => void
   /** 打开「消耗 40 本 · 向下一格进发」（保底计数前进，可摇骰或自选步数） */
   onOpenFallbackAdvance: () => void
+  /** 打开「手动移动」（常驻：无需打卡审核，随时点亮当前格并前进） */
+  onOpenManualMove: () => void
 }) {
   const tile = useTile(team.position)
   const judgement = useActivityStore((s) => s.judgement)
@@ -129,6 +132,12 @@ export function CurrentTaskPanel({
     team.status !== 'timer-running' &&
     team.status !== 'completed' &&
     !team.litTiles[team.position]
+  // 常驻手动移动：队长随时可点亮当前格并前进（惩罚计时中与完成后除外，归档态不渲染）
+  const canManualMove =
+    isCaptain &&
+    !readOnly &&
+    team.status !== 'timer-running' &&
+    team.status !== 'completed'
 
   return (
     <section aria-labelledby="current-task-heading" className="space-y-3">
@@ -219,6 +228,24 @@ export function CurrentTaskPanel({
               <PlusCircle aria-hidden className="size-4" />
               提交打卡
             </button>
+
+            {canManualMove && (
+              <button
+                type="button"
+                onClick={onOpenManualMove}
+                disabled={rolling}
+                title="无需打卡审核，点亮当前格并前进 1–6 格"
+                className={cn(
+                  'flex h-10 w-full items-center justify-center gap-1.5 rounded-md border-2 border-stone-800 text-sm font-black shadow-[3px_3px_0_#292524] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none',
+                  rolling
+                    ? 'cursor-not-allowed border-stone-300 bg-stone-200 text-stone-400 shadow-none'
+                    : 'bg-stone-800 text-white hover:bg-stone-700',
+                )}
+              >
+                <Footprints aria-hidden className="size-4" />
+                手动移动 · 点亮当前格
+              </button>
+            )}
 
             {canFallbackAdvance && (
               <button

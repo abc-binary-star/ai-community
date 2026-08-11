@@ -253,6 +253,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.POST("/roll", handler.RollActivityDice)
 	activity.POST("/advance", handler.AdvanceActivityTeam)
 	activity.POST("/advance/fallback", handler.FallbackAdvanceActivityTeam)
+	activity.POST("/advance/manual", handler.ManualAdvanceActivityTeam)
 	activity.GET("/judgement", handler.GetActivityJudgement)
 	activity.POST("/judgement/roll", handler.RollActivityJudgement)
 	activity.GET("/tiles/:index", handler.GetActivityTileDetail)
