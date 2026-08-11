@@ -59,15 +59,17 @@ func GetAsset(ctx context.Context, c *app.RequestContext) {
 }
 
 // ListAssets 已发布资产列表（可选登录）
-// GET /api/assets?authorId=&type=&keyword=&page=&pageSize=
+// GET /api/assets?authorId=&type=&tag=&keyword=&sort=&page=&pageSize=
 func ListAssets(ctx context.Context, c *app.RequestContext) {
 	viewerID := middleware.GetCurrentUserID(c)
 	authorID := c.Query("authorId")
 	assetType := c.Query("type")
+	tag := c.Query("tag")
 	keyword := c.Query("keyword")
+	sort := c.Query("sort")
 	page, pageSize := pagination.Parse(c)
 
-	result, err := assetService.ListAssets(ctx, viewerID, authorID, assetType, keyword, page, pageSize)
+	result, err := assetService.ListAssets(ctx, viewerID, authorID, assetType, tag, keyword, sort, page, pageSize)
 	if err != nil {
 		handleAssetError(c, err)
 		return

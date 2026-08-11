@@ -66,6 +66,10 @@ type Asset struct {
 	PromptTemplate string         `gorm:"type:text;not null" json:"promptTemplate"` // 模板正文，含 {{var}} 占位
 	InputVariables json.RawMessage `gorm:"type:jsonb" json:"inputVariables"`         // []AssetInputVariable
 	DefaultParams  json.RawMessage `gorm:"type:jsonb" json:"defaultParams"`          // AssetDefaultParams
+	// Tags 资产分类标签，1-5 个，用于列表筛选与发现页推荐。
+	// serializer:json 让 GORM 自动把 []string 序列化为 jsonb 存储，
+	// 便于 @> 包含查询；归并到预定义白名单避免同义词碎片化。
+	Tags          []string        `gorm:"type:jsonb;serializer:json;index" json:"tags"`
 	AuthorID      string          `gorm:"index;not null" json:"authorId"`
 	Author        User            `gorm:"foreignKey:AuthorID;constraint:OnDelete:CASCADE" json:"-"`
 	ParentID      *string         `gorm:"index" json:"parentId,omitempty"` // Remix 来源资产

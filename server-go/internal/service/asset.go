@@ -54,6 +54,139 @@ var assetVarTypes = map[string]bool{
 	"select":  true,
 }
 
+// assetPredefinedTags 预定义标签白名单。
+// 作者手动输入相近标签时归并到此处，避免「写作/文案」等同义词碎片化。
+// 小写存储，查询与归并统一按小写匹配。
+var assetPredefinedTags = []string{
+	"写作", "文案", "摘要", "续写",
+	"翻译", "本地化",
+	"分析", "解读", "总结",
+	"角色扮演", "对话", "问答",
+	"格式化", "转换", "提取",
+}
+
+// assetPredefinedTagSet 用于 O(1) 查找预定义标签
+var assetPredefinedTagSet = func() map[string]bool {
+	m := make(map[string]bool, len(assetPredefinedTags))
+	for _, t := range assetPredefinedTags {
+		m[t] = true
+	}
+	return m
+}()
+
+// assetTagMaxCount 标签数量上限
+const assetTagMaxCount = 5
+
+// assetTagMaxLen 单个标签长度上限（rune 数）
+const assetTagMaxLen = 10
+
+// normalizeTags 校验并归并资产标签：
+//   - 数量 0-5 个（允许空，表示不打标签）
+//   - 单个标签 ≤ 10 字符
+//   - 去重 + 去空格
+//   - 预定义白名单中的标签原样保留；非预定义标签尝试归并到相近预定义标签
+//   - 归并失败（无相近项）时保留原始标签，允许自定义标签存在
+func normalizeTags(tags []string) ([]string, error) {
+	if len(tags) == 0 {
+		return []string{}, nil
+	}
+	if len(tags) > assetTagMaxCount {
+		return nil, fmt.Errorf("%w: 标签最多 %d 个", ErrAssetInvalidInput, assetTagMaxCount)
+	}
+	seen := make(map[string]bool, len(tags))
+	result := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		t := strings.TrimSpace(raw)
+		if t == "" {
+			continue
+		}
+		if len([]rune(t)) > assetTagMaxLen {
+			return nil, fmt.Errorf("%w: 标签长度不能超过 %d 个字符: %s", ErrAssetInvalidInput, assetTagMaxLen, t)
+		}
+		// 归并：预定义标签直接命中
+		if assetPredefinedTagSet[t] {
+			if !seen[t] {
+				seen[t] = true
+				result = append(result, t)
+			}
+			continue
+		}
+		// 归并：尝试找相近的预定义标签（编辑距离 ≤ 2）
+		merged := mergeToPredefinedTag(t)
+		if merged != "" {
+			if !seen[merged] {
+				seen[merged] = true
+				result = append(result, merged)
+			}
+			continue
+		}
+		// 无法归并：保留原始标签（允许自定义）
+		if !seen[t] {
+			seen[t] = true
+			result = append(result, t)
+		}
+	}
+	return result, nil
+}
+
+// mergeToPredefinedTag 尝试将自定义标签归并到最相近的预定义标签。
+// 遍历全部预定义标签取编辑距离最小者；最小距离 ≤ 2 视为相近（如「文按」->「文案」）。
+// 返回归并后的标签；无法归并返回空串。
+func mergeToPredefinedTag(tag string) string {
+	best := ""
+	bestDist := assetTagMaxLen + 1
+	for _, pre := range assetPredefinedTags {
+		if d := editDistance(tag, pre); d < bestDist {
+			bestDist = d
+			best = pre
+		}
+	}
+	if bestDist <= 2 {
+		return best
+	}
+	return ""
+}
+
+// editDistance 计算两个字符串的 Levenshtein 编辑距离。
+// 用于标签归并：距离 ≤ 2 视为相近。
+func editDistance(a, b string) int {
+	ra := []rune(a)
+	rb := []rune(b)
+	la := len(ra)
+	lb := len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	dp := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		dp[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		prev := dp[0]
+		dp[0] = i
+		for j := 1; j <= lb; j++ {
+			tmp := dp[j]
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			dp[j] = minInt(minInt(dp[j]+1, dp[j-1]+1), prev+cost)
+			prev = tmp
+		}
+	}
+	return dp[lb]
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // CreateAsset 创建资产。作者 ID 必填；status 默认 draft。
 func (s *AssetService) CreateAsset(ctx context.Context, req types.CreateAssetReq, authorID string) (*types.Asset, error) {
 	if authorID == "" {
@@ -88,6 +221,10 @@ func (s *AssetService) CreateAsset(ctx context.Context, req types.CreateAssetReq
 	if err != nil {
 		return nil, err
 	}
+	tags, err := normalizeTags(req.Tags)
+	if err != nil {
+		return nil, err
+	}
 
 	// ParentID 校验：来源资产必须存在且已发布
 	if req.ParentID != nil && *req.ParentID != "" {
@@ -109,6 +246,7 @@ func (s *AssetService) CreateAsset(ctx context.Context, req types.CreateAssetReq
 		PromptTemplate:  req.PromptTemplate,
 		InputVariables:  inputVars,
 		DefaultParams:   defaultParams,
+		Tags:            tags,
 		AuthorID:        authorID,
 		ParentID:        req.ParentID,
 		Status:          status,
@@ -156,8 +294,9 @@ func (s *AssetService) GetAsset(ctx context.Context, id, viewerID string) (*type
 }
 
 // ListAssets 列出已发布资产（公开列表）。
-// 支持按 authorID / type / 关键字过滤；分页。
-func (s *AssetService) ListAssets(ctx context.Context, viewerID, authorID, assetType, keyword string, page, pageSize int) (*types.Paginated[types.Asset], error) {
+// 支持按 authorID / type / tag / 关键字过滤；sort 控制排序；分页。
+// 搜索范围：name + description + prompt_template（C1 升级）。
+func (s *AssetService) ListAssets(ctx context.Context, viewerID, authorID, assetType, tag, keyword, sort string, page, pageSize int) (*types.Paginated[types.Asset], error) {
 	q := dal.DB.WithContext(ctx).Model(&model.Asset{}).
 		Preload("Author").
 		Where("status = ?", model.AssetStatusPublished)
@@ -174,17 +313,34 @@ func (s *AssetService) ListAssets(ctx context.Context, viewerID, authorID, asset
 	if assetType != "" {
 		q = q.Where("type = ?", assetType)
 	}
+	// 标签过滤：jsonb @> 包含查询，tags 列存 ["写作","翻译"] 格式
+	if tag = strings.TrimSpace(tag); tag != "" {
+		q = q.Where("tags @> ?::jsonb", `["`+tag+`"]`)
+	}
+	// 搜索范围扩展到 prompt_template（C1 升级）
 	if keyword = strings.TrimSpace(keyword); keyword != "" {
 		like := "%" + keyword + "%"
-		q = q.Where("(name ILIKE ? OR description ILIKE ?)", like, like)
+		q = q.Where("(name ILIKE ? OR description ILIKE ? OR prompt_template ILIKE ?)", like, like, like)
 	}
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, err
 	}
+	// 排序：latest（默认）/ hot（运行次数）/ forks（派生次数）
+	orderClause := "created_at DESC"
+	switch sort {
+	case "", "latest":
+		orderClause = "created_at DESC"
+	case "hot":
+		orderClause = "run_count DESC, created_at DESC"
+	case "forks":
+		orderClause = "fork_count DESC, created_at DESC"
+	default:
+		return nil, fmt.Errorf("%w: 非法的 sort 参数: %s", ErrAssetInvalidInput, sort)
+	}
 	var rows []model.Asset
-	if err := q.Order("created_at DESC").
+	if err := q.Order(orderClause).
 		Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -297,6 +453,13 @@ func (s *AssetService) UpdateAsset(ctx context.Context, id, viewerID string, req
 		}
 		updates["default_params"] = raw
 	}
+	if req.Tags != nil {
+		tags, err := normalizeTags(*req.Tags)
+		if err != nil {
+			return nil, err
+		}
+		updates["tags"] = tags
+	}
 	if req.Status != nil {
 		switch *req.Status {
 		case model.AssetStatusDraft, model.AssetStatusPublished, model.AssetStatusArchived:
@@ -368,6 +531,10 @@ func (s *AssetService) loadDTO(ctx context.Context, id, viewerID string) (*types
 // mapToDTO 将 model.Asset 映射为 types.Asset。
 // liked 由调用方在聚合层补充，这里默认 false（点赞在 B3/B4 之后再加）。
 func (s *AssetService) mapToDTO(a *model.Asset, liked bool) types.Asset {
+	tags := a.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	dto := types.Asset{
 		ID:             a.ID,
 		Type:           a.Type,
@@ -377,6 +544,7 @@ func (s *AssetService) mapToDTO(a *model.Asset, liked bool) types.Asset {
 		PromptTemplate: a.PromptTemplate,
 		InputVariables: decodeInputVariables(a.InputVariables),
 		DefaultParams:  decodeDefaultParams(a.DefaultParams),
+		Tags:           tags,
 		AuthorID:       a.AuthorID,
 		Author:         mapper.AuthorToDTO(&a.Author),
 		ParentID:       a.ParentID,

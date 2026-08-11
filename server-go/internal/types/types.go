@@ -846,6 +846,7 @@ type Asset struct {
 	PromptTemplate string               `json:"promptTemplate"`
 	InputVariables []AssetInputVariable `json:"inputVariables"`
 	DefaultParams  AssetDefaultParams   `json:"defaultParams"`
+	Tags           []string             `json:"tags"`
 	AuthorID       string               `json:"authorId"`
 	Author         PublicUser           `json:"author"`
 	ParentID       *string              `json:"parentId,omitempty"`
@@ -868,12 +869,13 @@ type CreateAssetReq struct {
 	PromptTemplate  string               `json:"promptTemplate" vd:"len($)>=1 && len($)<=20000"`
 	InputVariables  []AssetInputVariable `json:"inputVariables"`
 	DefaultParams   *AssetDefaultParams  `json:"defaultParams"`
+	Tags            []string             `json:"tags"`
 	ParentID        *string              `json:"parentId"`
 	Status          string               `json:"status" vd:"in($, '', 'draft', 'published', 'archived')"`
 	Visibility      string               `json:"visibility" vd:"in($, '', 'public', 'unlisted', 'private')"`
 }
 
-// UpdateAssetReq 更新资产请求；仅作者可改，已 published 的资产只允许改 description/visibility/status
+// UpdateAssetReq 更新资产请求；仅作者可改，已 published 的资产只允许改 description/visibility/status/tags
 type UpdateAssetReq struct {
 	Name            *string               `json:"name"`
 	Version         *string               `json:"version"`
@@ -881,6 +883,7 @@ type UpdateAssetReq struct {
 	PromptTemplate  *string               `json:"promptTemplate"`
 	InputVariables  *[]AssetInputVariable `json:"inputVariables"`
 	DefaultParams   *AssetDefaultParams   `json:"defaultParams"`
+	Tags            *[]string             `json:"tags"`
 	Status          *string               `json:"status"`
 	Visibility      *string               `json:"visibility"`
 }
