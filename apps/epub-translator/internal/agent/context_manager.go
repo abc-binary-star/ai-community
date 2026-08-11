@@ -7,9 +7,9 @@ import (
 // ContextManager 翻译上下文管理器
 // 维护术语表、章节摘要累积、翻译历史
 type ContextManager struct {
-	mu          sync.RWMutex
-	glossary    map[string]string // 原文术语 -> 中文译名
-	summaries   map[string]string // chapterID -> 累积摘要
+	mu           sync.RWMutex
+	glossary     map[string]string // 原文术语 -> 中文译名
+	summaries    map[string]string // chapterID -> 累积摘要
 	chapterOrder []string          // 章节顺序
 }
 
@@ -61,7 +61,18 @@ func (cm *ContextManager) AppendSummary(chapterID, summary string) {
 		cm.summaries[chapterID] = existing + " " + summary
 	} else {
 		cm.summaries[chapterID] = summary
-		cm.chapterOrder = append(cm.chapterOrder, chapterID)
+		// Chapters are normally registered before translation starts. Avoid
+		// adding a second occurrence when the first summary arrives later.
+		registered := false
+		for _, id := range cm.chapterOrder {
+			if id == chapterID {
+				registered = true
+				break
+			}
+		}
+		if !registered {
+			cm.chapterOrder = append(cm.chapterOrder, chapterID)
+		}
 	}
 }
 
