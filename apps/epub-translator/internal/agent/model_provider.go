@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/ark"
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
@@ -50,12 +51,25 @@ func (p *ModelProvider) ensureModels(ctx context.Context) error {
 	}
 	baseURL := p.cfg.BaseURL
 
-	m, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
-		APIKey:  p.cfg.APIKey,
-		BaseURL: baseURL,
-		Model:   p.cfg.Model,
-		Timeout: &timeout,
-	})
+	// 创建主模型：默认 OpenAI 兼容接口（DeepSeek / 火山方舟 / OpenAI 均兼容），
+	// provider=ark 时使用火山方舟专用组件
+	createModel := func(modelName string) (model.ChatModel, error) {
+		if p.cfg.Provider == "ark" {
+			return ark.NewChatModel(ctx, &ark.ChatModelConfig{
+				APIKey:  p.cfg.APIKey,
+				BaseURL: baseURL,
+				Model:   modelName,
+				Timeout: &timeout,
+			})
+		}
+		return openai.NewChatModel(ctx, &openai.ChatModelConfig{
+			APIKey:  p.cfg.APIKey,
+			BaseURL: baseURL,
+			Model:   modelName,
+		})
+	}
+
+	m, err := createModel(p.cfg.Model)
 	if err != nil {
 		return fmt.Errorf("创建翻译模型失败: %w", err)
 	}
@@ -63,12 +77,7 @@ func (p *ModelProvider) ensureModels(ctx context.Context) error {
 	rm := m
 	reviewModel := p.cfg.ReviewModel
 	if reviewModel != "" && reviewModel != p.cfg.Model {
-		rm, err = ark.NewChatModel(ctx, &ark.ChatModelConfig{
-			APIKey:  p.cfg.APIKey,
-			BaseURL: baseURL,
-			Model:   reviewModel,
-			Timeout: &timeout,
-		})
+		rm, err = createModel(reviewModel)
 		if err != nil {
 			return fmt.Errorf("创建审校模型失败: %w", err)
 		}

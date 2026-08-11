@@ -147,13 +147,13 @@ func applyDefaults(cfg *Config) {
 		cfg.Server.Mode = "debug"
 	}
 	if cfg.LLM.Provider == "" {
-		cfg.LLM.Provider = "ark"
+		cfg.LLM.Provider = "openai" // openai（DeepSeek/方舟/OpenAI 等兼容端点）| ark（火山方舟专用）
 	}
 	if cfg.LLM.Model == "" {
-		cfg.LLM.Model = "doubao-pro-128k"
+		cfg.LLM.Model = "deepseek-chat"
 	}
 	if cfg.LLM.ReviewModel == "" {
-		cfg.LLM.ReviewModel = "doubao-pro-32k"
+		cfg.LLM.ReviewModel = "deepseek-chat"
 	}
 	if cfg.LLM.MaxRetries == 0 {
 		cfg.LLM.MaxRetries = 3

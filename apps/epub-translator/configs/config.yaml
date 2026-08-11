@@ -6,13 +6,14 @@ server:
   read_timeout: 60s
   write_timeout: 600s
 
-# 豆包火山方舟 API 配置
+# 大模型配置：默认 OpenAI 兼容接口，复用社区 server-go 的 DeepSeek 接入
+# （provider: openai 支持 DeepSeek/火山方舟/OpenAI 等任意兼容端点；ark 为火山方舟专用）
 llm:
-  provider: "ark"
-  api_key: "${ARK_API_KEY}"
-  base_url: "https://ark.cn-beijing.volces.com/api/v3"
-  model: "doubao-pro-128k"   # 翻译主模型
-  review_model: "doubao-pro-32k" # 审校模型，可用更轻量
+  provider: "openai"
+  api_key: "${DEEPSEEK_API_KEY}"
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-chat"        # 翻译主模型
+  review_model: "deepseek-chat" # 审校模型（可与主模型相同，或用 deepseek-reasoner）
   timeout: 600s
   max_retries: 3
   temperature: 0.3   # 翻译要求低随机性

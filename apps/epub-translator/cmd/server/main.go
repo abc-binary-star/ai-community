@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/joho/godotenv"
 
 	"github.com/abc-binary-star/ai-community/apps/epub-translator/internal/handler"
 	"github.com/abc-binary-star/ai-community/apps/epub-translator/internal/router"
@@ -19,6 +20,9 @@ func main() {
 	// 解析命令行参数
 	configPath := flag.String("config", "", "配置文件路径（默认 ./configs/config.yaml）")
 	flag.Parse()
+
+	// 加载 .env（提供 DEEPSEEK_API_KEY 等密钥，不纳入版本控制）
+	_ = godotenv.Load()
 
 	// 加载配置
 	cfg, err := config.Load(*configPath)
