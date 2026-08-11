@@ -63,8 +63,11 @@ func (p *Parser) ParseBytes(data []byte) (*Book, error) {
 	book.Description = opf.Metadata.Description
 	book.Identifier = opf.Metadata.Identifier
 
-	// 3. 按 spine 顺序读取章节内容
+	// 构建 guide/landmarks 映射（href -> 前置页类型）
 	baseDir := filepath.Dir(opfPath)
+	book.Guide = buildGuideMap(opf, baseDir)
+
+	// 3. 按 spine 顺序读取章节内容
 	for i, itemref := range opf.Spine.Itemrefs {
 		manifestItem := findManifestItem(opf.Manifest, itemref.IDRef)
 		if manifestItem == nil {
@@ -84,6 +87,7 @@ func (p *Parser) ParseBytes(data []byte) (*Book, error) {
 			Title:       title,
 			HTMLContent: string(htmlData),
 			Order:       i,
+			Kind:        classifyChapterKind(book.Guide, href),
 		}
 		book.Chapters = append(book.Chapters, chapter)
 	}
@@ -117,6 +121,7 @@ type opfDocument struct {
 	Metadata  opfMetadata `xml:"metadata"`
 	Manifest  opfManifest `xml:"manifest"`
 	Spine     opfSpine    `xml:"spine"`
+	Guide     opfGuide    `xml:"guide"`
 }
 
 type opfMetadata struct {
@@ -145,6 +150,39 @@ type opfSpine struct {
 
 type opfItemref struct {
 	IDRef string `xml:"idref,attr"`
+}
+
+// opfGuide OPF guide（EPUB2 前置页导航）
+type opfGuide struct {
+	References []opfReference `xml:"reference"`
+}
+
+type opfReference struct {
+	Type  string `xml:"type,attr"`
+	Href  string `xml:"href,attr"`
+	Title string `xml:"title,attr"`
+}
+
+// buildGuideMap 构建 href(归一化，含 OPF 目录前缀) -> guide 类型 的映射
+func buildGuideMap(opf *opfDocument, baseDir string) map[string]string {
+	m := make(map[string]string)
+	for _, ref := range opf.Guide.References {
+		if ref.Type == "" || ref.Href == "" {
+			continue
+		}
+		// 去掉锚点（#id），并拼上 OPF 目录前缀与章节路径保持一致
+		href := strings.SplitN(ref.Href, "#", 2)[0]
+		m[normalizePath(joinPath(baseDir, href))] = ref.Type
+	}
+	return m
+}
+
+// classifyChapterKind 判断章节类型（前置页 / 正文）
+func classifyChapterKind(guide map[string]string, href string) string {
+	if len(guide) == 0 {
+		return ""
+	}
+	return guide[normalizePath(href)]
 }
 
 func parseOPF(data []byte) (*opfDocument, error) {

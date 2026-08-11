@@ -42,7 +42,10 @@ func main() {
 
 	// 初始化服务层
 	translationSvc := service.NewTranslationService(cfg)
-	taskSvc := service.NewTaskService()
+	taskSvc, err := service.NewTaskService(cfg)
+	if err != nil {
+		panic("初始化任务存储失败: " + err.Error())
+	}
 	pipelineSvc := service.NewPipelineService(translationSvc.Provider())
 
 	// 初始化 HTTP Handler

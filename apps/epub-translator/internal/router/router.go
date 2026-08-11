@@ -41,6 +41,14 @@ func Register(h *server.Hertz, hdl *handler.Handler) {
 		v1.GET("/tasks/:id", hdl.GetTask)
 		v1.GET("/tasks/:id/download", hdl.DownloadTask)
 
+		// M1 书籍工作台：目录总览 / 前置页汉化 / 按章翻译 / 整本翻译 / 导出
+		v1.GET("/tasks/:id/chapters", hdl.ListChapters)
+		v1.GET("/tasks/:id/chapters/:index/content", hdl.GetChapterContent)
+		v1.POST("/tasks/:id/frontmatter/translate", hdl.FrontMatterTranslate)
+		v1.POST("/tasks/:id/chapters/:index/translate", hdl.TranslateChapter)
+		v1.POST("/tasks/:id/translate", hdl.TranslateAllChapters)
+		v1.POST("/tasks/:id/export", hdl.ExportBook)
+
 		// 阶段 3：术语表（抽取 / 查看 / 确认）
 		v1.POST("/tasks/:id/glossary/extract", hdl.ExtractGlossary)
 		v1.GET("/tasks/:id/glossary", hdl.GetGlossary)

@@ -300,6 +300,80 @@ func (s *PostService) GetPost(ctx context.Context, postID, userID string) (*type
 	return &dto, nil
 }
 
+// RelatedPosts 相关讨论推荐（F14）。
+// 匹配策略：同频道优先 + 共享标签加分，排除自身；取 limit 条（默认 5）。
+// 只返回已发布且当前用户可见的帖子。
+func (s *PostService) RelatedPosts(ctx context.Context, postID, userID string, limit int) ([]types.Post, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 10 {
+		limit = 10
+	}
+
+	var post model.Post
+	if err := dal.DB.WithContext(ctx).
+		Select("id", "channel").
+		First(&post, "id = ?", postID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrPostNotFound_Post
+		}
+		return nil, err
+	}
+
+	// 同频道已发布帖子（排除自身），按相似度评分排序后取前 limit 条
+	dbQuery := dal.DB.WithContext(ctx).
+		Model(&model.Post{}).
+		Select(`posts.id,
+			CASE WHEN posts.channel = ? THEN 2 ELSE 0 END +
+			(SELECT COUNT(*) FROM post_tags pt
+			 WHERE pt.post_id = posts.id
+			   AND pt.tag_id IN (SELECT pt2.tag_id FROM post_tags pt2 WHERE pt2.post_id = ?)) AS rel_score`,
+			post.Channel, postID).
+		Where("posts.id <> ?", postID)
+	dbQuery = postPublishedScope(ctx, dbQuery, userID)
+
+	var rows []model.Post
+	if err := dbQuery.
+		Order("rel_score DESC, posts.created_at DESC").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
+		log.Printf("[Post/RelatedPosts] 查询相关讨论失败, postID=%s, err=%v", postID, err)
+		return nil, err
+	}
+
+	if len(rows) == 0 {
+		return []types.Post{}, nil
+	}
+
+	// 批量组装 DTO
+	ids := make([]string, 0, len(rows))
+	for i := range rows {
+		ids = append(ids, rows[i].ID)
+	}
+	commentCounts := batchCommentCount(ctx, ids)
+	likedSet := batchLikedPostIDs(ctx, ids, userID)
+	bookmarkedSet := batchBookmarkedPostIDs(ctx, ids, userID)
+
+	// 预加载作者与标签
+	var full []model.Post
+	if err := dal.DB.WithContext(ctx).
+		Preload("Author").Preload("Tags").
+		Where("id IN ?", ids).
+		Find(&full).Error; err != nil {
+		log.Printf("[Post/RelatedPosts] 预加载相关讨论失败, postID=%s, err=%v", postID, err)
+		return nil, err
+	}
+
+	items := make([]types.Post, 0, len(full))
+	for i := range full {
+		p := &full[i]
+		tagNames := mapper.ExtractTagNames(p.Tags)
+		items = append(items, mapper.PostToDTO(p, commentCounts[p.ID], likedSet[p.ID], bookmarkedSet[p.ID], tagNames))
+	}
+	return items, nil
+}
+
 func replacePostTagsTx(tx *gorm.DB, postID string, rawTags []string) error {
 	if err := tx.Where("post_id = ?", postID).Delete(&model.PostTag{}).Error; err != nil {
 		return err

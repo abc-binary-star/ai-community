@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"log"
+	"strconv"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/middleware"
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/pagination"
@@ -55,6 +56,26 @@ func GetPost(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
 
 	result, err := postService.GetPost(ctx, id, userID)
+	if err != nil {
+		handlePostError(c, err)
+		return
+	}
+	response.JSON(c, result)
+}
+
+// RelatedPosts 相关讨论推荐
+// GET /api/posts/:id/related?limit=5
+func RelatedPosts(ctx context.Context, c *app.RequestContext) {
+	id := c.Param("id")
+	userID := middleware.GetCurrentUserID(c)
+	limit := 5
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	result, err := postService.RelatedPosts(ctx, id, userID, limit)
 	if err != nil {
 		handlePostError(c, err)
 		return

@@ -23,6 +23,7 @@ import { fontFamily } from '@/lib/font-options'
 import { getChannelLabel, type Post, type ThreadSummary } from 'shared'
 import { WholeDiscussion } from './whole-discussion'
 import { AssetPanel } from './asset-panel'
+import { RelatedDiscussions } from './related-discussions'
 import { LikeButton } from './like-button'
 import { BookmarkButton } from './bookmark-button'
 import { ShareButton } from './share-button'
@@ -429,6 +430,8 @@ export function PostDetailView({ id }: { id: string }) {
           </div>
         </div>
       </Card>
+
+      <RelatedDiscussions postId={post.id} />
 
       <WholeDiscussion postId={id} />
 

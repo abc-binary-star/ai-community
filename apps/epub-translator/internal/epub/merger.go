@@ -118,8 +118,11 @@ func replaceBlockRange(blockNodes []*html.Node, start, end int, translatedHTML s
 		parent.InsertBefore(frag, first)
 	}
 
-	// 2. 移除被替换的原始块节点
+	// 2. 移除被替换的原始块节点（用各自父节点移除，块可能跨父节点聚合）
 	for i := start; i <= end; i++ {
-		parent.RemoveChild(blockNodes[i])
+		node := blockNodes[i]
+		if node.Parent != nil {
+			node.Parent.RemoveChild(node)
+		}
 	}
 }

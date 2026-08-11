@@ -61,6 +61,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.PUT("/api/posts/:id/status", middleware.Auth(), middleware.RequireRole("admin", "moderator"), handler.SetPostStatus)
 	h.GET("/api/posts/:id/summary", middleware.OptionalAuth(), handler.GetThreadSummary)
 	h.POST("/api/posts/:id/summary", middleware.Auth(), middleware.AILimit(ailimit.FeatureThreadSummary), handler.GenerateThreadSummary)
+	h.GET("/api/posts/:id/related", middleware.OptionalAuth(), handler.RelatedPosts)
 	h.POST("/api/posts/:id/like", middleware.Auth(), handler.LikePost)
 	h.DELETE("/api/posts/:id/like", middleware.Auth(), handler.UnlikePost)
 

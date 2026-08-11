@@ -98,6 +98,44 @@ func truncate(s string, n int) string {
 	return s[:n] + "..."
 }
 
+// 回归测试：跨父节点聚合的块（如 TOC 页 <ul><li>..</li></ul> 后跟 <p>）
+// 不应导致 ReplaceChild/RemoveChild panic
+func TestMergeCrossParentBlocks(t *testing.T) {
+	htmlStr := `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>TOC</title></head><body>
+<h1>Table of Contents</h1>
+<ul>
+<li><a href="chapter1.xhtml">Chapter 1: The Awakening</a></li>
+<li><a href="chapter2.xhtml">Chapter 2: The Journey</a></li>
+</ul>
+<p>Preface text here.</p>
+</body></html>`
+
+	chunker := NewChunker(1500, 300, 100)
+	chapter := Chapter{ID: "toc", Href: "toc.xhtml", Title: "TOC", HTMLContent: htmlStr}
+	chunks, err := chunker.ChunkChapter(chapter)
+	if err != nil {
+		t.Fatalf("chunk 失败: %v", err)
+	}
+
+	translated := make([]string, len(chunks))
+	for i, c := range chunks {
+		translated[i] = fmt.Sprintf("[T%d] %s", i, c.HTMLFragment)
+	}
+
+	// 不应 panic
+	out, err := MergeTranslations(htmlStr, chunks, translated)
+	if err != nil {
+		t.Fatalf("merge 失败: %v", err)
+	}
+	for i := range chunks {
+		if !strings.Contains(out, fmt.Sprintf("[T%d]", i)) {
+			t.Fatalf("chunk %d 的翻译内容未写回", i)
+		}
+	}
+	t.Logf("跨父节点合并成功，输出长度=%d", len(out))
+}
+
 func parseHTML(s string) (*html.Node, error) {
 	return html.Parse(strings.NewReader(s))
 }

@@ -74,12 +74,13 @@ func (g *TranslatorGraph) buildGraph() {
 	}
 
 	// 分支：审校未通过且未超过重试上限 → rewrite；否则结束
+	// 注意：endNodes 是 condition 返回值白名单，必须包含所有可能的返回 key
 	branch := compose.NewGraphBranch(func(ctx context.Context, in *translateState) (string, error) {
 		if in.Passed || in.Retries >= g.maxRetries {
 			return compose.END, nil
 		}
 		return "rewrite", nil
-	}, map[string]bool{compose.END: true})
+	}, map[string]bool{compose.END: true, "rewrite": true})
 	if err := graph.AddBranch("review", branch); err != nil {
 		logger.L().Warnf("添加审校分支失败: %v", err)
 		return

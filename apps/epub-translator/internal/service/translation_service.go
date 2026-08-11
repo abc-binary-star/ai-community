@@ -204,16 +204,18 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0o644)
 }
 
-// TaskService 任务管理服务（简化版，Phase 4 接入数据库）
+// TaskService 任务管理服务（SQLite 持久化）
 type TaskService struct {
-	tasks map[string]*model.Task
+	store *TaskStore
 }
 
 // NewTaskService 创建任务服务
-func NewTaskService() *TaskService {
-	return &TaskService{
-		tasks: make(map[string]*model.Task),
+func NewTaskService(cfg *config.Config) (*TaskService, error) {
+	store, err := NewTaskStore(cfg.Database.SQLite.Path)
+	if err != nil {
+		return nil, err
 	}
+	return &TaskService{store: store}, nil
 }
 
 // CreateTask 创建任务
@@ -230,19 +232,74 @@ func (ts *TaskService) CreateTask(fileName, bookTitle, sourceLang, targetLang, m
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
-	ts.tasks[task.ID] = task
+	_ = ts.store.Save(task)
 	return task
+}
+
+// SetChapters 初始化/更新章节状态列表
+func (ts *TaskService) SetChapters(id string, chapters []model.ChapterState) {
+	if task, ok := ts.GetTask(id); ok {
+		task.Chapters = chapters
+		task.UpdatedAt = time.Now()
+		_ = ts.store.Save(task)
+	}
+}
+
+// UpdateChapter 更新单个章节状态（自动持久化）
+func (ts *TaskService) UpdateChapter(id string, index int, fn func(ch *model.ChapterState)) bool {
+	task, ok := ts.GetTask(id)
+	if !ok {
+		return false
+	}
+	if index < 0 || index >= len(task.Chapters) {
+		return false
+	}
+	fn(&task.Chapters[index])
+	task.UpdatedAt = time.Now()
+	_ = ts.store.Save(task)
+	return true
+}
+
+// MarkFrontMatterDone 标记前置页汉化完成
+func (ts *TaskService) MarkFrontMatterDone(id string, done bool) {
+	if task, ok := ts.GetTask(id); ok {
+		task.FrontMatterDone = done
+		task.UpdatedAt = time.Now()
+		_ = ts.store.Save(task)
+	}
+}
+
+// SaveTask 保存任务（供外部修改任务对象后落库）
+func (ts *TaskService) SaveTask(task *model.Task) {
+	task.UpdatedAt = time.Now()
+	_ = ts.store.Save(task)
+}
+
+// MutateTask 原子读-改-写（基于最新库状态），返回是否成功
+func (ts *TaskService) MutateTask(id string, fn func(*model.Task)) bool {
+	if err := ts.store.Mutate(id, fn); err != nil {
+		logger.L().Errorf("更新任务 %s 失败: %v", id, err)
+		return false
+	}
+	return true
 }
 
 // GetTask 获取任务
 func (ts *TaskService) GetTask(id string) (*model.Task, bool) {
-	task, ok := ts.tasks[id]
-	return task, ok
+	task, err := ts.store.Get(id)
+	if err != nil {
+		logger.L().Errorf("读取任务 %s 失败: %v", id, err)
+		return nil, false
+	}
+	if task == nil {
+		return nil, false
+	}
+	return task, true
 }
 
 // UpdateTaskStatus 更新任务状态
 func (ts *TaskService) UpdateTaskStatus(id string, status model.TaskStatus) {
-	if task, ok := ts.tasks[id]; ok {
+	if task, ok := ts.GetTask(id); ok {
 		task.Status = status
 		task.UpdatedAt = time.Now()
 		if status == model.TaskStatusTranslating && task.StartedAt == nil {
@@ -253,23 +310,26 @@ func (ts *TaskService) UpdateTaskStatus(id string, status model.TaskStatus) {
 			now := time.Now()
 			task.CompletedAt = &now
 		}
+		_ = ts.store.Save(task)
 	}
 }
 
 // UpdateProgress 更新进度
 func (ts *TaskService) UpdateProgress(id string, done, total int) {
-	if task, ok := ts.tasks[id]; ok {
+	if task, ok := ts.GetTask(id); ok {
 		task.DoneChunks = done
 		task.TotalChunks = total
 		task.UpdatedAt = time.Now()
+		_ = ts.store.Save(task)
 	}
 }
 
 // ListTasks 列出所有任务
 func (ts *TaskService) ListTasks() []*model.Task {
-	tasks := make([]*model.Task, 0, len(ts.tasks))
-	for _, t := range ts.tasks {
-		tasks = append(tasks, t)
+	tasks, err := ts.store.List()
+	if err != nil {
+		logger.L().Errorf("读取任务列表失败: %v", err)
+		return nil
 	}
 	return tasks
 }

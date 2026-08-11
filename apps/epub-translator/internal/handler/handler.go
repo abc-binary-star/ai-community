@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,6 +74,7 @@ func (h *Handler) CreateTranslateTask(ctx context.Context, c *app.RequestContext
 	task := h.taskSvc.CreateTask(filename, "", sourceLang, targetLang, usedModel, "")
 	uploadPath := filepath.Join(h.cfg.Storage.Local.UploadDir, task.ID+"_"+filename)
 	task.UploadPath = uploadPath
+	h.taskSvc.SaveTask(task)
 
 	if err := c.SaveUploadedFile(file, uploadPath); err != nil {
 		logger.L().Errorf("保存上传文件失败: %v", err)
@@ -84,16 +86,40 @@ func (h *Handler) CreateTranslateTask(ctx context.Context, c *app.RequestContext
 		return
 	}
 
-	// 异步执行翻译
-	go h.executeTranslation(task.ID, uploadPath, filename, sourceLang, targetLang, usedModel)
+	// 异步解析并初始化章节（M1：上传后先看目录，不自动整本翻译）
+	safeGo(func() { h.executeInit(task.ID, uploadPath) })
 
 	c.JSON(consts.StatusAccepted, utils.H{
 		"task_id":    task.ID,
 		"status":     task.Status,
 		"file_name":  task.FileName,
 		"created_at": task.CreatedAt,
-		"message":    "翻译任务已创建，请通过 GET /api/v1/tasks/:id 查询进度",
+		"message":    "书籍已上传，解析完成后可查看目录并按章翻译",
 	})
+}
+
+// executeInit 异步解析 EPUB 并初始化章节状态
+func (h *Handler) executeInit(taskID, filePath string) {
+	h.taskSvc.UpdateTaskStatus(taskID, model.TaskStatusParsing)
+
+	task, ok := h.taskSvc.GetTask(taskID)
+	if !ok {
+		return
+	}
+	book, err := h.translationSvc.ParseBook(task)
+	if err != nil {
+		logger.L().Errorf("任务 %s 解析失败: %v", taskID, err)
+		task.ErrorMessage = "解析 EPUB 失败: " + err.Error()
+		h.taskSvc.SaveTask(task)
+		h.taskSvc.UpdateTaskStatus(taskID, model.TaskStatusFailed)
+		return
+	}
+
+	task.BookTitle = book.Title
+	task.Chapters = h.translationSvc.BuildChapterStates(book, nil)
+	task.Status = model.TaskStatusReady
+	h.taskSvc.SaveTask(task)
+	logger.L().Infof("任务 %s 解析完成: 《%s》 %d 章，进入按章翻译", taskID, book.Title, len(book.Chapters))
 }
 
 // executeTranslation 异步执行翻译
@@ -244,6 +270,18 @@ func (h *Handler) Health(ctx context.Context, c *app.RequestContext) {
 // Ping GET /ping
 func (h *Handler) Ping(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, utils.H{"message": "pong"})
+}
+
+// safeGo 异步执行任务，panic 时记录日志而不拖垮服务
+func safeGo(fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.L().Errorf("异步任务 panic: %v", r)
+			}
+		}()
+		fn()
+	}()
 }
 
 // getTaskOr404 获取任务，不存在返回 404
@@ -451,5 +489,217 @@ func (h *Handler) AcceptTask(ctx context.Context, c *app.RequestContext) {
 		"task_id":  task.ID,
 		"accepted": task.Accepted,
 		"message":  msg,
+	})
+}
+
+// ListChapters GET /api/v1/tasks/:id/chapters
+// M1 书籍工作台：目录总览（章节列表 + 状态）
+func (h *Handler) ListChapters(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+
+	// 懒初始化章节状态（任务已存在但未解析时）
+	if len(task.Chapters) == 0 {
+		book, err := h.translationSvc.ParseBook(task)
+		if err != nil {
+			c.JSON(consts.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+		task.BookTitle = book.Title
+		task.Chapters = h.translationSvc.BuildChapterStates(book, nil)
+		h.taskSvc.SaveTask(task)
+	}
+
+	c.JSON(consts.StatusOK, utils.H{
+		"task_id":           task.ID,
+		"book_title":        task.BookTitle,
+		"status":            task.Status,
+		"chapters":          task.Chapters,
+		"front_matter_done": task.FrontMatterDone,
+		"glossary_set":      task.GlossarySet,
+	})
+}
+
+// TranslateChapter POST /api/v1/tasks/:id/chapters/:index/translate
+// M1 按章翻译（异步）
+func (h *Handler) TranslateChapter(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+	index, err := strconv.Atoi(c.Param("index"))
+	if err != nil || index < 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "章节序号无效"})
+		return
+	}
+
+	// 标记任务翻译中
+	h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+		t.Status = model.TaskStatusTranslating
+	})
+
+	safeGo(func() {
+		err := h.translationSvc.TranslateChapter(context.Background(), task, index)
+		h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+			if err != nil {
+				t.ErrorMessage = err.Error()
+				logger.L().Errorf("章节 %d 翻译失败: %v", index, err)
+			} else if index < len(task.Chapters) {
+				t.Chapters[index] = task.Chapters[index]
+			}
+			t.Status = model.TaskStatusReady
+		})
+	})
+
+	c.JSON(consts.StatusAccepted, utils.H{
+		"task_id": task.ID,
+		"index":   index,
+		"message": "章节翻译已启动",
+	})
+}
+
+// TranslateAllChapters POST /api/v1/tasks/:id/translate
+// M1 整本逐章翻译（异步）
+func (h *Handler) TranslateAllChapters(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+
+	h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+		t.Status = model.TaskStatusTranslating
+	})
+
+	safeGo(func() {
+		err := h.translationSvc.TranslateAllChapters(context.Background(), task)
+		h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+			if err != nil {
+				t.ErrorMessage = err.Error()
+			}
+			for i, cs := range task.Chapters {
+				if i < len(t.Chapters) {
+					t.Chapters[i] = cs
+				}
+			}
+			t.Status = model.TaskStatusReady
+		})
+	})
+
+	c.JSON(consts.StatusAccepted, utils.H{
+		"task_id": task.ID,
+		"message": "整本翻译已启动",
+	})
+}
+
+// FrontMatterTranslate POST /api/v1/tasks/:id/frontmatter/translate
+// M1 一键汉化前置页（封面/扉页/版权/目录）
+func (h *Handler) FrontMatterTranslate(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+
+	safeGo(func() {
+		err := h.translationSvc.TranslateFrontMatter(context.Background(), task)
+		h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+			if err != nil {
+				t.ErrorMessage = err.Error()
+				logger.L().Errorf("前置页汉化失败: %v", err)
+			} else {
+				t.FrontMatterDone = true
+				for i, cs := range task.Chapters {
+					if i < len(t.Chapters) && cs.Status == model.ChapterStatusTranslated {
+						t.Chapters[i] = cs
+					}
+				}
+			}
+		})
+	})
+
+	c.JSON(consts.StatusAccepted, utils.H{
+		"task_id": task.ID,
+		"message": "前置页汉化已启动",
+	})
+}
+
+// GetChapterContent GET /api/v1/tasks/:id/chapters/:index/content
+// M1 章节预览：返回原文与译文（供阅读对照）
+func (h *Handler) GetChapterContent(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+	index, err := strconv.Atoi(c.Param("index"))
+	if err != nil || index < 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "章节序号无效"})
+		return
+	}
+
+	book, err := h.translationSvc.ParseBook(task)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	if index >= len(book.Chapters) {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "章节序号越界"})
+		return
+	}
+
+	sourceHTML := book.Chapters[index].HTMLContent
+	translatedHTML := ""
+	var chunkPairs []model.ChunkPair
+	if index < len(task.Chapters) {
+		translatedHTML = task.Chapters[index].TranslatedHTML
+		chunkPairs = task.Chapters[index].ChunkPairs
+	}
+
+	c.JSON(consts.StatusOK, utils.H{
+		"task_id":         task.ID,
+		"index":           index,
+		"title":           book.Chapters[index].Title,
+		"kind":            book.Chapters[index].Kind,
+		"source_html":     sourceHTML,
+		"translated_html": translatedHTML,
+		"chunk_pairs":     chunkPairs,
+		"status":          func() string {
+			if index < len(task.Chapters) {
+				return string(task.Chapters[index].Status)
+			}
+			return string(model.ChapterStatusPending)
+		}(),
+	})
+}
+
+// ExportBook POST /api/v1/tasks/:id/export
+// M1 组装已翻译章节并导出 EPUB
+func (h *Handler) ExportBook(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+	if task.Chapters == nil {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "任务尚未解析章节"})
+		return
+	}
+
+	outputPath, err := h.translationSvc.BuildEpub(task)
+	if err != nil {
+		logger.L().Errorf("导出 EPUB 失败: %v", err)
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+
+	h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+		t.OutputPath = outputPath
+		t.Status = model.TaskStatusCompleted
+	})
+
+	c.JSON(consts.StatusOK, utils.H{
+		"task_id":     task.ID,
+		"output_path": outputPath,
+		"download":    "/api/v1/tasks/" + task.ID + "/download",
+		"message":     "导出完成，可下载",
 	})
 }

@@ -11,6 +11,7 @@ type Book struct {
 	Chapters    []Chapter // 章节列表
 	Resources   []Resource // 静态资源（图片/CSS/字体）
 	MetaPath    string    // OPF 文件路径
+	Guide       map[string]string // guide 映射：href -> 前置页类型（cover/titlepage/colophon/toc）
 }
 
 // Chapter EPUB 章节
@@ -20,6 +21,7 @@ type Chapter struct {
 	Title      string // 章节标题（从 TOC 或 <h1> 提取）
 	HTMLContent string // 原始 XHTML 内容
 	Order      int    // 在 spine 中的顺序
+	Kind       string // 章节类型："" 正文 | cover | titlepage | colophon | toc 前置页
 }
 
 // Resource 静态资源
