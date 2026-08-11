@@ -23,6 +23,7 @@ import {
   ScrollText,
   Sun,
   UserCircle,
+  Wrench,
   X,
 } from 'lucide-react'
 import { useCollapsedState } from '@/lib/use-collapsed-state'
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'megaphone': Megaphone,
   'scroll-text': ScrollText,
   'hash': Hash,
+  'wrench': Wrench,
 }
 
 // fallback 频道的默认图标映射
@@ -308,6 +310,15 @@ function SidebarContent({
           icon="box"
           href="/community/assets"
           active={pathname === '/community/assets' || pathname.startsWith('/community/assets/')}
+          onNavigate={onNavigate}
+        />
+
+        {/* 固定项：实用工具 */}
+        <ChannelItem
+          label="实用工具"
+          icon="wrench"
+          href="/community/tools"
+          active={pathname === '/community/tools' || pathname.startsWith('/community/tools/')}
           onNavigate={onNavigate}
         />
 
