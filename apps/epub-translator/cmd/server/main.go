@@ -39,9 +39,10 @@ func main() {
 	// 初始化服务层
 	translationSvc := service.NewTranslationService(cfg)
 	taskSvc := service.NewTaskService()
+	pipelineSvc := service.NewPipelineService(translationSvc.Provider())
 
 	// 初始化 HTTP Handler
-	hdl := handler.NewHandler(cfg, translationSvc, taskSvc)
+	hdl := handler.NewHandler(cfg, translationSvc, taskSvc, pipelineSvc)
 
 	// 创建 Hertz 服务器
 	h := server.Default(

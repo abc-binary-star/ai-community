@@ -42,7 +42,12 @@ type Task struct {
 	DoneChunks    int        `json:"done_chunks"`
 	FailedChunks  int        `json:"failed_chunks"`
 	ErrorMessage  string     `json:"error_message,omitempty"`
-	GlossaryJSON  string     `json:"glossary,omitempty"` // 术语表 JSON
+	GlossaryJSON  string     `json:"glossary,omitempty"`          // 已确认术语表 JSON
+	GlossaryDraft string     `json:"glossary_draft,omitempty"`    // AI 抽取的候选术语 JSON
+	GlossarySet   bool       `json:"glossary_set"`                // 术语表是否已确认
+	Consistency   string     `json:"consistency_report,omitempty"` // 一致性报告 JSON
+	QAReport      string     `json:"qa_report,omitempty"`         // QA 报告 JSON
+	Accepted      bool       `json:"accepted"`                    // 是否通过 QA 验收
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 	StartedAt     *time.Time `json:"started_at,omitempty"`

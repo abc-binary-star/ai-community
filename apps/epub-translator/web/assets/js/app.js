@@ -12,6 +12,11 @@ const API = {
   health: '/api/v1/health',
   taskDetail: (id) => `/api/v1/tasks/${id}`,
   download: (id) => `/api/v1/tasks/${id}/download`,
+  glossary: (id) => `/api/v1/tasks/${id}/glossary`,
+  glossaryExtract: (id) => `/api/v1/tasks/${id}/glossary/extract`,
+  consistency: (id) => `/api/v1/tasks/${id}/consistency`,
+  qa: (id) => `/api/v1/tasks/${id}/qa`,
+  accept: (id) => `/api/v1/tasks/${id}/accept`,
 };
 
 const LANG_MAP = {
@@ -251,15 +256,49 @@ function taskItemHtml(t) {
     ? `${t.translated_chunks || 0} / ${t.total_chunks} 个文本块`
     : '';
 
-  const actions = t.status === 'COMPLETED'
-    ? `<button class="ghost-btn" onclick="window.downloadTask('${t.task_id}')" title="下载翻译结果">
-         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-           <path d="M7 10l5 5 5-5"/>
-           <path d="M12 15V3"/>
-         </svg>
-         下载</button>`
+  // 操作按钮（按状态渐进展示）
+  const actions = [];
+  const acceptedBadge = t.accepted
+    ? '<span class="badge badge--accepted">已验收</span>'
     : '';
+
+  if (t.status === 'COMPLETED') {
+    actions.push(`
+      <button class="ghost-btn" onclick="window.downloadTask('${t.task_id}')" title="下载翻译结果">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="M7 10l5 5 5-5"/>
+          <path d="M12 15V3"/>
+        </svg>
+        下载</button>
+      <button class="ghost-btn" onclick="window.runConsistency('${t.task_id}')" title="检查译名一致性">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+        一致性</button>
+      <button class="ghost-btn" onclick="window.runQA('${t.task_id}')" title="质量评估">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v18h18"/>
+          <path d="M7 15l4-6 3 4 3-7"/>
+        </svg>
+        QA 评估</button>
+      <button class="ghost-btn" onclick="window.acceptTask('${t.task_id}')" title="发布前人工验收">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/>
+          <path d="M22 4L12 14l-3-3"/>
+        </svg>
+        验收</button>`);
+  }
+  if (['PENDING', 'QUEUED', 'PARSING', 'TRANSLATING', 'ASSEMBLING', 'COMPLETED', 'FAILED'].includes(t.status)) {
+    actions.push(`
+      <button class="ghost-btn" onclick="window.openGlossary('${t.task_id}')" title="术语表抽取与确认">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        术语表</button>`);
+  }
 
   return `
     <div class="task-item" id="task-${t.task_id}">
@@ -281,7 +320,7 @@ function taskItemHtml(t) {
       ${progressHtml}
       <div class="task-meta">
         <span>${chunksText || (t.status === 'TRANSLATING' ? 'AI 处理中…' : '')}</span>
-        <span class="task-actions">${actions}</span>
+        <span class="task-actions">${acceptedBadge}${actions.join('')}</span>
       </div>
       ${errorHtml}
     </div>`;
@@ -393,6 +432,211 @@ function formatTime(iso) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/* ============================================================
+   阶段 3/6/8 · 术语表 / 一致性 / QA / 验收
+   ============================================================ */
+
+let glossaryTaskId = null;
+let glossaryTerms = [];
+
+/* ---------- 术语表弹窗 ---------- */
+window.openGlossary = async function (taskId) {
+  glossaryTaskId = taskId;
+  glossaryTerms = [];
+  glossaryModal.hidden = false;
+  renderGlossaryList();
+
+  try {
+    const res = await fetch(API.glossary(taskId));
+    const data = await res.json();
+    if (data.glossary_draft) {
+      glossaryTerms = JSON.parse(data.glossary_draft);
+      $('#glossaryHint').textContent = data.glossary_set
+        ? `已确认 ${JSON.parse(data.glossary || '[]').length} 条`
+        : `候选 ${glossaryTerms.length} 条`;
+    } else if (data.glossary_set) {
+      glossaryTerms = JSON.parse(data.glossary || '[]');
+      $('#glossaryHint').textContent = `已确认 ${glossaryTerms.length} 条`;
+    }
+  } catch (_) { /* 忽略 */ }
+  renderGlossaryList();
+};
+
+window.closeGlossaryModal = function () {
+  glossaryModal.hidden = true;
+  glossaryTaskId = null;
+};
+
+$('#glossaryExtractBtn').addEventListener('click', async () => {
+  if (!glossaryTaskId) return;
+  const btn = $('#glossaryExtractBtn');
+  btn.disabled = true;
+  btn.textContent = 'AI 抽取中…';
+  $('#glossaryHint').textContent = '正在抽取专有名词…';
+  try {
+    const res = await fetch(API.glossaryExtract(glossaryTaskId), { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '抽取失败');
+    glossaryTerms = JSON.parse(data.glossary_draft);
+    $('#glossaryHint').textContent = `候选 ${glossaryTerms.length} 条，请核对译名`;
+    renderGlossaryList();
+    showToast(`AI 抽取完成：${glossaryTerms.length} 条候选术语`);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'AI 抽取候选';
+  }
+});
+
+function renderGlossaryList() {
+  const list = $('#glossaryList');
+  if (!glossaryTerms.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <p>暂无术语数据</p>
+        <span>点击"AI 抽取候选"从书中提取专有名词</span>
+      </div>`;
+    return;
+  }
+  list.innerHTML = glossaryTerms.map((term, i) => `
+    <div class="glossary-item" data-i="${i}">
+      <input class="term-source" value="${escapeHtml(term.source)}" placeholder="原文" />
+      <input class="term-target" value="${escapeHtml(term.target || '')}" placeholder="译名" />
+      <span class="term-type">${term.type || 'term'}</span>
+      <button class="term-del" type="button" title="删除" onclick="window.deleteGlossaryTerm(${i})">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+        </svg>
+      </button>
+    </div>`).join('');
+}
+
+window.deleteGlossaryTerm = function (i) {
+  glossaryTerms.splice(i, 1);
+  renderGlossaryList();
+};
+
+window.saveGlossary = async function () {
+  if (!glossaryTaskId) return;
+  // 收集编辑后的术语
+  const items = document.querySelectorAll('.glossary-item');
+  const terms = [];
+  items.forEach((el, i) => {
+    const source = el.querySelector('.term-source').value.trim();
+    const target = el.querySelector('.term-target').value.trim();
+    if (source && target) {
+      const orig = glossaryTerms[i] || {};
+      terms.push({ source, target, type: orig.type || 'term', confidence: orig.confidence || 0.5 });
+    }
+  });
+  if (!terms.length) {
+    showToast('术语表为空，请至少保留一条', 'error');
+    return;
+  }
+  try {
+    const res = await fetch(API.glossary(glossaryTaskId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ glossary: JSON.stringify(terms) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存失败');
+    showToast(`术语表已保存：${data.count} 条`);
+    closeGlossaryModal();
+    loadTasks();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+/* ---------- 一致性 / QA 报告 ---------- */
+function showReport(title, sub, bodyHtml) {
+  $('#reportModalTitle').textContent = title;
+  $('#reportModalSub').textContent = sub;
+  $('#reportModalBody').innerHTML = bodyHtml;
+  reportModal.hidden = false;
+}
+
+window.closeReportModal = function () {
+  reportModal.hidden = true;
+};
+
+window.runConsistency = async function (taskId) {
+  try {
+    const res = await fetch(API.consistency(taskId), { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '校验失败');
+    const issues = JSON.parse(data.consistency_report || '[]');
+    if (!issues.length) {
+      showReport('一致性检查', '术语与译名一致性良好', `
+        <div class="empty-state">
+          <p>未发现不一致问题</p>
+          <span>全部专有名词与术语译名统一</span>
+        </div>`);
+      return;
+    }
+    showReport('一致性检查', `发现 ${issues.length} 处疑似不一致`, `
+      <div class="report-section">
+        ${issues.map((it) => `
+          <div class="issue-item">
+            <div><span class="issue-term">${escapeHtml(it.term)}</span>
+              <span class="issue-variants"> · ${escapeHtml(it.variants)}</span>
+              <span> · 出现 ${it.count || '-'} 次 · ${it.confidence || 'low'}</span>
+            </div>
+            <div class="issue-suggestion">建议统一为：${escapeHtml(it.suggestion || '-')}</div>
+          </div>`).join('')}
+      </div>`);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+window.runQA = async function (taskId) {
+  try {
+    const res = await fetch(API.qa(taskId), { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '评估失败');
+    const report = JSON.parse(data.qa_report || '{}');
+    const scores = report.scores || [];
+    const dimName = { faithfulness: '忠实度', fluency: '流畅度', terminology: '术语一致性', format: '格式保持' };
+    const scoreClass = (s) => (s >= 4 ? 'high' : s >= 3 ? 'mid' : 'low');
+    showReport('QA 质量评估', `抽样 ${report.samples || 0} 段 · 综合评分 ${report.overall || '-'}/5`, `
+      <div class="qa-scores">
+        ${scores.map((s) => `
+          <div class="qa-score-card">
+            <div class="qa-dim">${dimName[s.dimension] || s.dimension}</div>
+            <div class="qa-val ${scoreClass(s.score)}">${s.score}/5</div>
+            <div class="qa-comment">${escapeHtml(s.comment || '')}</div>
+          </div>`).join('')}
+      </div>
+      ${(report.issues && report.issues.length) ? `
+        <div class="report-section">
+          <h4>待改进项</h4>
+          ${report.issues.map((i) => `<div class="issue-item">${escapeHtml(i)}</div>`).join('')}
+        </div>` : ''}`);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+window.acceptTask = async function (taskId) {
+  if (!confirm('确认通过该任务的质量验收？通过后即可发布下载。')) return;
+  try {
+    const res = await fetch(API.accept(taskId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accepted: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '验收失败');
+    showToast(data.message || '已通过验收');
+    loadTasks();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
 
 /* ---------- 初始化 ---------- */
 (function init() {

@@ -37,6 +37,11 @@ func NewTranslationService(cfg *config.Config) *TranslationService {
 	}
 }
 
+// Provider 返回底层模型提供者（供流水线服务复用）
+func (s *TranslationService) Provider() *agent.ModelProvider {
+	return s.modelProvider
+}
+
 // TranslateRequest 创建翻译任务请求
 type TranslateRequest struct {
 	FilePath    string

@@ -40,6 +40,18 @@ func Register(h *server.Hertz, hdl *handler.Handler) {
 		v1.GET("/tasks", hdl.ListTasks)
 		v1.GET("/tasks/:id", hdl.GetTask)
 		v1.GET("/tasks/:id/download", hdl.DownloadTask)
+
+		// 阶段 3：术语表（抽取 / 查看 / 确认）
+		v1.POST("/tasks/:id/glossary/extract", hdl.ExtractGlossary)
+		v1.GET("/tasks/:id/glossary", hdl.GetGlossary)
+		v1.PUT("/tasks/:id/glossary", hdl.SaveGlossary)
+
+		// 阶段 6：一致性校验
+		v1.POST("/tasks/:id/consistency", hdl.CheckConsistency)
+
+		// 阶段 8：质量 QA 与人工验收
+		v1.POST("/tasks/:id/qa", hdl.AssessQuality)
+		v1.POST("/tasks/:id/accept", hdl.AcceptTask)
 	}
 
 	// 前端静态资源（demo 单页）

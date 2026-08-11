@@ -4,44 +4,142 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cloudwego/eino/compose"
+
 	"github.com/abc-binary-star/ai-community/apps/epub-translator/internal/epub"
 	"github.com/abc-binary-star/ai-community/apps/epub-translator/pkg/logger"
 )
 
+// translateState 翻译图状态：贯穿 Translate → Review → (Rewrite) 各节点
+type translateState struct {
+	Input     TranslateInput
+	Output    TranslateOutput
+	Passed    bool
+	ReviewMsg string
+	Retries   int
+}
+
 // TranslatorGraph 翻译编排器
-// Phase 2: 骨架实现，提供单块翻译流程
-// Phase 3: 将升级为 Eino Graph 编排（Translate -> Review -> Rewrite 分支）
+// 基于 Eino Graph：Translate -> Review -> 分支（合格结束 / 不合格重译循环）
 type TranslatorGraph struct {
-	provider *ModelProvider
-	ctxMgr   *ContextManager
+	provider   *ModelProvider
+	ctxMgr     *ContextManager
+	maxRetries int
+	runnable   compose.Runnable[*translateState, *translateState]
 }
 
 // NewTranslatorGraph 创建翻译编排器
 func NewTranslatorGraph(provider *ModelProvider, ctxMgr *ContextManager) *TranslatorGraph {
-	return &TranslatorGraph{
-		provider: provider,
-		ctxMgr:   ctxMgr,
+	g := &TranslatorGraph{
+		provider:   provider,
+		ctxMgr:     ctxMgr,
+		maxRetries: 2,
 	}
+	g.buildGraph()
+	return g
+}
+
+// buildGraph 构建并编译 Eino 翻译图
+// 节点流：translate → review → 分支
+//   - Passed 或重试耗尽 → 结束
+//   - 否则 → rewrite（复用翻译节点）→ review，形成重译循环
+func (g *TranslatorGraph) buildGraph() {
+	graph := compose.NewGraph[*translateState, *translateState]()
+
+	translateLambda := compose.InvokableLambda(g.translateNode)
+	rewriteLambda := compose.InvokableLambda(g.translateNode)
+	reviewLambda := compose.InvokableLambda(g.reviewNode)
+
+	if err := graph.AddLambdaNode("translate", translateLambda); err != nil {
+		logger.L().Warnf("添加 translate 节点失败: %v", err)
+		return
+	}
+	if err := graph.AddLambdaNode("rewrite", rewriteLambda); err != nil {
+		logger.L().Warnf("添加 rewrite 节点失败: %v", err)
+		return
+	}
+	if err := graph.AddLambdaNode("review", reviewLambda); err != nil {
+		logger.L().Warnf("添加 review 节点失败: %v", err)
+		return
+	}
+
+	// 定义图边界：START → translate；review 通过分支到达 END
+	if err := graph.AddEdge(compose.START, "translate"); err != nil {
+		logger.L().Warnf("添加边 START->translate 失败: %v", err)
+		return
+	}
+	if err := graph.AddEdge("translate", "review"); err != nil {
+		logger.L().Warnf("添加边 translate->review 失败: %v", err)
+		return
+	}
+
+	// 分支：审校未通过且未超过重试上限 → rewrite；否则结束
+	branch := compose.NewGraphBranch(func(ctx context.Context, in *translateState) (string, error) {
+		if in.Passed || in.Retries >= g.maxRetries {
+			return compose.END, nil
+		}
+		return "rewrite", nil
+	}, map[string]bool{compose.END: true})
+	if err := graph.AddBranch("review", branch); err != nil {
+		logger.L().Warnf("添加审校分支失败: %v", err)
+		return
+	}
+	if err := graph.AddEdge("rewrite", "review"); err != nil {
+		logger.L().Warnf("添加边 rewrite->review 失败: %v", err)
+		return
+	}
+
+	runnable, err := graph.Compile(context.Background())
+	if err != nil {
+		logger.L().Warnf("编译翻译 Graph 失败: %v，降级为直通模式", err)
+		return
+	}
+	g.runnable = runnable
+	logger.L().Debugf("翻译 Eino Graph 编译完成（最大重试 %d 次）", g.maxRetries)
+}
+
+// translateNode 翻译节点（translate 与 rewrite 共用）
+func (g *TranslatorGraph) translateNode(ctx context.Context, state *translateState) (*translateState, error) {
+	out, err := g.provider.Translate(ctx, state.Input)
+	if err != nil {
+		return nil, fmt.Errorf("翻译调用失败: %w", err)
+	}
+	state.Output = out
+	state.Retries++
+	return state, nil
+}
+
+// reviewNode 审校节点
+func (g *TranslatorGraph) reviewNode(ctx context.Context, state *translateState) (*translateState, error) {
+	passed, msg, err := g.provider.Review(ctx, state.Input.SourceText, state.Output.TranslatedText, g.ctxMgr.GetGlossaryJSON())
+	if err != nil {
+		logger.L().Warnf("审校调用出错: %v，默认通过", err)
+		passed = true
+	}
+	state.Passed = passed
+	state.ReviewMsg = msg
+	if !passed {
+		logger.L().Debugf("审校未通过（第 %d 次）: %s", state.Retries, msg)
+	}
+	return state, nil
 }
 
 // TranslateChunkInput 翻译单个 Chunk 的输入
 type TranslateChunkInput struct {
-	Chunk       epub.TextChunk
-	SourceLang  string
-	TargetLang  string
+	Chunk      epub.TextChunk
+	SourceLang string
+	TargetLang string
 }
 
 // TranslateChunkResult 翻译单个 Chunk 的结果
 type TranslateChunkResult struct {
-	ChunkIndex    int
+	ChunkIndex     int
 	TranslatedHTML string
-	Success       bool
-	Error         error
+	Success        bool
+	Error          error
 }
 
 // TranslateChunk 翻译单个文本块
-// 当前为骨架流程：Translate -> Review -> Output
-// Phase 3 将使用 Eino Graph 重构
 func (g *TranslatorGraph) TranslateChunk(ctx context.Context, input TranslateChunkInput) (TranslateChunkResult, error) {
 	chunk := input.Chunk
 	result := TranslateChunkResult{ChunkIndex: chunk.Index}
@@ -49,7 +147,6 @@ func (g *TranslatorGraph) TranslateChunk(ctx context.Context, input TranslateChu
 	logger.L().Debugf("开始翻译 Chunk %d (章节: %s, tokens: %d)",
 		chunk.Index, chunk.ChapterTitle, chunk.TokenCount)
 
-	// 1. 构建翻译输入
 	translateInput := TranslateInput{
 		SourceText:   chunk.HTMLFragment,
 		SourceLang:   input.SourceLang,
@@ -61,32 +158,42 @@ func (g *TranslatorGraph) TranslateChunk(ctx context.Context, input TranslateChu
 		Summary:      g.ctxMgr.GetSummary(chunk.ChapterID),
 	}
 
-	// 2. 调用翻译
-	output, err := g.provider.Translate(ctx, translateInput)
-	if err != nil {
-		result.Error = fmt.Errorf("翻译失败: %w", err)
-		return result, result.Error
+	state := &translateState{Input: translateInput}
+
+	if g.runnable != nil {
+		invoked, err := g.runnable.Invoke(ctx, state)
+		if err != nil {
+			result.Error = fmt.Errorf("翻译失败: %w", err)
+			return result, result.Error
+		}
+		state = invoked
+		if state == nil {
+			result.Error = fmt.Errorf("翻译图返回空状态")
+			return result, result.Error
+		}
+		if !state.Passed {
+			logger.L().Warnf("Chunk %d 审校未通过（重试耗尽）: %s", chunk.Index, state.ReviewMsg)
+		}
+	} else {
+		// 直通模式（Graph 编译失败时降级）
+		out, err := g.provider.Translate(ctx, translateInput)
+		if err != nil {
+			result.Error = fmt.Errorf("翻译失败: %w", err)
+			return result, result.Error
+		}
+		state.Output = out
 	}
 
-	// 3. 质量审校
-	passed, reviewMsg, err := g.provider.Review(ctx, chunk.HTMLFragment, output.TranslatedText, g.ctxMgr.GetGlossaryJSON())
-	if err != nil {
-		logger.L().Warnf("Chunk %d 审校出错: %v，采用翻译结果", chunk.Index, err)
-	} else if !passed {
-		logger.L().Warnf("Chunk %d 审校未通过: %s", chunk.Index, reviewMsg)
-		// Phase 3: 这里会触发重译分支
-	}
-
-	// 4. 生成段落摘要并累积上下文
+	// 生成段落摘要并累积上下文
 	summary, err := g.provider.GenerateSummary(ctx, chunk.PlainText)
 	if err == nil && summary != "" {
 		g.ctxMgr.AppendSummary(chunk.ChapterID, summary)
 	}
 
-	result.TranslatedHTML = output.TranslatedText
+	result.TranslatedHTML = state.Output.TranslatedText
 	result.Success = true
 
-	logger.L().Debugf("Chunk %d 翻译完成，使用 tokens: %d", chunk.Index, output.UsedTokens)
+	logger.L().Debugf("Chunk %d 翻译完成，使用 tokens: %d", chunk.Index, state.Output.UsedTokens)
 	return result, nil
 }
 

@@ -157,6 +157,60 @@
   <!-- ===== 轻提示 ===== -->
   <div class="toast" id="toast" role="status"></div>
 
+  <!-- ===== 术语表确认弹窗 ===== -->
+  <div class="modal-overlay" id="glossaryModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3 class="modal-title">术语表确认</h3>
+          <p class="modal-sub" id="glossaryModalSub">AI 已从书中抽取候选术语，请核对译名后保存</p>
+        </div>
+        <button class="icon-btn" type="button" onclick="closeGlossaryModal()" aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="glossary-toolbar">
+          <button class="ghost-btn" id="glossaryExtractBtn" type="button">AI 抽取候选</button>
+          <span class="glossary-hint" id="glossaryHint">未抽取</span>
+        </div>
+        <div class="glossary-list" id="glossaryList">
+          <div class="empty-state">
+            <p>暂无术语数据</p>
+            <span>点击"AI 抽取候选"从书中提取专有名词</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" type="button" onclick="closeGlossaryModal()">取消</button>
+        <button class="btn-primary btn-primary--sm" id="glossarySaveBtn" type="button" onclick="saveGlossary()">保存术语表</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 一致性 / QA 报告弹窗 ===== -->
+  <div class="modal-overlay" id="reportModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3 class="modal-title" id="reportModalTitle">检查报告</h3>
+          <p class="modal-sub" id="reportModalSub"></p>
+        </div>
+        <button class="icon-btn" type="button" onclick="closeReportModal()" aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="reportModalBody"></div>
+      <div class="modal-foot">
+        <button class="btn-primary btn-primary--sm" type="button" onclick="closeReportModal()">知道了</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/assets/js/app.js"></script>
 </body>
 </html>

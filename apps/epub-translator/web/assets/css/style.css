@@ -764,3 +764,223 @@ select {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
+
+/* ---------- 弹窗 ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgb(10 12 18 / 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fade-in 0.2s ease-out;
+}
+
+.modal {
+  width: min(640px, 100%);
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in 0.2s ease-out;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.modal-title {
+  font-family: 'Sora', 'PingFang SC', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.modal-sub {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.btn-primary--sm {
+  width: auto;
+  margin-top: 0;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+}
+
+/* ---------- 术语表 ---------- */
+.glossary-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.glossary-hint {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.glossary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.glossary-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 4px);
+  background: hsl(var(--background) / 0.5);
+  animation: fade-in 0.25s ease-out;
+}
+
+.glossary-item input {
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  font-size: 0.84rem;
+  font-family: inherit;
+  color: inherit;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--input));
+  border-radius: calc(var(--radius) - 6px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glossary-item input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.16);
+}
+
+.glossary-item .term-type {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 999px;
+  color: hsl(var(--info));
+  background: hsl(var(--info) / 0.1);
+  white-space: nowrap;
+}
+
+.glossary-item .term-del {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: hsl(var(--muted-foreground));
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.glossary-item .term-del:hover {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+}
+
+/* ---------- 报告 ---------- */
+.report-section {
+  margin-bottom: 1.1rem;
+}
+
+.report-section h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.qa-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.qa-score-card {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 4px);
+  background: hsl(var(--background) / 0.5);
+}
+
+.qa-score-card .qa-dim {
+  font-size: 0.72rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.qa-score-card .qa-val {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-top: 0.15rem;
+}
+
+.qa-score-card .qa-val.high { color: hsl(var(--success)); }
+.qa-score-card .qa-val.mid { color: hsl(var(--warning)); }
+.qa-score-card .qa-val.low { color: hsl(var(--destructive)); }
+
+.qa-comment {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.issue-item {
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border-left: 3px solid hsl(var(--warning));
+  background: hsl(var(--background) / 0.5);
+  border-radius: 0 calc(var(--radius) - 6px) calc(var(--radius) - 6px) 0;
+  font-size: 0.84rem;
+}
+
+.issue-item .issue-term {
+  font-weight: 700;
+}
+
+.issue-item .issue-variants {
+  color: hsl(var(--warning));
+}
+
+.issue-item .issue-suggestion {
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.2rem;
+}
+
+/* 任务验收状态 */
+.badge--accepted {
+  color: hsl(var(--success));
+  background: hsl(var(--success) / 0.12);
+  border: 1px solid hsl(var(--success) / 0.3);
+}
