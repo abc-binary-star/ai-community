@@ -1,16 +1,8 @@
 import Link from 'next/link'
-import { ArrowUpRight, BookOpenText, Wrench } from 'lucide-react'
+import { ArrowUpRight, Wrench } from 'lucide-react'
 
 // 实用工具列表（独立个人应用，社区前端提供统一入口）
-const TOOLS = [
-  {
-    slug: 'epub-translator',
-    name: 'EPUB 翻译',
-    icon: BookOpenText,
-    description: '上传外文 EPUB，AI Agent 分章解析、保持版式，输出简体中文版',
-    status: '可用',
-  },
-]
+const TOOLS = [] as const
 
 export const metadata = {
   title: '实用工具 · Commons',

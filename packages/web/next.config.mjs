@@ -21,14 +21,7 @@ const nextConfig = {
   // 生产部署通过环境变量 API_ORIGIN 指定 API 服务地址，避免硬编码 localhost 泄漏到生产。
   async rewrites() {
     const apiOrigin = process.env.API_ORIGIN || 'http://localhost:3001'
-    // EPUB 翻译工具服务（Go，8888）：服务端代理，浏览器永远只访问同源的 /et-api/*，
-    // 避免 iframe/跨端口导致的 localhost 解析问题。ET_API_ORIGIN 可覆盖部署地址。
-    const etOrigin = process.env.ET_API_ORIGIN || 'http://localhost:8888'
     return [
-      {
-        source: '/et-api/:path*',
-        destination: `${etOrigin}/api/v1/:path*`,
-      },
       {
         source: '/api/:path*',
         destination: `${apiOrigin}/api/:path*`,

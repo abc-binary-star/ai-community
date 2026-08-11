@@ -1,7 +1,7 @@
 # EPUB 翻译流水线解耦分析
 
 > 从一本外文 EPUB 到一本简体中文 EPUB：全流程步骤拆解、职责归属（AI / 人工 / 规则引擎）与解耦设计。
-> 适用服务：`apps/epub-translator`
+> 适用服务：独立项目 `epub-translator`（已从 `apps/epub-translator` 迁出）
 
 ## 1. 总览
 
