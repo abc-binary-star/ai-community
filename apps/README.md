@@ -10,7 +10,7 @@
 
 ## 实用工具分区（独立个人应用）
 
-面向个人用户的独立实用工具集合。每个工具是**自包含的独立应用**（独立 Go Module + 自带 Web 界面），可单独启动使用；社区前端（`packages/web`）通过 `/community/tools` 提供统一入口（iframe 嵌入）。**工具本身不做社区协作/分享功能。**
+面向个人用户的独立实用工具集合。每个工具是**自包含的独立应用**（独立 Go Module + 自带 Web 界面），可单独启动使用；同时以**社区原生页面**的形式接入 `packages/web`（`/community/tools`），页面 API 通过 Next.js 服务端代理（`/et-api/*` → 工具服务 8888 端口）访问，浏览器只访问同源地址，无跨域/localhost 问题。**工具本身不做社区协作/分享功能。**
 
 | 子服务 | 说明 | 技术栈 | 状态 |
 |--------|------|--------|------|
@@ -21,10 +21,11 @@
 
 | 入口 | 地址 |
 |------|------|
+| 社区原生页面（推荐） | `http://localhost:3000/community/tools/epub-translator` |
 | 独立应用（直接访问） | `http://localhost:8888/` |
-| 社区前端入口（iframe 嵌入） | `http://localhost:3000/community/tools` |
 
-工具地址可用环境变量 `NEXT_PUBLIC_EPUB_TRANSLATOR_URL` 覆盖（社区前端读取）。
+- 代理地址可用环境变量 `ET_API_ORIGIN` 覆盖（Next.js 服务端读取，默认 `http://localhost:8888`，在服务器本机解析）
+- 工具服务地址 `NEXT_PUBLIC_EPUB_TRANSLATOR_URL` 已废弃（不再使用 iframe）
 
 ## 目录约定
 

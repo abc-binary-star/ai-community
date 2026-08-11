@@ -55,7 +55,7 @@ export function PieceStack({
   const hiddenCount = teams.length - visibleTeams.length
 
   return (
-    <span className="pointer-events-none absolute inset-x-1 bottom-1 flex h-7 items-end justify-center gap-0.5 rounded bg-white/80 px-0.5 shadow-sm backdrop-blur-[1px]">
+    <span className="pointer-events-none absolute bottom-1 right-1 flex items-end justify-end gap-0.5">
       {visibleTeams.map((team) => (
         <TeamPiece
           key={team.id}
@@ -65,7 +65,7 @@ export function PieceStack({
         />
       ))}
       {hiddenCount > 0 && (
-        <span className="mb-1 flex size-5 items-center justify-center rounded-full bg-stone-800 text-[11px] font-black text-white">
+        <span className="mb-1 flex size-5 items-center justify-center rounded-full border border-stone-900/60 bg-stone-800 text-[11px] font-black text-white shadow-sm">
           +{hiddenCount}
         </span>
       )}
