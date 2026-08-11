@@ -49,6 +49,7 @@ type EpubConfig struct {
 	ContextLeftChars   int `mapstructure:"context_left_chars"`
 	ContextRightChars  int `mapstructure:"context_right_chars"`
 	OverlapSentences   int `mapstructure:"overlap_sentences"`
+	SectionTargetChars int `mapstructure:"section_target_chars"` // M2 段落节目标字数（默认 500）
 }
 
 type ConcurrencyConfig struct {
@@ -166,6 +167,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Epub.OverlapSentences == 0 {
 		cfg.Epub.OverlapSentences = 5
+	}
+	if cfg.Epub.SectionTargetChars == 0 {
+		cfg.Epub.SectionTargetChars = 500
 	}
 	if cfg.Concurrency.MaxTasks == 0 {
 		cfg.Concurrency.MaxTasks = 2

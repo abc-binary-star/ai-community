@@ -44,3 +44,17 @@ type TextChunk struct {
 	BlockStart   int    // 覆盖的原始文本块起始序号
 	BlockEnd     int    // 覆盖的原始文本块结束序号（闭区间）
 }
+
+// SectionPlan 切分后的段落节计划（M2 精读模式最小翻译单元）
+// Kind 对齐 model.SectionKind 取值（paragraph/heading/list/dialogue/poem/quote/table/other）
+type SectionPlan struct {
+	Index        int    // 章节内节序号，从 0 开始
+	ChapterID    string // 所属章节 ID
+	ChapterTitle string // 章节标题
+	Kind         string // 节类型（特殊块保护产物）
+	HTMLFragment string // 原始 HTML 片段（保留内联标签）
+	PlainText    string // 纯文本
+	CharCount    int    // 字符数
+	BlockStart   int    // 覆盖的原始文本块起始序号
+	BlockEnd     int    // 覆盖的原始文本块结束序号（闭区间）
+}

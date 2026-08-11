@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -255,5 +256,63 @@ func TestTaskStorePlotline(t *testing.T) {
 	}
 	if entries[1].ChapterIndex != 1 || entries[1].Summary != "B2" {
 		t.Fatalf("剧情线更新未生效: %+v", entries[1])
+	}
+}
+
+// TestTaskStoreSectionsMigration 验证旧版 sections 表（无 M2.2 列）启动时自动迁移
+func TestTaskStoreSectionsMigration(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "old.db")
+
+	// 手工创建旧版 sections 表（缺少 kind/block_start/block_end）
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("打开旧库失败: %v", err)
+	}
+	oldSchema := `CREATE TABLE sections (
+		task_id         TEXT NOT NULL,
+		chapter_id      TEXT NOT NULL,
+		section_index   INTEGER NOT NULL,
+		source_html     TEXT NOT NULL DEFAULT '',
+		translated_html TEXT NOT NULL DEFAULT '',
+		summary         TEXT NOT NULL DEFAULT '',
+		status          TEXT NOT NULL DEFAULT 'PENDING',
+		retry_count     INTEGER NOT NULL DEFAULT 0,
+		error_message   TEXT NOT NULL DEFAULT '',
+		frozen          INTEGER NOT NULL DEFAULT 0,
+		updated_at      TEXT NOT NULL,
+		PRIMARY KEY (task_id, chapter_id, section_index)
+	);`
+	if _, err := db.Exec(oldSchema); err != nil {
+		t.Fatalf("创建旧表失败: %v", err)
+	}
+	_ = db.Close()
+
+	store, err := NewTaskStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewTaskStore 迁移失败: %v", err)
+	}
+	defer store.Close()
+
+	// 迁移后新字段可正常写入/读取
+	sec := &model.Section{
+		TaskID:     "t1",
+		ChapterID:  "c1",
+		Index:      0,
+		Kind:       "quote",
+		BlockStart: 2,
+		BlockEnd:   3,
+		SourceHTML: "<p>keep whole</p>",
+		Status:     model.SectionStatusPending,
+		UpdatedAt:  time.Now(),
+	}
+	if err := store.SaveSection(sec); err != nil {
+		t.Fatalf("迁移后 SaveSection 失败: %v", err)
+	}
+	got, err := store.GetSection("t1", "c1", 0)
+	if err != nil || got == nil {
+		t.Fatalf("迁移后 GetSection 失败: %v %v", got, err)
+	}
+	if got.Kind != "quote" || got.BlockStart != 2 || got.BlockEnd != 3 {
+		t.Fatalf("迁移后新字段未生效: %+v", got)
 	}
 }

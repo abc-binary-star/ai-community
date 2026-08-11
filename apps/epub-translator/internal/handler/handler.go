@@ -523,7 +523,7 @@ func (h *Handler) ListChapters(ctx context.Context, c *app.RequestContext) {
 }
 
 // TranslateChapter POST /api/v1/tasks/:id/chapters/:index/translate
-// M1 按章翻译（异步）
+// M2 按章翻译（异步，段落节级，断点续跑）
 func (h *Handler) TranslateChapter(ctx context.Context, c *app.RequestContext) {
 	task, ok := h.getTaskOr404(c)
 	if !ok {
@@ -535,13 +535,16 @@ func (h *Handler) TranslateChapter(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 标记任务翻译中
+	// 标记任务翻译中、章节切分中
 	h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
 		t.Status = model.TaskStatusTranslating
+		if index < len(t.Chapters) {
+			t.Chapters[index].Status = model.ChapterStatusSplitting
+		}
 	})
 
 	safeGo(func() {
-		err := h.translationSvc.TranslateChapter(context.Background(), task, index)
+		err := h.translationSvc.TranslateChapterBySections(context.Background(), task, index, nil)
 		h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
 			if err != nil {
 				t.ErrorMessage = err.Error()
@@ -560,8 +563,109 @@ func (h *Handler) TranslateChapter(ctx context.Context, c *app.RequestContext) {
 	})
 }
 
+// SplitChapter POST /api/v1/tasks/:id/chapters/:index/split
+// M2 显式切分段落节（幂等：已切分则复用）
+func (h *Handler) SplitChapter(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+	index, err := strconv.Atoi(c.Param("index"))
+	if err != nil || index < 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "章节序号无效"})
+		return
+	}
+
+	count, err := h.translationSvc.SplitChapter(task, index)
+	if err != nil {
+		logger.L().Errorf("章节 %d 切分失败: %v", index, err)
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	h.taskSvc.SaveTask(task)
+
+	c.JSON(consts.StatusOK, utils.H{
+		"task_id":       task.ID,
+		"index":         index,
+		"section_count": count,
+		"message":       "段落节切分完成",
+	})
+}
+
+// ListChapterSections GET /api/v1/tasks/:id/chapters/:index/sections
+// M2 段落节列表（未切分时自动切分）+ 节进度
+func (h *Handler) ListChapterSections(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+	index, err := strconv.Atoi(c.Param("index"))
+	if err != nil || index < 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "章节序号无效"})
+		return
+	}
+
+	sections, err := h.translationSvc.ListChapterSections(task, index)
+	if err != nil {
+		logger.L().Errorf("章节 %d 节列表失败: %v", index, err)
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	h.taskSvc.SaveTask(task)
+
+	c.JSON(consts.StatusOK, utils.H{
+		"task_id":       task.ID,
+		"index":         index,
+		"section_count": len(sections),
+		"sections":      sections,
+	})
+}
+
+// TranslateSection POST /api/v1/tasks/:id/chapters/:index/sections/:sid/translate
+// M2 单节翻译 / 重译（异步）
+func (h *Handler) TranslateSection(ctx context.Context, c *app.RequestContext) {
+	task, ok := h.getTaskOr404(c)
+	if !ok {
+		return
+	}
+	index, err := strconv.Atoi(c.Param("index"))
+	if err != nil || index < 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "章节序号无效"})
+		return
+	}
+	sid, err := strconv.Atoi(c.Param("sid"))
+	if err != nil || sid < 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "节序号无效"})
+		return
+	}
+
+	h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+		t.Status = model.TaskStatusTranslating
+	})
+
+	safeGo(func() {
+		err := h.translationSvc.TranslateSection(context.Background(), task, index, sid)
+		h.taskSvc.MutateTask(task.ID, func(t *model.Task) {
+			if err != nil {
+				t.ErrorMessage = err.Error()
+				logger.L().Errorf("章节 %d 节 %d 翻译失败: %v", index, sid, err)
+			} else if index < len(task.Chapters) {
+				t.Chapters[index] = task.Chapters[index]
+			}
+			t.Status = model.TaskStatusReady
+		})
+	})
+
+	c.JSON(consts.StatusAccepted, utils.H{
+		"task_id": task.ID,
+		"index":   index,
+		"section": sid,
+		"message": "单节翻译已启动",
+	})
+}
+
 // TranslateAllChapters POST /api/v1/tasks/:id/translate
-// M1 整本逐章翻译（异步）
+// M1 整本逐章翻译（异步，基于段落节，断点续跑）
 func (h *Handler) TranslateAllChapters(ctx context.Context, c *app.RequestContext) {
 	task, ok := h.getTaskOr404(c)
 	if !ok {

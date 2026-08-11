@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS sections (
 	task_id         TEXT NOT NULL,
 	chapter_id      TEXT NOT NULL,
 	section_index   INTEGER NOT NULL,
+	kind            TEXT NOT NULL DEFAULT '',
+	block_start     INTEGER NOT NULL DEFAULT -1,
+	block_end       INTEGER NOT NULL DEFAULT -1,
 	source_html     TEXT NOT NULL DEFAULT '',
 	translated_html TEXT NOT NULL DEFAULT '',
 	summary         TEXT NOT NULL DEFAULT '',
@@ -95,6 +98,10 @@ CREATE TABLE IF NOT EXISTS book_plotline (
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("初始化表结构失败: %w", err)
+	}
+	if err := migrateSectionsColumns(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("迁移 sections 表失败: %w", err)
 	}
 
 	logger.L().Infof("任务存储就绪: %s", path)
@@ -202,6 +209,50 @@ func (s *TaskStore) Close() error {
 
 // ---------- M2 段落节（sections） ----------
 
+// migrateSectionsColumns 为旧版 sections 表补充 M2.2 新增列（kind/block_start/block_end）
+func migrateSectionsColumns(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(sections)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue any
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	// 表不存在（schema 已建，此处仅防御）
+	if len(cols) == 0 {
+		return nil
+	}
+	for _, c := range []struct{ name, ddl string }{
+		{"kind", `ALTER TABLE sections ADD COLUMN kind TEXT NOT NULL DEFAULT ''`},
+		{"block_start", `ALTER TABLE sections ADD COLUMN block_start INTEGER NOT NULL DEFAULT -1`},
+		{"block_end", `ALTER TABLE sections ADD COLUMN block_end INTEGER NOT NULL DEFAULT -1`},
+	} {
+		if !cols[c.name] {
+			if _, err := db.Exec(c.ddl); err != nil {
+				return fmt.Errorf("添加列 %s 失败: %w", c.name, err)
+			}
+		}
+	}
+	return nil
+}
+
 // SaveSection 保存（或更新）单个段落节
 func (s *TaskStore) SaveSection(sec *model.Section) error {
 	if sec == nil {
@@ -211,9 +262,12 @@ func (s *TaskStore) SaveSection(sec *model.Section) error {
 		return fmt.Errorf("段落节缺少 task_id 或 chapter_id")
 	}
 	_, err := s.db.Exec(`
-INSERT INTO sections (task_id, chapter_id, section_index, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sections (task_id, chapter_id, section_index, kind, block_start, block_end, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(task_id, chapter_id, section_index) DO UPDATE SET
+	kind = excluded.kind,
+	block_start = excluded.block_start,
+	block_end = excluded.block_end,
 	source_html = excluded.source_html,
 	translated_html = excluded.translated_html,
 	summary = excluded.summary,
@@ -222,7 +276,8 @@ ON CONFLICT(task_id, chapter_id, section_index) DO UPDATE SET
 	error_message = excluded.error_message,
 	frozen = excluded.frozen,
 	updated_at = excluded.updated_at`,
-		sec.TaskID, sec.ChapterID, sec.Index, sec.SourceHTML, sec.TranslatedHTML, sec.Summary,
+		sec.TaskID, sec.ChapterID, sec.Index, sec.Kind, sec.BlockStart, sec.BlockEnd,
+		sec.SourceHTML, sec.TranslatedHTML, sec.Summary,
 		string(sec.Status), sec.RetryCount, sec.ErrorMessage, boolToInt(sec.Frozen),
 		sec.UpdatedAt.Format(time.RFC3339),
 	)
@@ -244,9 +299,12 @@ func (s *TaskStore) SaveSections(taskID, chapterID string, sections []*model.Sec
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
-INSERT INTO sections (task_id, chapter_id, section_index, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sections (task_id, chapter_id, section_index, kind, block_start, block_end, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(task_id, chapter_id, section_index) DO UPDATE SET
+	kind = excluded.kind,
+	block_start = excluded.block_start,
+	block_end = excluded.block_end,
 	source_html = excluded.source_html,
 	translated_html = excluded.translated_html,
 	summary = excluded.summary,
@@ -264,9 +322,9 @@ ON CONFLICT(task_id, chapter_id, section_index) DO UPDATE SET
 		if sec == nil {
 			continue
 		}
-		if _, err := stmt.Exec(taskID, chapterID, sec.Index, sec.SourceHTML, sec.TranslatedHTML,
-			sec.Summary, string(sec.Status), sec.RetryCount, sec.ErrorMessage, boolToInt(sec.Frozen),
-			sec.UpdatedAt.Format(time.RFC3339)); err != nil {
+		if _, err := stmt.Exec(taskID, chapterID, sec.Index, sec.Kind, sec.BlockStart, sec.BlockEnd,
+			sec.SourceHTML, sec.TranslatedHTML, sec.Summary, string(sec.Status), sec.RetryCount,
+			sec.ErrorMessage, boolToInt(sec.Frozen), sec.UpdatedAt.Format(time.RFC3339)); err != nil {
 			return fmt.Errorf("写入段落节 %d 失败: %w", sec.Index, err)
 		}
 	}
@@ -277,7 +335,7 @@ ON CONFLICT(task_id, chapter_id, section_index) DO UPDATE SET
 func (s *TaskStore) GetSection(taskID, chapterID string, index int) (*model.Section, error) {
 	var sec model.Section
 	row := s.db.QueryRow(`
-SELECT task_id, chapter_id, section_index, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at
+SELECT task_id, chapter_id, section_index, kind, block_start, block_end, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at
 FROM sections WHERE task_id = ? AND chapter_id = ? AND section_index = ?`,
 		taskID, chapterID, index)
 	if err := scanSection(row, &sec); err != nil {
@@ -292,7 +350,7 @@ FROM sections WHERE task_id = ? AND chapter_id = ? AND section_index = ?`,
 // ListSections 按章节顺序列出全部段落节
 func (s *TaskStore) ListSections(taskID, chapterID string) ([]*model.Section, error) {
 	rows, err := s.db.Query(`
-SELECT task_id, chapter_id, section_index, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at
+SELECT task_id, chapter_id, section_index, kind, block_start, block_end, source_html, translated_html, summary, status, retry_count, error_message, frozen, updated_at
 FROM sections WHERE task_id = ? AND chapter_id = ? ORDER BY section_index ASC`,
 		taskID, chapterID)
 	if err != nil {
@@ -486,8 +544,9 @@ type sectionScanner interface {
 func scanSection(row sectionScanner, sec *model.Section) error {
 	var status, updatedAt string
 	var frozen int
-	err := row.Scan(&sec.TaskID, &sec.ChapterID, &sec.Index, &sec.SourceHTML, &sec.TranslatedHTML,
-		&sec.Summary, &status, &sec.RetryCount, &sec.ErrorMessage, &frozen, &updatedAt)
+	err := row.Scan(&sec.TaskID, &sec.ChapterID, &sec.Index, &sec.Kind, &sec.BlockStart, &sec.BlockEnd,
+		&sec.SourceHTML, &sec.TranslatedHTML, &sec.Summary, &status, &sec.RetryCount,
+		&sec.ErrorMessage, &frozen, &updatedAt)
 	if err != nil {
 		return err
 	}

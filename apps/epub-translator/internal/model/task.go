@@ -32,9 +32,24 @@ type ChapterStatus string
 
 const (
 	ChapterStatusPending    ChapterStatus = "PENDING"    // 未翻译
+	ChapterStatusSplitting  ChapterStatus = "SPLITTING"  // 切分中（M2 段落节切分）
 	ChapterStatusTranslating ChapterStatus = "TRANSLATING" // 翻译中
 	ChapterStatusTranslated ChapterStatus = "TRANSLATED"  // 已翻译
 	ChapterStatusReviewed   ChapterStatus = "REVIEWED"    // 已审核
+)
+
+// SectionKind 段落节类型（供翻译策略区分：诗歌/对话/引用等特殊块）
+type SectionKind string
+
+const (
+	SectionKindParagraph SectionKind = "paragraph" // 普通段落
+	SectionKindHeading   SectionKind = "heading"   // 标题
+	SectionKindList      SectionKind = "list"      // 列表项聚合
+	SectionKindDialogue  SectionKind = "dialogue"  // 对话（保持完整不拆散）
+	SectionKindPoem      SectionKind = "poem"      // 诗歌（保持完整不拆散）
+	SectionKindQuote     SectionKind = "quote"     // 引用块（保持完整不拆散）
+	SectionKindTable     SectionKind = "table"     // 表格单元格
+	SectionKindOther     SectionKind = "other"     // 其他特殊块（pre/dt/dd 等）
 )
 
 // SectionStatus 段落节翻译状态
@@ -83,6 +98,9 @@ type Section struct {
 	TaskID         string        `json:"task_id"`
 	ChapterID      string        `json:"chapter_id"`
 	Index          int           `json:"index"` // 章节内节序号，从 0 开始
+	Kind           string        `json:"kind,omitempty"` // 节类型：paragraph/dialogue/poem/quote/heading/list/table/other
+	BlockStart     int           `json:"block_start,omitempty"` // 覆盖的原始文本块起始序号（merger 定位用）
+	BlockEnd       int           `json:"block_end,omitempty"`   // 覆盖的原始文本块结束序号（闭区间）
 	SourceHTML     string        `json:"source_html"`
 	TranslatedHTML string        `json:"translated_html,omitempty"`
 	Summary        string        `json:"summary,omitempty"` // 本节剧情摘要

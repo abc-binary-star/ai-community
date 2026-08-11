@@ -19,21 +19,25 @@ import (
 
 // TranslationService 翻译核心服务
 type TranslationService struct {
-	cfg          *config.Config
-	parser       *epub.Parser
-	writer       *epub.Writer
-	chunker      *epub.Chunker
-	modelProvider *agent.ModelProvider
+	cfg            *config.Config
+	parser         *epub.Parser
+	writer         *epub.Writer
+	chunker        *epub.Chunker
+	sectionChunker *epub.Chunker // M2 段落节切分器
+	modelProvider  *agent.ModelProvider
+	store          *TaskStore // M2 节级持久化存储
 }
 
 // NewTranslationService 创建翻译服务
-func NewTranslationService(cfg *config.Config) *TranslationService {
+func NewTranslationService(cfg *config.Config, store *TaskStore) *TranslationService {
 	return &TranslationService{
-		cfg:           cfg,
-		parser:        epub.NewParser(),
-		writer:        epub.NewWriter(),
-		chunker:       epub.NewChunker(cfg.Epub.ChunkMaxTokens, cfg.Epub.ContextLeftChars, cfg.Epub.ContextRightChars),
-		modelProvider: agent.NewModelProvider(&cfg.LLM),
+		cfg:            cfg,
+		parser:         epub.NewParser(),
+		writer:         epub.NewWriter(),
+		chunker:        epub.NewChunker(cfg.Epub.ChunkMaxTokens, cfg.Epub.ContextLeftChars, cfg.Epub.ContextRightChars),
+		sectionChunker: epub.NewSectionChunker(cfg.Epub.SectionTargetChars),
+		modelProvider:  agent.NewModelProvider(&cfg.LLM),
+		store:          store,
 	}
 }
 
@@ -209,13 +213,9 @@ type TaskService struct {
 	store *TaskStore
 }
 
-// NewTaskService 创建任务服务
-func NewTaskService(cfg *config.Config) (*TaskService, error) {
-	store, err := NewTaskStore(cfg.Database.SQLite.Path)
-	if err != nil {
-		return nil, err
-	}
-	return &TaskService{store: store}, nil
+// NewTaskService 创建任务服务（复用外部 TaskStore，与 TranslationService 共享同一连接）
+func NewTaskService(store *TaskStore) *TaskService {
+	return &TaskService{store: store}
 }
 
 // CreateTask 创建任务

@@ -49,6 +49,11 @@ func Register(h *server.Hertz, hdl *handler.Handler) {
 		v1.POST("/tasks/:id/translate", hdl.TranslateAllChapters)
 		v1.POST("/tasks/:id/export", hdl.ExportBook)
 
+		// M2 精读模式：段落节切分 / 节列表 / 单节翻译
+		v1.POST("/tasks/:id/chapters/:index/split", hdl.SplitChapter)
+		v1.GET("/tasks/:id/chapters/:index/sections", hdl.ListChapterSections)
+		v1.POST("/tasks/:id/chapters/:index/sections/:sid/translate", hdl.TranslateSection)
+
 		// 阶段 3：术语表（抽取 / 查看 / 确认）
 		v1.POST("/tasks/:id/glossary/extract", hdl.ExtractGlossary)
 		v1.GET("/tasks/:id/glossary", hdl.GetGlossary)

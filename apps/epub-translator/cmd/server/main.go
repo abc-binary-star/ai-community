@@ -40,12 +40,13 @@ func main() {
 	log.Infof("LLM 模型: %s (审校: %s)", cfg.LLM.Model, cfg.LLM.ReviewModel)
 	log.Infof("存储目录: %s", cfg.Storage.Local.OutputDir)
 
-	// 初始化服务层
-	translationSvc := service.NewTranslationService(cfg)
-	taskSvc, err := service.NewTaskService(cfg)
+	// 初始化服务层（TranslationService 与 TaskService 共享同一 SQLite 连接）
+	store, err := service.NewTaskStore(cfg.Database.SQLite.Path)
 	if err != nil {
 		panic("初始化任务存储失败: " + err.Error())
 	}
+	translationSvc := service.NewTranslationService(cfg, store)
+	taskSvc := service.NewTaskService(store)
 	pipelineSvc := service.NewPipelineService(translationSvc.Provider())
 
 	// 初始化 HTTP Handler

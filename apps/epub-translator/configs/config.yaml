@@ -27,6 +27,8 @@ epub:
   context_right_chars: 100
   # 段落重叠句子数
   overlap_sentences: 5
+  # M2 精读模式：段落节目标字数（语义段落聚合，可配置）
+  section_target_chars: 500
 
 # 并发配置
 concurrency:
