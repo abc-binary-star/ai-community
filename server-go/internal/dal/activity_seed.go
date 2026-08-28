@@ -109,7 +109,8 @@ func migrateSeptemberTeamReset() {
 	}
 
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.ActivityTeam{}).Updates(map[string]any{
+		// 一次性重置全部队伍；显式 Where 避免触发 GORM 全表更新保护（ErrMissingWhereClause）
+		if err := tx.Model(&model.ActivityTeam{}).Where("1 = 1").Updates(map[string]any{
 			"position":       0,
 			"status":         model.TeamStatusCollecting,
 			"points":         0,
