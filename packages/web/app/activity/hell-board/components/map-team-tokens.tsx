@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { trackSampleAtPosition } from "../lib/track";
 import type { Team } from "../lib/types";
 import { TeamToken } from "./team-token";
@@ -119,7 +119,7 @@ function DockConnector({ position }: { position: number }) {
 }
 
 /** 队伍停在路线外侧；同格时只展示少量徽章，其余合并为 +N（可点击查看）。 */
-export function MapTeamTokens({
+export const MapTeamTokens = memo(function MapTeamTokens({
   teams,
   myTeamId,
   lod,
@@ -130,6 +130,7 @@ export function MapTeamTokens({
   lod: MapLod;
   onSelectTile: (index: number) => void;
 }) {
+  const layout = markerLayout(lod);
   const groups = useMemo(() => {
     const result = new Map<number, Team[]>();
     for (const team of teams) {
@@ -148,9 +149,8 @@ export function MapTeamTokens({
   return (
     <>
       {[...groups.entries()].flatMap(([position, group]) => {
-        const visible = group.slice(0, markerLayout(lod).visibleCount);
+        const visible = group.slice(0, layout.visibleCount);
         const hidden = group.length - visible.length;
-        const layout = markerLayout(lod);
         return [
           <DockConnector key={`connector-${position}`} position={position} />,
           ...visible.map((team, slot) => (
@@ -205,4 +205,4 @@ export function MapTeamTokens({
       })}
     </>
   );
-}
+});

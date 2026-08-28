@@ -52,7 +52,7 @@ export function TileInfoDialog({ index, onClose }: { index: number; onClose: () 
 
       <div className="flex gap-3 px-4 py-4">
         <div className="size-16 shrink-0">
-          <MapTile tile={tile} lod="detail" angle={0} onClick={() => undefined} active={false} />
+          <MapTile tile={tile} lod="detail" angle={0} onSelect={() => undefined} active={false} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="flex items-start gap-1 text-[15px] font-black leading-snug text-stone-900">

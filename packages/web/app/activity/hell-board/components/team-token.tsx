@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import type { Team } from '../lib/types'
 
@@ -8,7 +9,7 @@ import type { Team } from '../lib/types'
  * 高光、内阴影、描边与底部投影营造立体感；我队/完成态有额外标记。
  * 纯色用 team.color 直接着色，不依赖 color-mix（兼容性更好）。
  */
-export function TeamToken({
+export const TeamToken = memo(function TeamToken({
   team,
   isSelf,
   size = 20,
@@ -60,4 +61,4 @@ export function TeamToken({
       )}
     </span>
   )
-}
+})

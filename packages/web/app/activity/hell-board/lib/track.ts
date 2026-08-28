@@ -203,6 +203,15 @@ export function trackAngle(index: number): number {
   return trackSampleAtPosition(index).tangent;
 }
 
+/**
+ * 100 个格子的路线采样，模块加载时预计算一次。
+ * 主地图与缩略图每帧渲染都查此表，避免重复二分查找。
+ */
+export const TILE_SAMPLES: readonly TrackSample[] = Array.from(
+  { length: TILE_COUNT },
+  (_, i) => trackSampleAtPosition(i + 1),
+);
+
 /** 最近格命中；主地图和缩略图点击共用 */
 export function trackIndexAt(px: number, py: number): number {
   let best = 1;

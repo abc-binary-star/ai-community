@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   ArrowDown,
   ArrowRightLeft,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isFinish, KIND_META } from "../lib/board";
+import { CELL, TILE_SAMPLES } from "../lib/track";
 import { tileDetailText } from "../lib/rules";
 import type { Tile } from "../lib/types";
 
@@ -45,27 +47,27 @@ function TileIcon({ tile, className }: { tile: Tile; className?: string }) {
   return <Sparkles className={className} aria-hidden strokeWidth={2.5} />;
 }
 
-/**
- * 2.5D 路砖。外层随路线轻微转向，内容层反向旋转以保持数字可读。
- * 全景仍保留全部可点击按钮，但只突出里程格和特殊格。
- */
-export function MapTile({
-  tile,
-  lod,
-  active,
-  focused,
-  angle,
-  occupantCount = 0,
-  onClick,
-}: {
+interface MapTileProps {
   tile: Tile;
   lod: MapLod;
   active: boolean;
   focused?: boolean;
   angle: number;
-  occupantCount?: number;
-  onClick: () => void;
-}) {
+  onSelect: (index: number) => void;
+}
+
+/**
+ * 2.5D 路砖本体。外层随路线轻微转向，内容层反向旋转以保持数字可读。
+ * 全景仍保留全部可点击按钮，但只突出里程格和特殊格。
+ */
+function MapTileInner({
+  tile,
+  lod,
+  active,
+  focused = false,
+  angle,
+  onSelect,
+}: MapTileProps) {
   const finish = isFinish(tile.index);
   const isMilestone = tile.index === 1 || tile.index % 5 === 0 || finish;
   const isFeature = tile.kind !== "blank";
@@ -75,7 +77,7 @@ export function MapTile({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => onSelect(tile.index)}
       title={`第 ${tile.index} 格 · ${tileDetailText(tile)}`}
       aria-label={`第 ${tile.index} 格 ${tileDetailText(tile)}`}
       className={cn(
@@ -140,3 +142,39 @@ export function MapTile({
     </button>
   );
 }
+
+export const MapTile = memo(MapTileInner);
+
+/**
+ * 主地图专用：自带轨道绝对定位包裹层，位置与转向角查 TILE_SAMPLES 表。
+ * memo 边界覆盖整个定位层，拖拽/缩放期间上层重渲染时整块跳过。
+ */
+export const PlacedMapTile = memo(function PlacedMapTile({
+  tile,
+  lod,
+  active,
+  focused,
+  onSelect,
+}: Omit<MapTileProps, "angle">) {
+  const sample = TILE_SAMPLES[tile.index - 1];
+  return (
+    <div
+      className="absolute z-20"
+      style={{
+        left: sample.x - CELL / 2,
+        top: sample.y - CELL / 2,
+        width: CELL,
+        height: CELL,
+      }}
+    >
+      <MapTileInner
+        tile={tile}
+        lod={lod}
+        active={active}
+        focused={focused}
+        angle={sample.tangent}
+        onSelect={onSelect}
+      />
+    </div>
+  );
+});

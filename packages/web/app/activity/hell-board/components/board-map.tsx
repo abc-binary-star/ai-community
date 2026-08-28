@@ -10,19 +10,12 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  BOARD_H,
-  BOARD_W,
-  CELL,
-  trackAngle,
-  trackIndexAt,
-  trackPoint,
-} from "../lib/track";
+import { BOARD_H, BOARD_W, trackIndexAt, trackPoint } from "../lib/track";
 import { useActivityStore, useCurrentTeam } from "../lib/store";
 import { useMapViewport } from "../hooks/use-map-viewport";
 import { MapScene } from "./map-scene";
 import { MapTeamTokens } from "./map-team-tokens";
-import { MapTile, type MapLod } from "./map-tile";
+import { PlacedMapTile, type MapLod } from "./map-tile";
 import { MiniMap } from "./mini-map";
 import { TileLegend } from "./tile-legend";
 import type { Tile } from "../lib/types";
@@ -75,14 +68,6 @@ export function BoardMap({
     () => tiles.slice().sort((a, b) => a.index - b.index),
     [tiles],
   );
-  const teamCounts = useMemo(() => {
-    const counts = new Map<number, number>();
-    for (const team of teams) {
-      const position = Math.max(1, team.position);
-      counts.set(position, (counts.get(position) ?? 0) + 1);
-    }
-    return counts;
-  }, [teams]);
   const lod = lodForScale(map.scale);
 
   const centerOnIndex = useCallback(
@@ -91,6 +76,16 @@ export function BoardMap({
       centerMapOn(trackPoint(index), smooth);
     },
     [centerMapOn],
+  );
+
+  // 100 个格子的共同回调：引用稳定，让 PlacedMapTile 的 memo 在拖拽/缩放期间生效
+  const handleTileSelect = useCallback(
+    (index: number) => {
+      if (map.suppressClickRef.current) return;
+      setFocusedTile(index);
+      onSelectTile(index);
+    },
+    [map.suppressClickRef, onSelectTile],
   );
 
   useEffect(() => {
@@ -192,38 +187,17 @@ export function BoardMap({
       >
         <MapScene lod={lod} />
 
-        {/* 100 个语义化交互路砖 */}
-        {sortedTiles.map((tile: Tile) => {
-          const point = trackPoint(tile.index);
-          const active = myTeam?.position === tile.index;
-          const isFocused = focusedTile === tile.index;
-          return (
-            <div
-              key={tile.index}
-              className="absolute z-20"
-              style={{
-                left: point.x - CELL / 2,
-                top: point.y - CELL / 2,
-                width: CELL,
-                height: CELL,
-              }}
-            >
-              <MapTile
-                tile={tile}
-                lod={lod}
-                active={Boolean(active)}
-                focused={isFocused}
-                angle={trackAngle(tile.index)}
-                occupantCount={teamCounts.get(tile.index) ?? 0}
-                onClick={() => {
-                  if (map.suppressClickRef.current) return;
-                  setFocusedTile(tile.index);
-                  onSelectTile(tile.index);
-                }}
-              />
-            </div>
-          );
-        })}
+        {/* 100 个语义化交互路砖（PlacedMapTile 自带定位与 memo 边界） */}
+        {sortedTiles.map((tile: Tile) => (
+          <PlacedMapTile
+            key={tile.index}
+            tile={tile}
+            lod={lod}
+            active={myTeam?.position === tile.index}
+            focused={focusedTile === tile.index}
+            onSelect={handleTileSelect}
+          />
+        ))}
 
         <MapTeamTokens teams={teams} myTeamId={myTeam?.id ?? null} lod={lod} onSelectTile={onSelectTile} />
       </div>

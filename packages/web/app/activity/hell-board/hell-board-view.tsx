@@ -64,10 +64,20 @@ export function HellBoardView() {
 
   useEffect(() => {
     if (archived) return
-    const timer = setInterval(() => {
+    const tick = () => {
+      // 后台标签页暂停轮询，省流量省电
+      if (document.hidden) return
       void refresh().then((ok) => { if (ok) setLastUpdated(new Date()) })
-    }, POLL_INTERVAL_MS)
-    return () => clearInterval(timer)
+    }
+    const timer = setInterval(tick, POLL_INTERVAL_MS)
+    const onVisibilityChange = () => {
+      if (!document.hidden) tick()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [archived, refresh])
 
   const manualRefresh = async () => {
