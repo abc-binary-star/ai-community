@@ -345,18 +345,18 @@ type DiscoverResponse struct {
 }
 
 type Notification struct {
-	ID           string  `json:"id"`
-	Type         string  `json:"type"`
-	ActorID      *string `json:"actorId"`
-	ActorName    *string `json:"actorName"`
-	PostID       *string `json:"postId"`
-	CommentID    *string `json:"commentId"`
-	AnnotationID *string `json:"annotationId"`
-	Content      *string `json:"content"`
-	Read         bool    `json:"read"`
-	Suppressed   bool    `json:"suppressed"`
+	ID            string  `json:"id"`
+	Type          string  `json:"type"`
+	ActorID       *string `json:"actorId"`
+	ActorName     *string `json:"actorName"`
+	PostID        *string `json:"postId"`
+	CommentID     *string `json:"commentId"`
+	AnnotationID  *string `json:"annotationId"`
+	Content       *string `json:"content"`
+	Read          bool    `json:"read"`
+	Suppressed    bool    `json:"suppressed"`
 	DeliverableAt *string `json:"deliverableAt"`
-	CreatedAt    string  `json:"createdAt"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 type Report struct {
@@ -864,30 +864,30 @@ type Asset struct {
 
 // CreateAssetReq 创建资产请求
 type CreateAssetReq struct {
-	Type            string               `json:"type" vd:"in($, '', 'prompt', 'agent', 'workflow')"`
-	Name            string               `json:"name" vd:"len($)>=1 && len($)<=150"`
-	Version         string               `json:"version" vd:"len($)<=30"`
-	Description     string               `json:"description" vd:"len($)<=1000"`
-	PromptTemplate  string               `json:"promptTemplate" vd:"len($)>=1 && len($)<=20000"`
-	InputVariables  []AssetInputVariable `json:"inputVariables"`
-	DefaultParams   *AssetDefaultParams  `json:"defaultParams"`
-	Tags            []string             `json:"tags"`
-	ParentID        *string              `json:"parentId"`
-	Status          string               `json:"status" vd:"in($, '', 'draft', 'published', 'archived')"`
-	Visibility      string               `json:"visibility" vd:"in($, '', 'public', 'unlisted', 'private')"`
+	Type           string               `json:"type" vd:"in($, '', 'prompt', 'agent', 'workflow')"`
+	Name           string               `json:"name" vd:"len($)>=1 && len($)<=150"`
+	Version        string               `json:"version" vd:"len($)<=30"`
+	Description    string               `json:"description" vd:"len($)<=1000"`
+	PromptTemplate string               `json:"promptTemplate" vd:"len($)>=1 && len($)<=20000"`
+	InputVariables []AssetInputVariable `json:"inputVariables"`
+	DefaultParams  *AssetDefaultParams  `json:"defaultParams"`
+	Tags           []string             `json:"tags"`
+	ParentID       *string              `json:"parentId"`
+	Status         string               `json:"status" vd:"in($, '', 'draft', 'published', 'archived')"`
+	Visibility     string               `json:"visibility" vd:"in($, '', 'public', 'unlisted', 'private')"`
 }
 
 // UpdateAssetReq 更新资产请求；仅作者可改，已 published 的资产只允许改 description/visibility/status/tags
 type UpdateAssetReq struct {
-	Name            *string               `json:"name"`
-	Version         *string               `json:"version"`
-	Description     *string               `json:"description"`
-	PromptTemplate  *string               `json:"promptTemplate"`
-	InputVariables  *[]AssetInputVariable `json:"inputVariables"`
-	DefaultParams   *AssetDefaultParams   `json:"defaultParams"`
-	Tags            *[]string             `json:"tags"`
-	Status          *string               `json:"status"`
-	Visibility      *string               `json:"visibility"`
+	Name           *string               `json:"name"`
+	Version        *string               `json:"version"`
+	Description    *string               `json:"description"`
+	PromptTemplate *string               `json:"promptTemplate"`
+	InputVariables *[]AssetInputVariable `json:"inputVariables"`
+	DefaultParams  *AssetDefaultParams   `json:"defaultParams"`
+	Tags           *[]string             `json:"tags"`
+	Status         *string               `json:"status"`
+	Visibility     *string               `json:"visibility"`
 }
 
 // PostAsset 帖子绑定的资产 DTO（B2）
@@ -914,8 +914,8 @@ type BindPostAssetReq struct {
 // Params 可覆盖资产 DefaultParams（maxTokens / temperature）；model 暂不可覆盖，
 // 统一由后端 ai 包管理，避免用户任意指定高价模型。
 type RunAssetReq struct {
-	Inputs map[string]any            `json:"inputs"`
-	Params *AssetDefaultParams       `json:"params"`
+	Inputs map[string]any      `json:"inputs"`
+	Params *AssetDefaultParams `json:"params"`
 }
 
 // RunUsage 单次运行的 token 用量
@@ -927,13 +927,13 @@ type RunUsage struct {
 
 // RunAssetResult 运行结果
 type RunAssetResult struct {
-	Output    string             `json:"output"`
-	Model     string             `json:"model"`
-	Params    AssetDefaultParams `json:"params"`
-	Usage     RunUsage           `json:"usage"`
-	DurationMs int               `json:"durationMs"`
+	Output     string             `json:"output"`
+	Model      string             `json:"model"`
+	Params     AssetDefaultParams `json:"params"`
+	Usage      RunUsage           `json:"usage"`
+	DurationMs int                `json:"durationMs"`
 	// RunID 运行快照 ID（B4）；前端可用于「分享结果」「一键复现」
-	RunID     string             `json:"runId"`
+	RunID string `json:"runId"`
 }
 
 // --- 运行快照（B4）---

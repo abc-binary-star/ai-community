@@ -239,18 +239,18 @@ func (s *AssetService) CreateAsset(ctx context.Context, req types.CreateAssetReq
 	}
 
 	rec := &model.Asset{
-		Type:            assetType,
-		Name:            strings.TrimSpace(req.Name),
-		Version:         trimOrDefault(req.Version, "1.0.0"),
-		Description:     req.Description,
-		PromptTemplate:  req.PromptTemplate,
-		InputVariables:  inputVars,
-		DefaultParams:   defaultParams,
-		Tags:            tags,
-		AuthorID:        authorID,
-		ParentID:        req.ParentID,
-		Status:          status,
-		Visibility:      visibility,
+		Type:           assetType,
+		Name:           strings.TrimSpace(req.Name),
+		Version:        trimOrDefault(req.Version, "1.0.0"),
+		Description:    req.Description,
+		PromptTemplate: req.PromptTemplate,
+		InputVariables: inputVars,
+		DefaultParams:  defaultParams,
+		Tags:           tags,
+		AuthorID:       authorID,
+		ParentID:       req.ParentID,
+		Status:         status,
+		Visibility:     visibility,
 	}
 
 	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

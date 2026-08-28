@@ -152,10 +152,10 @@ func TestCanViewAsset(t *testing.T) {
 	author := "u-author"
 	other := "u-other"
 	cases := []struct {
-		name     string
-		asset    model.Asset
-		viewer   string
-		visible  bool
+		name    string
+		asset   model.Asset
+		viewer  string
+		visible bool
 	}{
 		{
 			name:    "作者查看自己的草稿",

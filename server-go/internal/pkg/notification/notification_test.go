@@ -14,10 +14,10 @@ func inQuietAt(hour int) time.Time {
 
 func TestInQuietWindow(t *testing.T) {
 	cases := []struct {
-		name      string
-		hour      int
+		name       string
+		hour       int
 		start, end int
-		want      bool
+		want       bool
 	}{
 		{name: "same-day-in", hour: 3, start: 1, end: 5, want: true},
 		{name: "same-day-before", hour: 0, start: 1, end: 5, want: false},
@@ -66,10 +66,10 @@ func TestAllowsType(t *testing.T) {
 	}
 
 	cases := []struct {
-		name     string
-		pref     *model.NotificationPreference
+		name      string
+		pref      *model.NotificationPreference
 		notifType string
-		want     bool
+		want      bool
 	}{
 		{name: "comment-on", pref: pref(true, true, true, true, true), notifType: "comment", want: true},
 		{name: "comment-off", pref: pref(false, true, true, true, true), notifType: "comment", want: false},

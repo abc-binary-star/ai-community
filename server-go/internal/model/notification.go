@@ -25,9 +25,9 @@ type Notification struct {
 	Content      *string     `json:"content"`
 	Read         bool        `gorm:"default:false;index" json:"read"`
 	// Suppressed 免打扰时段抑制触达（仍入库）；等待 DeliverableAt 后可补推
-	Suppressed   bool       `gorm:"default:false;index" json:"suppressed"`
+	Suppressed    bool       `gorm:"default:false;index" json:"suppressed"`
 	DeliverableAt *time.Time `gorm:"index" json:"deliverableAt"`
-	CreatedAt    time.Time   `json:"createdAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 func (n *Notification) BeforeCreate(tx *gorm.DB) error {

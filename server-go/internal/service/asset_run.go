@@ -111,15 +111,15 @@ func (s *AssetRunService) Run(ctx context.Context, assetID, userID string, req t
 
 	// 落运行快照（成功 / 失败均落，失败时记录错误信息）
 	runID := s.persistRun(ctx, assetRunSnapshot{
-		AssetID:          assetID,
-		UserID:           userID,
-		Inputs:           req.Inputs,
-		Params:           params,
-		Output:           output,
-		Model:            modelName,
-		Usage:            usage,
-		DurationMs:       durationMs,
-		Err:              err,
+		AssetID:    assetID,
+		UserID:     userID,
+		Inputs:     req.Inputs,
+		Params:     params,
+		Output:     output,
+		Model:      modelName,
+		Usage:      usage,
+		DurationMs: durationMs,
+		Err:        err,
 	})
 
 	if err != nil {
@@ -564,16 +564,16 @@ func (s *AssetRunService) RemixFromRun(ctx context.Context, runID, userID string
 	// ParentID 指向资产，而非快照，保持 fork 关系链的语义一致
 	parentID := parent.ID
 	createReq := types.CreateAssetReq{
-		Type:            parent.Type,
-		Name:            name,
-		Version:         "1.0.0",
-		Description:     description,
-		PromptTemplate:  parent.PromptTemplate,
-		InputVariables:  decodeInputVariables(parent.InputVariables),
-		DefaultParams:   ptrOfDefaultParams(decodeDefaultParams(parent.DefaultParams)),
-		ParentID:        &parentID,
-		Status:          model.AssetStatusDraft,
-		Visibility:      model.AssetVisibilityPublic,
+		Type:           parent.Type,
+		Name:           name,
+		Version:        "1.0.0",
+		Description:    description,
+		PromptTemplate: parent.PromptTemplate,
+		InputVariables: decodeInputVariables(parent.InputVariables),
+		DefaultParams:  ptrOfDefaultParams(decodeDefaultParams(parent.DefaultParams)),
+		ParentID:       &parentID,
+		Status:         model.AssetStatusDraft,
+		Visibility:     model.AssetVisibilityPublic,
 	}
 	return s.assetSvc.CreateAsset(ctx, createReq, userID)
 }

@@ -31,31 +31,31 @@ const (
 
 // AssetRun 资产运行快照
 type AssetRun struct {
-	ID            string          `gorm:"primaryKey" json:"id"`
-	AssetID       string          `gorm:"index:idx_asset_run_asset;not null" json:"assetId"`
-	Asset         Asset           `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"-"`
-	UserID        string          `gorm:"index:idx_asset_run_user;not null" json:"userId"`
-	User          User            `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	ID      string `gorm:"primaryKey" json:"id"`
+	AssetID string `gorm:"index:idx_asset_run_asset;not null" json:"assetId"`
+	Asset   Asset  `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"-"`
+	UserID  string `gorm:"index:idx_asset_run_user;not null" json:"userId"`
+	User    User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 	// Inputs 用户填写的变量值，与资产 InputVariables 声明一一对应
-	Inputs        json.RawMessage `gorm:"type:jsonb" json:"inputs"`
+	Inputs json.RawMessage `gorm:"type:jsonb" json:"inputs"`
 	// Params 实际生效的运行参数（合并资产默认值与用户覆盖后）
-	Params        json.RawMessage `gorm:"type:jsonb" json:"params"`
+	Params json.RawMessage `gorm:"type:jsonb" json:"params"`
 	// Output 模型生成内容；failed 时为空
-	Output        string          `gorm:"type:text" json:"output"`
-	Model         string          `gorm:"size:60" json:"model"`
+	Output string `gorm:"type:text" json:"output"`
+	Model  string `gorm:"size:60" json:"model"`
 	// 用量
-	PromptTokens     int          `gorm:"default:0" json:"promptTokens"`
-	CompletionTokens int          `gorm:"default:0" json:"completionTokens"`
-	TotalTokens      int          `gorm:"default:0" json:"totalTokens"`
-	DurationMs       int          `gorm:"default:0" json:"durationMs"`
+	PromptTokens     int `gorm:"default:0" json:"promptTokens"`
+	CompletionTokens int `gorm:"default:0" json:"completionTokens"`
+	TotalTokens      int `gorm:"default:0" json:"totalTokens"`
+	DurationMs       int `gorm:"default:0" json:"durationMs"`
 	// 状态与错误信息
-	Status        string          `gorm:"size:20;not null;index;default:success" json:"status"`
-	ErrorMessage  string          `gorm:"size:1000" json:"errorMessage"`
+	Status       string `gorm:"size:20;not null;index;default:success" json:"status"`
+	ErrorMessage string `gorm:"size:1000" json:"errorMessage"`
 	// 可见范围：private 仅作者可见；public 可被分享/被列表展示
-	Visibility    string          `gorm:"size:20;not null;default:private;index" json:"visibility"`
+	Visibility string `gorm:"size:20;not null;default:private;index" json:"visibility"`
 	// PostID 运行入口来自哪个帖子（可选，便于按帖子聚合「本帖试玩记录」）
-	PostID        *string         `gorm:"index" json:"postId,omitempty"`
-	CreatedAt     time.Time       `gorm:"index" json:"createdAt"`
+	PostID    *string   `gorm:"index" json:"postId,omitempty"`
+	CreatedAt time.Time `gorm:"index" json:"createdAt"`
 }
 
 // BeforeCreate 自动生成 UUID 主键

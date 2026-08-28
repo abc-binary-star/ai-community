@@ -18,10 +18,10 @@ const (
 
 // 处罚类型与状态
 const (
-	ModerationActionWarning  = "warning"
-	ModerationActionMute     = "mute"
-	ModerationActionSuspend  = "suspend"
-	ModerationActionBan      = "ban"
+	ModerationActionWarning = "warning"
+	ModerationActionMute    = "mute"
+	ModerationActionSuspend = "suspend"
+	ModerationActionBan     = "ban"
 
 	ModerationActionActive  = "active"
 	ModerationActionExpired = "expired"
@@ -32,20 +32,20 @@ const (
 // 处罚自动生效（StartsAt）、可到期（EndsAt，nil 表示永久）、可申诉（AppealID）、可撤销（Status=revoked）。
 // 所有状态变化与操作者、时间一并落库，形成不可静默覆盖的审计轨迹。
 type ModerationAction struct {
-	ID        string    `gorm:"primaryKey" json:"id"`
-	UserID    string    `gorm:"index;not null" json:"userId"`
-	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
-	Action    string    `gorm:"size:20;not null;index" json:"action"` // warning | mute | suspend | ban
-	Reason    string    `gorm:"size:500" json:"reason"`
-	Evidence  string    `gorm:"size:2000" json:"evidence"`
-	ActorID   *string   `json:"actorId"`
-	Actor     *User     `gorm:"foreignKey:ActorID;constraint:OnDelete:SET NULL" json:"-"`
-	StartsAt  time.Time `gorm:"index" json:"startsAt"`
-	EndsAt    *time.Time `gorm:"index" json:"endsAt"` // 到期时间；nil 表示永久
-	Status    string    `gorm:"size:20;default:active;index" json:"status"` // active | expired | revoked
-	AppealID  *string   `json:"appealId"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string     `gorm:"primaryKey" json:"id"`
+	UserID    string     `gorm:"index;not null" json:"userId"`
+	User      User       `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	Action    string     `gorm:"size:20;not null;index" json:"action"` // warning | mute | suspend | ban
+	Reason    string     `gorm:"size:500" json:"reason"`
+	Evidence  string     `gorm:"size:2000" json:"evidence"`
+	ActorID   *string    `json:"actorId"`
+	Actor     *User      `gorm:"foreignKey:ActorID;constraint:OnDelete:SET NULL" json:"-"`
+	StartsAt  time.Time  `gorm:"index" json:"startsAt"`
+	EndsAt    *time.Time `gorm:"index" json:"endsAt"`                        // 到期时间；nil 表示永久
+	Status    string     `gorm:"size:20;default:active;index" json:"status"` // active | expired | revoked
+	AppealID  *string    `json:"appealId"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 func (m *ModerationAction) BeforeCreate(tx *gorm.DB) error {

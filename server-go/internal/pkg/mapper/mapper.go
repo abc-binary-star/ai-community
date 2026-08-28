@@ -138,18 +138,18 @@ func NotificationToDTO(n *model.Notification, actorName *string) types.Notificat
 		deliverableAt = &v
 	}
 	return types.Notification{
-		ID:           n.ID,
-		Type:         n.Type,
-		ActorID:      n.ActorID,
-		ActorName:    actorName,
-		PostID:       n.PostID,
-		CommentID:    n.CommentID,
-		AnnotationID: n.AnnotationID,
-		Content:      n.Content,
-		Read:         n.Read,
-		Suppressed:   n.Suppressed,
+		ID:            n.ID,
+		Type:          n.Type,
+		ActorID:       n.ActorID,
+		ActorName:     actorName,
+		PostID:        n.PostID,
+		CommentID:     n.CommentID,
+		AnnotationID:  n.AnnotationID,
+		Content:       n.Content,
+		Read:          n.Read,
+		Suppressed:    n.Suppressed,
 		DeliverableAt: deliverableAt,
-		CreatedAt:    n.CreatedAt.Format(time.RFC3339),
+		CreatedAt:     n.CreatedAt.Format(time.RFC3339),
 	}
 }
 
