@@ -14,7 +14,7 @@ import (
 
 var activityService = &service.ActivityService{}
 
-// GetActivityBoard 棋盘全局快照
+// GetActivityBoard 棋盘全局快照（百格地图 + 队伍状态 + 当前用户身份）
 // GET /api/activity/hell-board/board
 func GetActivityBoard(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
@@ -26,106 +26,16 @@ func GetActivityBoard(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, board)
 }
 
-// ListActivityCheckIns 本队打卡列表
-// GET /api/activity/hell-board/checkins
-func ListActivityCheckIns(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	items, err := activityService.ListMyTeamCheckIns(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, map[string]any{"items": items})
-}
-
-// CreateActivityCheckIn 提交打卡
-// POST /api/activity/hell-board/checkins
-func CreateActivityCheckIn(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityCheckInReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.SubmitCheckIn(ctx, userID, req)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.Created(c, dto)
-}
-
-// AdminCreateActivityCheckIn 管理员代成员补打卡（审批台「补卡」入口）
-// POST /api/activity/hell-board/admin/checkins
-func AdminCreateActivityCheckIn(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityAdminCheckInReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	inner := types.ActivityCheckInReq{
-		TileIndex:   req.TileIndex,
-		Books:       req.Books,
-		EvidenceURL: req.EvidenceURL,
-	}
-	dto, err := activityService.AdminSubmitCheckIn(ctx, req.MemberID, inner)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.Created(c, dto)
-}
-
-// DeleteActivityCheckIn 撤回未审打卡
-// DELETE /api/activity/hell-board/checkins/:id
-func DeleteActivityCheckIn(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	if err := activityService.DeleteCheckIn(ctx, userID, c.Param("id")); err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.OK(c)
-}
-
-// UpdateActivityCheckIn 成员修改自己历史打卡的内容（心得/字数/时长等）
-// PUT /api/activity/hell-board/checkins/:id
-func UpdateActivityCheckIn(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityCheckInReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.UpdateCheckIn(ctx, userID, c.Param("id"), req)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, dto)
-}
-
-// RollActivityDice 队长掷骰前进
+// RollActivityDice 队长录入群里掷出的骰子点数（程序按 100 格地图结算）
 // POST /api/activity/hell-board/roll
 func RollActivityDice(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	result, err := activityService.RollDice(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, result)
-}
-
-// AdvanceActivityTeam 队长手动前进指定格数（1–6 格，替代掷骰随机点数）
-// POST /api/activity/hell-board/advance
-func AdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityAdvanceReq
+	var req types.ActivityRollReq
 	if err := c.BindAndValidate(&req); err != nil {
 		response.BadRequest(c, "参数不合法")
 		return
 	}
 	userID := middleware.GetCurrentUserID(c)
-	result, err := activityService.AdvanceTeam(ctx, userID, req.Steps)
+	result, err := activityService.RecordRoll(ctx, userID, req)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -133,17 +43,16 @@ func AdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
-// FallbackAdvanceActivityTeam 队长消耗 40 本保底计数向下一格进发：
-// steps 为自选步数（1–6），0 表示摇骰子随机前进
-// POST /api/activity/hell-board/advance/fallback
-func FallbackAdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityFallbackAdvanceReq
+// UseActivityUniversalDice 队长使用 1 枚万能骰子（无视当前格子效果）
+// POST /api/activity/hell-board/universal-dice
+func UseActivityUniversalDice(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityRollReq
 	if err := c.BindAndValidate(&req); err != nil {
 		response.BadRequest(c, "参数不合法")
 		return
 	}
 	userID := middleware.GetCurrentUserID(c)
-	result, err := activityService.FallbackAdvance(ctx, userID, req.Steps)
+	result, err := activityService.UseUniversalDice(ctx, userID, req)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -151,76 +60,23 @@ func FallbackAdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
-// ManualAdvanceActivityTeam 队长常驻手动移动：不依赖打卡审核，任意时刻点亮当前格并前进指定格数
-// POST /api/activity/hell-board/advance/manual
-func ManualAdvanceActivityTeam(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityAdvanceReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
+// CompleteActivityCycle 队长声明本轮彩虹集齐（群里集齐后在 App 内登记，+1 掷骰机会）
+// POST /api/activity/hell-board/cycle
+func CompleteActivityCycle(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
-	result, err := activityService.ManualAdvanceTeam(ctx, userID, req.Steps)
+	team, err := activityService.CompleteCycle(ctx, userID)
 	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	response.JSON(c, result)
+	response.JSON(c, team)
 }
 
-// GetActivityJudgement 读取当前判定会话
-// GET /api/activity/hell-board/judgement
-func GetActivityJudgement(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	session, err := activityService.GetJudgement(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	// 当前格无特殊判定时返回 null，前端据此隐藏判定面板
-	response.JSON(c, session)
-}
-
-// RollActivityJudgement 成员参与判定掷骰
-// POST /api/activity/hell-board/judgement/roll
-func RollActivityJudgement(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	session, err := activityService.RollJudgement(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, session)
-}
-
-// GetActivityTileDetail 格子打卡记录
-// GET /api/activity/hell-board/tiles/:index
-func GetActivityTileDetail(ctx context.Context, c *app.RequestContext) {
-	index, err := strconv.Atoi(c.Param("index"))
-	if err != nil || index < 1 || index > 20 {
-		response.BadRequest(c, "格子编号不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	detail, err := activityService.GetTileDetail(ctx, userID, index)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, detail)
-}
-
-// GetActivityRanking 榜单
-// GET /api/activity/hell-board/ranking?metric=books|words&subject=team|member
+// GetActivityRanking 团队进度榜（位置降序，并列按彩虹/积分）
+// GET /api/activity/hell-board/ranking
 func GetActivityRanking(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
-	limit := 10
-	if v := c.Query("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
-	rows, err := activityService.GetRanking(ctx, userID, c.Query("metric"), c.Query("subject"), limit)
+	rows, err := activityService.GetRanking(ctx, userID)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -228,19 +84,7 @@ func GetActivityRanking(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]any{"items": rows})
 }
 
-// GetActivityLitRanking 点亮进度榜
-// GET /api/activity/hell-board/ranking/lit
-func GetActivityLitRanking(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	rows, err := activityService.GetLitRanking(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, map[string]any{"items": rows})
-}
-
-// ListActivityTimeline 队伍时间线
+// ListActivityTimeline 本队时间线
 // GET /api/activity/hell-board/timeline
 func ListActivityTimeline(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
@@ -252,66 +96,48 @@ func ListActivityTimeline(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]any{"items": events})
 }
 
-// ListActivityFeed 活动大事件流：全员打卡 + 全部队伍事件
-// GET /api/activity/hell-board/feed
-func ListActivityFeed(ctx context.Context, c *app.RequestContext) {
+// EnrollActivity 报名活动（入队的前提），可携带活动内昵称
+// POST /api/activity/hell-board/enroll
+func EnrollActivity(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
-	items, err := activityService.ListGlobalFeed(ctx, userID)
+	var req types.ActivityEnrollReq
+	// 兼容空 body 报名：绑定失败视为空昵称
+	_ = c.Bind(&req)
+	dto, err := activityService.Enroll(ctx, userID, req)
 	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	response.JSON(c, map[string]any{"items": items})
+	response.Created(c, dto)
 }
 
-// ListActivityBookLibrary 第 20 格候选书库
-// GET /api/activity/hell-board/library?keyword=
-func ListActivityBookLibrary(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	limit := 50
-	if v := c.Query("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
-	books, err := activityService.ListBookLibrary(ctx, userID, c.Query("keyword"), limit)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, map[string]any{"items": books})
-}
-
-// --- 管理员：人工终审台与运营后台 ---
-
-// ListActivityReviewQueue 审核队列
-// GET /api/activity/hell-board/admin/reviews?teamId=&tileIndex=&status=
-func ListActivityReviewQueue(ctx context.Context, c *app.RequestContext) {
-	page, pageSize := pagination.Parse(c)
-	tileIndex := 0
-	if v := c.Query("tileIndex"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			tileIndex = n
-		}
-	}
-	result, err := activityService.ListReviewQueue(ctx, c.Query("teamId"), tileIndex, c.Query("status"), page, pageSize)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, result)
-}
-
-// ReviewActivityBook 人工终审单条书目
-// POST /api/activity/hell-board/admin/reviews/:bookId
-func ReviewActivityBook(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityReviewReq
+// JoinActivityTeam 自助选组入队：满 7 人、队长位、彩虹色一人一色
+// POST /api/activity/hell-board/team/join
+func JoinActivityTeam(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityJoinTeamReq
 	if err := c.BindAndValidate(&req); err != nil {
 		response.BadRequest(c, "参数不合法")
 		return
 	}
-	reviewerID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.Review(ctx, reviewerID, c.Param("bookId"), req)
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.JoinTeam(ctx, userID, req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, dto)
+}
+
+// ClaimActivityColor 认领/更换彩虹色（一人一色）
+// POST /api/activity/hell-board/team/color
+func ClaimActivityColor(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityClaimColorReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.ClaimColor(ctx, userID, req)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -319,24 +145,49 @@ func ReviewActivityBook(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, dto)
 }
 
-// ForceApproveActivityBook 管理员强制通过：越过队长投票直接通过书目（审批池兜底）
-// POST /api/activity/hell-board/admin/reviews/:bookId/force-approve
-func ForceApproveActivityBook(ctx context.Context, c *app.RequestContext) {
-	adminID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.ForceApprove(ctx, adminID, c.Param("bookId"))
-	if err != nil {
+// UpdateActivityNickname 修改活动内昵称（榜单与成员名单的展示名）
+// PUT /api/activity/hell-board/team/nickname
+func UpdateActivityNickname(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityEnrollReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	if err := activityService.UpdateNickname(ctx, userID, req.Nickname); err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	response.JSON(c, dto)
+	response.OK(c)
 }
 
-// ListActivityMyBooks 我的打卡，按状态分组
-// GET /api/activity/hell-board/my-books?status=pending|approved|rejected
-func ListActivityMyBooks(ctx context.Context, c *app.RequestContext) {
+// LeaveActivityTeam 退出当前队伍（选错队伍时可退出重选）
+// POST /api/activity/hell-board/team/leave
+func LeaveActivityTeam(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetCurrentUserID(c)
-	status := c.Query("status")
-	items, err := activityService.ListMyBooks(ctx, userID, status)
+	if err := activityService.LeaveTeam(ctx, userID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]bool{"left": true})
+}
+
+// ClaimActivityCaptain 已入队成员自助补选为本队队长（队长位空缺时）
+// POST /api/activity/hell-board/team/claim-captain
+func ClaimActivityCaptain(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	if err := activityService.ClaimCaptain(ctx, userID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c)
+}
+
+// ListActivityEnrollments 报名名单（仅队长可见）
+// GET /api/activity/hell-board/team/enrollments
+func ListActivityEnrollments(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	items, err := activityService.Enrollments(ctx, userID)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -344,84 +195,53 @@ func ListActivityMyBooks(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]any{"items": items})
 }
 
-// ListActivityVotePool 投票池：全员可见
-// GET /api/activity/hell-board/vote-pool
-func ListActivityVotePool(ctx context.Context, c *app.RequestContext) {
+// UpdateTeamByCaptain 队长更新队名/徽章
+// PUT /api/activity/hell-board/team
+func UpdateTeamByCaptain(ctx context.Context, c *app.RequestContext) {
+	var req types.ActivityTeamUpsertReq
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
 	userID := middleware.GetCurrentUserID(c)
-	items, err := activityService.ListVotePool(ctx, userID)
+	team, err := activityService.CaptainUpdateTeam(ctx, userID, req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, team)
+}
+
+// AddTeamMemberByCaptain 队长从报名名单拉人入队
+// POST /api/activity/hell-board/team/members
+func AddTeamMemberByCaptain(ctx context.Context, c *app.RequestContext) {
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	if err := c.BindAndValidate(&req); err != nil || req.UserID == "" {
+		response.BadRequest(c, "参数不合法")
+		return
+	}
+	userID := middleware.GetCurrentUserID(c)
+	dto, err := activityService.CaptainAddMember(ctx, userID, req.UserID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.Created(c, dto)
+}
+
+// --- 运营后台 ---
+
+// ListActivityTeams 全部队伍（运营视角）
+// GET /api/activity/hell-board/admin/teams
+func ListActivityTeams(ctx context.Context, c *app.RequestContext) {
+	items, err := activityService.ListTeams(ctx)
 	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
 	response.JSON(c, map[string]any{"items": items})
-}
-
-// GetActivityMemberCheckIns 成员阅读档案（已通过打卡 + 汇总 + 点赞数）
-// GET /api/activity/hell-board/members/:memberId/checkins
-func GetActivityMemberCheckIns(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	profile, err := activityService.GetMemberCheckIns(ctx, userID, c.Param("memberId"))
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, profile)
-}
-
-// LikeActivityCheckIn 点赞某次打卡
-// POST /api/activity/hell-board/checkins/:id/like
-func LikeActivityCheckIn(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	if err := activityService.LikeCheckIn(ctx, userID, c.Param("id")); err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.OK(c)
-}
-
-// UnlikeActivityCheckIn 取消点赞
-// DELETE /api/activity/hell-board/checkins/:id/like
-func UnlikeActivityCheckIn(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	if err := activityService.UnlikeCheckIn(ctx, userID, c.Param("id")); err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.OK(c)
-}
-
-// CastActivityVote 队长投票
-// POST /api/activity/hell-board/vote-pool/:bookId/vote
-func CastActivityVote(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityVoteReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	item, err := activityService.CastVote(ctx, userID, c.Param("bookId"), req)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, item)
-}
-
-// BatchApproveActivityBooks 批量确认 AI 通过项
-// POST /api/activity/hell-board/admin/reviews/batch-approve
-func BatchApproveActivityBooks(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityBatchReviewReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	reviewerID := middleware.GetCurrentUserID(c)
-	count, err := activityService.BatchApprove(ctx, reviewerID, req.BookIDs)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, map[string]int{"approved": count})
 }
 
 // CreateActivityTeam 新建小组
@@ -448,11 +268,12 @@ func UpdateActivityTeam(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "参数不合法")
 		return
 	}
-	if err := activityService.UpdateTeam(ctx, c.Param("id"), req); err != nil {
+	dto, err := activityService.UpdateTeam(ctx, c.Param("id"), req)
+	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	response.OK(c)
+	response.JSON(c, dto)
 }
 
 // DeleteActivityTeam 删除小组
@@ -465,7 +286,7 @@ func DeleteActivityTeam(ctx context.Context, c *app.RequestContext) {
 	response.OK(c)
 }
 
-// AddActivityMember 添加成员
+// AddActivityMember 添加成员（自动分配彩虹色）
 // POST /api/activity/hell-board/admin/teams/:id/members
 func AddActivityMember(ctx context.Context, c *app.RequestContext) {
 	var req types.ActivityMemberUpsertReq
@@ -501,11 +322,11 @@ func SetActivityCaptain(ctx context.Context, c *app.RequestContext) {
 	response.OK(c)
 }
 
-// UpdateActivityTile 调整格子任务文案
+// UpdateActivityTile 调整格子定义（类型/文案/效果参数/双子）
 // PUT /api/activity/hell-board/admin/tiles/:index
 func UpdateActivityTile(ctx context.Context, c *app.RequestContext) {
 	index, err := strconv.Atoi(c.Param("index"))
-	if err != nil || index < 1 || index > 20 {
+	if err != nil || index < 1 || index > 100 {
 		response.BadRequest(c, "格子编号不合法")
 		return
 	}
@@ -514,14 +335,15 @@ func UpdateActivityTile(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "参数不合法")
 		return
 	}
-	if err := activityService.UpdateTile(ctx, index, req); err != nil {
+	dto, err := activityService.UpdateTile(ctx, index, req)
+	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	response.OK(c)
+	response.JSON(c, dto)
 }
 
-// ManualFixActivityTeam 手工修正队伍进度
+// ManualFixActivityTeam 手工修正队伍状态（带理由留痕）
 // POST /api/activity/hell-board/admin/teams/:id/manual-fix
 func ManualFixActivityTeam(ctx context.Context, c *app.RequestContext) {
 	var req types.ActivityManualFixReq
@@ -529,15 +351,15 @@ func ManualFixActivityTeam(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(c, "参数不合法")
 		return
 	}
-	adminID := middleware.GetCurrentUserID(c)
-	if err := activityService.ManualFix(ctx, adminID, c.Param("id"), req); err != nil {
+	dto, err := activityService.ManualFix(ctx, c.Param("id"), req)
+	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	response.OK(c)
+	response.JSON(c, dto)
 }
 
-// ExportActivityResults 导出结果与抽奖名单
+// ExportActivityResults 导出当前战况
 // GET /api/activity/hell-board/admin/export
 func ExportActivityResults(ctx context.Context, c *app.RequestContext) {
 	result, err := activityService.ExportResults(ctx)
@@ -546,141 +368,6 @@ func ExportActivityResults(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	response.JSON(c, result)
-}
-
-// EnrollActivity 报名活动（入队的前提），可携带活动内昵称
-// POST /api/activity/hell-board/enroll
-func EnrollActivity(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	var req types.ActivityEnrollReq
-	// 兼容空 body 报名：绑定失败视为空昵称
-	_ = c.Bind(&req)
-	dto, err := activityService.Enroll(ctx, userID, req.Nickname)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.Created(c, dto)
-}
-
-// JoinActivityTeam 自助选组入队，可同步选择成为队长
-// POST /api/activity/hell-board/team/join
-func JoinActivityTeam(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityJoinTeamReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.JoinTeam(ctx, userID, req.TeamID, req.IsCaptain)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.Created(c, dto)
-}
-
-// UpdateActivityNickname 修改活动内昵称（榜单与成员名单的展示名）
-// PUT /api/activity/hell-board/team/nickname
-func UpdateActivityNickname(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityEnrollReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数错误")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.UpdateNickname(ctx, userID, req.Nickname)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, dto)
-}
-
-// LeaveActivityTeam 退出当前队伍（选错队伍时可退出重选）
-// POST /api/activity/hell-board/team/leave
-func LeaveActivityTeam(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	if err := activityService.LeaveTeam(ctx, userID); err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, map[string]bool{"left": true})
-}
-
-// ClaimActivityCaptain 已入队成员自助补选为本队队长（队长位空缺时）
-// POST /api/activity/hell-board/team/claim-captain
-func ClaimActivityCaptain(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.ClaimCaptain(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, dto)
-}
-
-// ListActivityEnrollments 报名名单（仅队长可见）
-// GET /api/activity/hell-board/team/enrollments
-func ListActivityEnrollments(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetCurrentUserID(c)
-	items, err := activityService.Enrollments(ctx, userID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, map[string]any{"items": items})
-}
-
-// UpdateTeamByCaptain 队长更新队名 / 一次性选择队伍形象
-// PUT /api/activity/hell-board/team
-func UpdateTeamByCaptain(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityTeamUpsertReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	if err := activityService.CaptainUpdateTeam(ctx, userID, req); err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.OK(c)
-}
-
-// AddTeamMemberByCaptain 队长从报名名单拉人入队
-// POST /api/activity/hell-board/team/members
-func AddTeamMemberByCaptain(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityTeamAddMemberReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.CaptainAddMember(ctx, userID, req.UserID)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.Created(c, dto)
-}
-
-// InitializeActivityTeam 队长初始化队伍进度（活动已开始后的补录）：
-// 录入线下已完成的起始格、已点亮格与当前格，可重复执行（幂等覆盖）
-// POST /api/activity/hell-board/team/initialize
-func InitializeActivityTeam(ctx context.Context, c *app.RequestContext) {
-	var req types.ActivityTeamInitReq
-	if err := c.BindAndValidate(&req); err != nil {
-		response.BadRequest(c, "参数不合法")
-		return
-	}
-	userID := middleware.GetCurrentUserID(c)
-	dto, err := activityService.InitializeTeam(ctx, userID, req)
-	if err != nil {
-		handleServiceError(c, err)
-		return
-	}
-	response.JSON(c, dto)
 }
 
 // --- 反馈（bug / 需求） ---
@@ -702,7 +389,7 @@ func CreateActivityFeedback(ctx context.Context, c *app.RequestContext) {
 	response.Created(c, dto)
 }
 
-// ListActivityFeedback 管理员查看反馈列表（审批台）
+// ListActivityFeedback 管理员查看反馈列表
 // GET /api/activity/hell-board/admin/feedback?status=pending|resolved
 func ListActivityFeedback(ctx context.Context, c *app.RequestContext) {
 	page, pageSize := pagination.Parse(c)

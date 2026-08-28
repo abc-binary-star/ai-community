@@ -1,50 +1,76 @@
 package types
 
-// 活动「无限循环读书地狱」DTO。字段名与前端 lib/types.ts 保持一致，
-// 前端可直接消费无需转换。
+// 活动「九月彩虹桥 · 读书大富翁」DTO。字段名与前 lib/types.ts 对应。
+// 玩法说明：读书/打卡/投骰在群内完成，本应用只做棋盘可视化与程序化结算——
+// 录入骰子点数后由服务端按 100 格地图规则移动队伍并结算格子效果。
 
 // --- 响应 DTO ---
 
-// ActivityTileDTO 格子定义，含面向用户的判定文案
-type ActivityTileDTO struct {
-	Index    int    `json:"index"`
-	Title    string `json:"title"`
-	TaskType string `json:"taskType"`
-	Target   int64  `json:"target"`
-	Unit     string `json:"unit"`
-	// SpecialRule 为空表示该格无特殊判定
-	SpecialRule      string `json:"specialRule,omitempty"`
-	SpecialRuleLabel string `json:"specialRuleLabel,omitempty"`
+// BuffDTO 生效中的 buff/debuff
+type BuffDTO struct {
+	// Kind 效果标识（与 hellboard.EffectKey 一致）
+	Kind string `json:"kind"`
+	// Label 面向用户的效果文案
+	Label string `json:"label"`
+	// Uses 剩余生效次数；次数用尽后自动移除
+	Uses int `json:"uses"`
 }
 
-// ActivityMemberDTO 成员及其累计成绩（仅统计终审通过）
+// ActivityTileDTO 百格地图定义（仅可视化 + 引擎结算白名单）
+type ActivityTileDTO struct {
+	Index int `json:"index"`
+	// Kind: forward / backward / special / swap / blank
+	Kind string `json:"kind"`
+	// Title 面向用户的格子名
+	Title string `json:"title"`
+	// Effect 特殊功能格效果标识
+	Effect string `json:"effect,omitempty"`
+	// Param 效果参数（前进/后退格数）
+	Param int `json:"param,omitempty"`
+	// Twin 双子格编号（位置互换格）
+	Twin int `json:"twin,omitempty"`
+}
+
+// ActivityMemberDTO 成员及其认领的彩虹色
 type ActivityMemberDTO struct {
 	ID        string `json:"id"`
 	UserID    string `json:"userId"`
 	Name      string `json:"name"`
 	AvatarURL string `json:"avatarUrl,omitempty"`
 	IsCaptain bool   `json:"isCaptain"`
-	BookCount int    `json:"bookCount"`
-	WordCount int64  `json:"wordCount"`
+	// Color 认领的彩虹色：red/orange/yellow/green/cyan/blue/purple
+	Color string `json:"color,omitempty"`
+	// BookCount / WordCount 累计（群内打卡产出，App 内仅展示）
+	BookCount int   `json:"bookCount"`
+	WordCount int64 `json:"wordCount"`
 }
 
-// ActivityTeamDTO 队伍快照。litTiles 为「格子编号 → 点亮方式」
+// ActivityTeamDTO 队伍全量状态快照
 type ActivityTeamDTO struct {
-	ID            string              `json:"id"`
-	Name          string              `json:"name"`
-	Color         string              `json:"color"`
-	Emblem        string              `json:"emblem"`
-	Members       []ActivityMemberDTO `json:"members"`
-	Position      int                 `json:"position"`
-	LitTiles      map[int]string      `json:"litTiles"`
-	Status        string              `json:"status"`
-	TileProgress  int64               `json:"tileProgress"`
-	FallbackCount int                 `json:"fallbackCount"`
-	TimerEndsAt   string              `json:"timerEndsAt,omitempty"`
-	Lap           int                 `json:"lap"`
+	ID      string              `json:"id"`
+	Name    string              `json:"name"`
+	Color   string              `json:"color"`
+	Emblem  string              `json:"emblem"`
+	Members []ActivityMemberDTO `json:"members"`
+	// Position 当前所在格 0–100；0 为起点，100 为终点
+	Position      int `json:"position"`
+	Points        int `json:"points"`
+	UniversalDice int `json:"universalDice"`
+	// RollChances 掷骰前进机会：完成一轮彩虹 +1
+	RollChances int `json:"rollChances"`
+	// RainbowCount 已完成的彩虹周期数
+	RainbowCount int `json:"rainbowCount"`
+	// WeekMinDelta 本周彩虹保底条数修正（保底扩容 -1）
+	WeekMinDelta int `json:"weekMinDelta"`
+	// ColorBlocks 当前彩虹周期内各色块数（红橙黄绿青蓝紫）
+	ColorBlocks map[string]int `json:"colorBlocks"`
+	// Buffs 生效中的 buff/debuff
+	Buffs []BuffDTO `json:"buffs"`
+	// Status: collecting / ready / completed
+	Status string `json:"status"`
 }
 
-// ActivityBoardDTO 棋盘全局快照，前端轮询该接口刷新（PRD 第 12 节实时性）
+// ActivityBoardDTO 棋盘全局快照，前端轮询该接口刷新
 type ActivityBoardDTO struct {
 	Tiles []ActivityTileDTO `json:"tiles"`
 	Teams []ActivityTeamDTO `json:"teams"`
@@ -54,15 +80,37 @@ type ActivityBoardDTO struct {
 	IsCaptain  bool   `json:"isCaptain"`
 	// Enrolled 当前用户是否已报名（报名是入队的前提）
 	Enrolled bool `json:"enrolled"`
-	// MyNickname 当前用户的活动内昵称，供「我的」弹窗回填；为空表示沿用账号昵称
+	// MyNickname 当前用户的活动内昵称
 	MyNickname string `json:"myNickname,omitempty"`
-	// Archived 为 true 时页面转只读归档态（P1-7 / 验收标准 12）
+	// Archived 为 true 时页面转只读归档态
 	Archived     bool   `json:"archived"`
 	CycleStarted bool   `json:"cycleStarted"`
 	CycleStart   string `json:"cycleStart"`
 	CycleEnd     string `json:"cycleEnd"`
-	// FallbackThreshold 保底阈值下发，避免前端硬编码
-	FallbackThreshold int `json:"fallbackThreshold"`
+	// RainbowGuarantee 每周每队保底彩虹条数
+	RainbowGuarantee int `json:"rainbowGuarantee"`
+}
+
+// ActivityRollResultDTO 骰子 / 万能骰子的程序化结算结果
+type ActivityRollResultDTO struct {
+	// Value 骰子面值 1–6（群里掷出的点数，由队长录入）
+	Value int `json:"value"`
+	// FromTile / ToTile 结算后队伍所在格
+	FromTile int `json:"fromTile"`
+	ToTile   int `json:"toTile"`
+	// Moved 净前进格数（含格子附加效果，可为负）
+	Moved int `json:"moved"`
+	// Points 本次净增团队积分（单数 +1，双数 +2，含效果修正）
+	Points int `json:"points"`
+	// DiceExchanged 本次自动兑换的万能骰子数
+	DiceExchanged int `json:"diceExchanged"`
+	// Results 逐条效果文案（格效 / buff 触发 / 积分修正）
+	Results []string `json:"results"`
+	// Effects 命中的格子类型清单
+	Effects []string `json:"effects,omitempty"`
+	// Won 是否冲线获胜
+	Won  bool            `json:"won"`
+	Team ActivityTeamDTO `json:"team"`
 }
 
 // EnrollmentDTO 报名名单条目，队长据此把人拉进队伍
@@ -71,17 +119,41 @@ type EnrollmentDTO struct {
 	UserID    string `json:"userId"`
 	Name      string `json:"name"`
 	AvatarURL string `json:"avatarUrl,omitempty"`
-	// Nickname 报名时填写的活动内昵称，为空时回退到账号昵称
-	Nickname string `json:"nickname,omitempty"`
-	// 已入队时的队伍信息；空表示待入队
-	TeamID   string `json:"teamId,omitempty"`
-	TeamName string `json:"teamName,omitempty"`
-	Joined   bool   `json:"joined"`
+	Nickname  string `json:"nickname,omitempty"`
+	TeamID    string `json:"teamId,omitempty"`
+	TeamName  string `json:"teamName,omitempty"`
+	Joined    bool   `json:"joined"`
 }
+
+// ActivityRankingRowDTO 榜单行（进度榜 / 彩虹榜）
+type ActivityRankingRowDTO struct {
+	ID    string `json:"id"`
+	Rank  int    `json:"rank"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+	// Position 棋盘进度
+	Position int `json:"position"`
+	// Points 团队积累积分
+	Points int `json:"points"`
+	// UniversalDice 万能骰子持有数
+	UniversalDice int `json:"universalDice"`
+	// RainbowCount 已完成彩虹轮数
+	RainbowCount int  `json:"rainbowCount"`
+	IsSelf       bool `json:"isSelf"`
+}
+
+// ActivityEventDTO 时间线事件（掷骰/格效/彩虹/道具）
+type ActivityEventDTO struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Text      string `json:"text"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// --- 请求 DTO ---
 
 // ActivityEnrollReq 报名活动请求
 type ActivityEnrollReq struct {
-	// Nickname 活动内昵称，用于榜单/成员列表展示，为空时使用账号昵称
 	Nickname string `json:"nickname" vd:"len($)<=50"`
 }
 
@@ -90,248 +162,50 @@ type ActivityJoinTeamReq struct {
 	TeamID string `json:"teamId" vd:"len($)>=1"`
 	// IsCaptain 是否成为队长；仅当该队队长位空缺时可选
 	IsCaptain bool `json:"isCaptain"`
+	// Color 认领的彩虹色（一人一色不重复）
+	Color string `json:"color" vd:"len($)<=16"`
 }
 
-// ActivityTeamAddMemberReq 队长从报名名单拉人入队
-type ActivityTeamAddMemberReq struct {
-	UserID string `json:"userId" vd:"len($)>=1"`
+// ActivityClaimColorReq 认领/更换彩虹色（本轮周期内不可中途换色，集齐后可重新分配）
+type ActivityClaimColorReq struct {
+	Color string `json:"color" vd:"len($)>=1 && len($)<=16"`
 }
 
-// ActivityTeamInitReq 队长初始化队伍进度（活动已开始后的补录）。
-// 录入线下已完成的起始格、已点亮格列表与当前格；可重复执行（幂等覆盖）。
-type ActivityTeamInitReq struct {
-	// StartTile 队伍起始格子（仅留痕，不参与状态机）
-	StartTile int `json:"startTile" vd:"$>=1 && $<=20"`
-	// LitTiles 已打卡（已点亮）的格子编号
-	LitTiles []int `json:"litTiles"`
-	// CurrentTile 队伍当前所在格子（未完成、正在做任务）
-	CurrentTile int `json:"currentTile" vd:"$>=1 && $<=20"`
+// ActivityRollReq 录入群里掷出的骰子点数（1–6）
+type ActivityRollReq struct {
+	Value int `json:"value" vd:"$>=1 && $<=6"`
 }
 
-// ActivityBookDTO 单条书目
-type ActivityBookDTO struct {
-	ID              string  `json:"id"`
-	CheckInID       string  `json:"checkInId"`
-	MemberID        string  `json:"memberId"`
-	MemberName      string  `json:"memberName"`
-	TeamID          string  `json:"teamId"`
-	TeamName        string  `json:"teamName,omitempty"`
-	TileIndex       int     `json:"tileIndex"`
-	Lap             int     `json:"lap"`
-	Title           string  `json:"title"`
-	Author          string  `json:"author"`
-	WordCount       int64   `json:"wordCount"`
-	DurationMinutes int     `json:"durationMinutes,omitempty"`
-	CoverURL        string  `json:"coverUrl,omitempty"`
-	Genre           string  `json:"genre,omitempty"`
-	Note            string  `json:"note,omitempty"`
-	ReviewStatus    string  `json:"reviewStatus"`
-	CountsForTask   bool    `json:"countsForTask"`
-	AIStatus        string  `json:"aiStatus,omitempty"`
-	AIConfidence    float64 `json:"aiConfidence,omitempty"`
-	AIReason        string  `json:"aiReason,omitempty"`
-	EvidenceURL     string  `json:"evidenceUrl,omitempty"`
-	CreatedAt       string  `json:"createdAt"`
+// ActivityManualFixReq 运营手工修正队伍状态，必须带理由留痕
+type ActivityManualFixReq struct {
+	Position      *int   `json:"position"`
+	Points        *int   `json:"points"`
+	UniversalDice *int   `json:"universalDice"`
+	RollChances   *int   `json:"rollChances"`
+	Reason        string `json:"reason" vd:"len($)>=1 && len($)<=500"`
 }
 
-// ActivityCheckInDTO 一次打卡提交
-type ActivityCheckInDTO struct {
-	ID          string            `json:"id"`
-	TileIndex   int               `json:"tileIndex"`
-	TeamID      string            `json:"teamId"`
-	MemberID    string            `json:"memberId"`
-	MemberName  string            `json:"memberName"`
-	Lap         int               `json:"lap"`
-	Books       []ActivityBookDTO `json:"books"`
-	EvidenceURL string            `json:"evidenceUrl,omitempty"`
-	CreatedAt   string            `json:"createdAt"`
+// ActivityTeamUpsertReq 运营维护小组名单
+type ActivityTeamUpsertReq struct {
+	Name   string `json:"name" vd:"len($)>=1 && len($)<=50"`
+	Color  string `json:"color" vd:"len($)>=1 && len($)<=20"`
+	Emblem string `json:"emblem" vd:"len($)<=24"`
 }
 
-// ActivityEventDTO 时间线事件
-type ActivityEventDTO struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	Text      string `json:"text"`
-	CreatedAt string `json:"createdAt"`
+// ActivityMemberUpsertReq 运营维护成员名单
+type ActivityMemberUpsertReq struct {
+	// Username 社区用户名，服务端解析为 userId
+	Username  string `json:"username" vd:"len($)>=1"`
+	IsCaptain bool   `json:"isCaptain"`
 }
 
-// ActivityFeedItemDTO 活动大事件流条目：全员打卡与全队事件的合并视图。
-// Kind 区分数据来源，前端据此决定渲染成打卡卡片还是事件条目。
-type ActivityFeedItemDTO struct {
-	ID   string `json:"id"`
-	Kind string `json:"kind"`
-	// Type 事件类型（打卡条目固定为 checkin）
-	Type       string `json:"type"`
-	TeamID     string `json:"teamId"`
-	TeamName   string `json:"teamName"`
-	TeamColor  string `json:"teamColor,omitempty"`
-	TeamEmblem string `json:"teamEmblem,omitempty"`
-	MemberName string `json:"memberName,omitempty"`
-	TileIndex  int    `json:"tileIndex,omitempty"`
-	Lap        int    `json:"lap,omitempty"`
-	Text       string `json:"text,omitempty"`
-	BookCount  int    `json:"bookCount,omitempty"`
-	WordCount  int64  `json:"wordCount,omitempty"`
-	// BookTitles 仅本队可见：其他队伍只给数量，避免互相抄书单（与格子详情口径一致）
-	BookTitles []string `json:"bookTitles,omitempty"`
-	OwnTeam    bool     `json:"ownTeam"`
-	CreatedAt  string   `json:"createdAt"`
-}
-
-// ActivityRollResultDTO 掷骰结果。点数由服务端生成，前端仅做动画表现
-type ActivityRollResultDTO struct {
-	Value    int `json:"value"`
-	FromTile int `json:"fromTile"`
-	ToTile   int `json:"toTile"`
-	// LitTile 本次掷骰点亮的格子编号，0 表示未点亮
-	LitTile   int    `json:"litTile,omitempty"`
-	LitReason string `json:"litReason,omitempty"`
-	// TimerStarted 落入第 8 格启动计时（P1-6）
-	TimerStarted bool            `json:"timerStarted"`
-	Team         ActivityTeamDTO `json:"team"`
-}
-
-// ActivityJudgementDTO 特殊判定会话
-type ActivityJudgementDTO struct {
-	TileIndex int    `json:"tileIndex"`
-	Rule      string `json:"rule"`
-	RuleLabel string `json:"ruleLabel"`
-	Round     int    `json:"round"`
-	// Rolls 为成员 id → 点数，缺席表示未掷
-	Rolls map[string]int `json:"rolls"`
-	// Result 为空表示未全员掷完；passed / failed
-	Result string `json:"result,omitempty"`
-}
-
-// ActivityTileRecordDTO 格子打卡记录（PRD 8.2）。
-// 非本组只下发汇总数量，books 为空，避免互相抄书单。
-type ActivityTileRecordDTO struct {
-	TeamID    string `json:"teamId"`
-	TeamName  string `json:"teamName"`
-	TeamColor string `json:"teamColor"`
-	Lap       int    `json:"lap"`
-	BookCount int    `json:"bookCount"`
-	Lit       bool   `json:"lit"`
-	LitReason string `json:"litReason,omitempty"`
-	IsMyTeam  bool   `json:"isMyTeam"`
-	// Books 仅本组可见完整清单
-	Books []ActivityBookDTO `json:"books,omitempty"`
-}
-
-// ActivityTileDetailDTO 格子详情
-type ActivityTileDetailDTO struct {
-	Tile    ActivityTileDTO         `json:"tile"`
-	Records []ActivityTileRecordDTO `json:"records"`
-}
-
-// ActivityRankingRowDTO 榜单行
-type ActivityRankingRowDTO struct {
-	ID        string `json:"id"`
-	Rank      int    `json:"rank"`
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	BookCount int    `json:"bookCount"`
-	WordCount int64  `json:"wordCount"`
-	LitCount  int    `json:"litCount"`
-	TeamName  string `json:"teamName,omitempty"`
-	IsSelf    bool   `json:"isSelf"`
-}
-
-// ActivityReviewQueueDTO 人工终审队列项（PRD 9.3）
-type ActivityReviewQueueDTO struct {
-	Book ActivityBookDTO `json:"book"`
-	// MemberPassRate 该成员历史通过率，供管理员参考
-	MemberPassRate float64 `json:"memberPassRate"`
-	// DuplicateInTeam 该书目是否被本队重复提交
-	DuplicateInTeam bool            `json:"duplicateInTeam"`
-	Tile            ActivityTileDTO `json:"tile"`
-}
-
-// ActivityVotePoolItemDTO 投票池条目。审核池对全员可见（只读），仅队长可投票。
-type ActivityVotePoolItemDTO struct {
-	Book ActivityBookDTO `json:"book"`
-	Tile ActivityTileDTO `json:"tile"`
-	// YesCount / NoCount 当前赞成 / 反对票数
-	YesCount int `json:"yesCount"`
-	NoCount  int `json:"noCount"`
-	// TotalCaptains 当前活动内队长总数（含无队伍时仍在册的队长），过半即通过
-	TotalCaptains int `json:"totalCaptains"`
-	// MyVote 当前用户已投的票：approve / reject，未投为空
-	MyVote string `json:"myVote,omitempty"`
-	// Resolved 本次操作是否使该条目出池（通过），前端可据此提示并刷新
-	Resolved bool `json:"resolved,omitempty"`
-}
-
-// ActivityMemberCheckInDTO 成员单次打卡（仅含已通过审核的书目），用于成员档案
-type ActivityMemberCheckInDTO struct {
-	CheckInID string            `json:"checkInId"`
-	TileIndex int               `json:"tileIndex"`
-	Lap       int               `json:"lap"`
-	CreatedAt string            `json:"createdAt"`
-	Books     []ActivityBookDTO `json:"books"`
-	// LikeCount 该次打卡的点赞数
-	LikeCount int `json:"likeCount"`
-	// LikedByMe 当前用户是否已点赞
-	LikedByMe bool `json:"likedByMe"`
-}
-
-// ActivityMemberProfileDTO 成员阅读档案（点击「全部队伍」中的成员查看）：
-// 仅统计已通过审核的打卡；总时长按分钟下发，展示层换算小时。
-type ActivityMemberProfileDTO struct {
-	MemberID   string `json:"memberId"`
-	MemberName string `json:"memberName"`
-	TeamID     string `json:"teamId"`
-	TeamName   string `json:"teamName,omitempty"`
-	// 已通过审核的累计数据
-	BookCount       int                        `json:"bookCount"`
-	WordCount       int64                      `json:"wordCount"`
-	DurationMinutes int                        `json:"durationMinutes"`
-	CheckIns        []ActivityMemberCheckInDTO `json:"checkIns"`
-}
-
-// --- 请求 DTO ---
-
-// ActivityBookReq 提交打卡中的单条书目。
-// 书名必填；作者仅作者相关格（作者国籍/同一作者/群内交叉）必填，
-// 字数仅累计字数格必填，其余格子选填（PRD 8.1 调整为按格子要求校验）。
-type ActivityBookReq struct {
-	Title  string `json:"title" vd:"len($)>=1 && len($)<=200"`
-	Author string `json:"author" vd:"len($)<=100"`
-	// WordCount 仅在累计字数格必填；其余格子可为 0（表示未填写）
-	WordCount int64 `json:"wordCount"`
-	// 上限 7 天，下限 0：负值会让 taskDelta 反向扣减 TileProgress
-	DurationMinutes int    `json:"durationMinutes" vd:"$>=0 && $<=10080"`
-	CoverURL        string `json:"coverUrl" vd:"len($)<=500"`
-	Genre           string `json:"genre" vd:"len($)<=50"`
-	Note            string `json:"note" vd:"len($)<=500"`
-}
-
-// ActivityCheckInReq 一次打卡可包含多条书目
-type ActivityCheckInReq struct {
-	TileIndex   int               `json:"tileIndex" vd:"$>=1 && $<=20"`
-	Books       []ActivityBookReq `json:"books"`
-	EvidenceURL string            `json:"evidenceUrl" vd:"len($)<=500"`
-}
-
-// ActivityAdminCheckInReq 管理员代成员补打卡请求（审批台「补卡」入口）
-type ActivityAdminCheckInReq struct {
-	// MemberID 目标成员（补卡人），服务端按活动成员 ID 定位
-	MemberID string `json:"memberId" vd:"len($)>=1"`
-	// TileIndex 补卡目标格：队伍当前格或本队已点亮的历史格
-	TileIndex   int               `json:"tileIndex" vd:"$>=1 && $<=20"`
-	Books       []ActivityBookReq `json:"books"`
-	EvidenceURL string            `json:"evidenceUrl" vd:"len($)<=500"`
-}
-
-// ActivityAdvanceReq 队长手动前进请求：步数 1–6（替代掷骰随机点数）
-type ActivityAdvanceReq struct {
-	Steps int `json:"steps" vd:"$>=1 && $<=6"`
-}
-
-// ActivityFallbackAdvanceReq 保底前进请求：消耗 40 本全局保底计数后前进。
-// Steps 为自选步数（1–6）；0 表示摇骰子，由服务端随机生成点数。
-type ActivityFallbackAdvanceReq struct {
-	Steps int `json:"steps" vd:"$>=0 && $<=6"`
+// ActivityTileUpdateReq 运营调整格子定义（仅特殊/前进/后退/互换相关字段）
+type ActivityTileUpdateReq struct {
+	Kind   string `json:"kind" vd:"len($)<=16"`
+	Title  string `json:"title" vd:"len($)<=100"`
+	Effect string `json:"effect" vd:"len($)<=32"`
+	Param  int    `json:"param"`
+	Twin   int    `json:"twin"`
 }
 
 // --- 反馈（bug / 需求） ---
@@ -341,13 +215,11 @@ type ActivityFeedbackReq struct {
 	// Type: bug / feature / other
 	Type    string `json:"type" vd:"in($,'bug','feature','other')"`
 	Content string `json:"content" vd:"len($)>=1 && len($)<=2000"`
-	// Contact 联系方式（选填）
 	Contact string `json:"contact" vd:"len($)<=100"`
 }
 
 // ActivityFeedbackResolveReq 管理员标记反馈已处理
 type ActivityFeedbackResolveReq struct {
-	// Reply 处理回复（选填）
 	Reply string `json:"reply" vd:"len($)<=1000"`
 }
 
@@ -362,56 +234,4 @@ type ActivityFeedbackDTO struct {
 	Status    string `json:"status"`
 	Reply     string `json:"reply,omitempty"`
 	CreatedAt string `json:"createdAt"`
-}
-
-// ActivityReviewReq 人工终审操作（PRD 9.3）
-type ActivityReviewReq struct {
-	// Action: approve / reject / revoke
-	Action string `json:"action" vd:"in($,'approve','reject','revoke')"`
-	// Reason 驳回与撤销时必填
-	Reason string `json:"reason" vd:"len($)<=500"`
-	// CountsForTask 通过时是否计入当前格任务进度，默认 true
-	CountsForTask *bool `json:"countsForTask"`
-	Violation     bool  `json:"violation"`
-}
-
-// ActivityBatchReviewReq 批量确认 AI 通过项（PRD 9.3）
-type ActivityBatchReviewReq struct {
-	BookIDs []string `json:"bookIds"`
-}
-
-// ActivityVoteReq 队长投票请求
-type ActivityVoteReq struct {
-	// Vote: approve / reject
-	Vote string `json:"vote" vd:"in($,'approve','reject')"`
-}
-
-// ActivityTeamUpsertReq 运营维护小组名单（PRD 第 13 节）
-type ActivityTeamUpsertReq struct {
-	Name   string `json:"name" vd:"len($)>=1 && len($)<=50"`
-	Color  string `json:"color" vd:"len($)>=1 && len($)<=20"`
-	Emblem string `json:"emblem" vd:"len($)<=24"`
-}
-
-// ActivityMemberUpsertReq 运营维护成员名单
-type ActivityMemberUpsertReq struct {
-	// Username 社区用户名，服务端解析为 userId
-	Username  string `json:"username" vd:"len($)>=1"`
-	IsCaptain bool   `json:"isCaptain"`
-}
-
-// ActivityManualFixReq 手工修正队伍位置与点亮状态，必须带理由留痕（PRD 第 13 节）
-type ActivityManualFixReq struct {
-	Position *int `json:"position"`
-	// LitTiles 需要标记点亮的格子编号
-	LitTiles []int `json:"litTiles"`
-	// UnlitTiles 需要取消点亮的格子编号
-	UnlitTiles []int  `json:"unlitTiles"`
-	Reason     string `json:"reason" vd:"len($)>=1 && len($)<=500"`
-}
-
-// ActivityTileUpdateReq 运营调整格子任务文案
-type ActivityTileUpdateReq struct {
-	Title  string `json:"title" vd:"len($)>=1 && len($)<=100"`
-	Target int64  `json:"target" vd:"$>0"`
 }

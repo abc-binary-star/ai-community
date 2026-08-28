@@ -1,198 +1,102 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
-import {
-  BookOpen,
-  ChevronDown,
-  ClipboardList,
-  Crown,
-  Gavel,
-  History,
-  Loader2,
-  LogOut,
-  Settings2,
-  Sparkles,
-  UserRound,
-  Users,
-} from 'lucide-react'
-import { useAuthStore } from '@/lib/store'
+import { useEffect, useState } from 'react'
+import { BookHeart, CircleHelp, Loader2, LogOut, Map as MapIcon, RefreshCw, Trophy, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ActivityFeedPanel } from './components/activity-feed-panel'
-import { AdvanceDialog } from './components/advance-dialog'
-import { AllTeamsPanel } from './components/all-teams-panel'
-import { BoardGrid } from './components/board-grid'
-import { CheckInFormDialog } from './components/checkin-form-dialog'
-import { CurrentTaskPanel } from './components/current-task-panel'
+import { useAuthStore } from '@/lib/store'
+import * as api from './lib/api'
+import { BoardMap } from './components/board-map'
 import { EnrollWizard } from './components/enroll-wizard'
-import { FallbackAdvanceDialog } from './components/fallback-advance-dialog'
-import { MyCheckInsPanel } from './components/my-checkins-panel'
-import { MyProfileDialog } from './components/my-profile-dialog'
-import { ManualMoveDialog } from './components/manual-move-dialog'
-import { RankingPanel } from './components/ranking-panel'
-import { TeamInitDialog } from './components/team-init-dialog'
-import { TeamManageDialog } from './components/team-manage-dialog'
-import { TeamPanel } from './components/team-panel'
-import { TileDetailDialog } from './components/tile-detail-dialog'
+import { MapSkeleton } from './components/map-skeleton'
+import { RankPanel } from './components/rank-panel'
+import { RainbowPanel } from './components/rainbow-panel'
+import { RollResultDialog } from './components/roll-result-dialog'
+import { RulesDialog } from './components/rules-dialog'
+import { TeamsOverview } from './components/teams-overview'
+import { TileInfoDialog } from './components/tile-info-dialog'
 import { TimelineDialog } from './components/timeline-dialog'
-import { VotePoolPanel } from './components/vote-pool-panel'
+import { ToastHost } from './components/toast'
 import { useActivityStore, useCurrentTeam, useIsCaptain } from './lib/store'
+import type { RankingRow } from './lib/types'
 
 const POLL_INTERVAL_MS = 10_000
 
-/** 右侧栏标签页：队伍/榜单/我的打卡；内容量更大的审核池与全部队伍移到顶部导航。 */
-const SIDE_TABS = [
-  ['team', '队伍'],
-  ['ranking', '榜单'],
-  ['mine', '我的打卡'],
-] as const
+type TopView = 'board' | 'ranking' | 'teams'
 
-type SideTab = (typeof SIDE_TABS)[number][0]
-
-/** 顶部导航：棋盘（默认）+ 内容量大的独立视图 */
-const TOP_VIEWS = [
-  ['board', '棋盘'],
-  ['feed', '🎉 大事件'],
-  ['pool', '审核池'],
-  ['teams', '全部队伍'],
-] as const
-
-type TopView = (typeof TOP_VIEWS)[number][0]
-
-/**
- * 队长操作下拉：把「补录」「队伍管理」收进一个入口。
- * 管理员兼队长时页头会同时出现终审台/时间线/退出，平铺容易在中等宽度换行。
- */
-function CaptainMenu({
-  archived,
-  onOpenInit,
-  onOpenManage,
-}: {
-  archived: boolean
-  onOpenInit: () => void
-  onOpenManage: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-
-  // 点击外部与 Esc 关闭
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const items = [
-    { label: '进度初始化 / 补录', icon: ClipboardList, disabled: archived, run: onOpenInit },
-    { label: '队伍管理', icon: Settings2, disabled: false, run: onOpenManage },
-  ]
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="队长操作"
-        className={cn(
-          'inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
-          open ? 'bg-[#ffd166]' : 'bg-white hover:-translate-y-0.5 hover:bg-[#fff4cf]',
-        )}
-      >
-        <Crown className="size-3.5 text-amber-600" />
-        <span className="hidden sm:inline">队长</span>
-        <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-1.5 w-48 overflow-hidden rounded-md border-2 border-stone-800 bg-white shadow-[3px_3px_0_#292524]"
-        >
-          {items.map(({ label, icon: Icon, disabled, run }) => (
-            <button
-              key={label}
-              type="button"
-              role="menuitem"
-              disabled={disabled}
-              onClick={() => {
-                setOpen(false)
-                run()
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold text-stone-700 transition-colors hover:bg-[#fff4cf] disabled:cursor-not-allowed disabled:text-stone-400 disabled:hover:bg-transparent"
-            >
-              <Icon className="size-3.5 shrink-0" />
-              {label}
-              {disabled && <span className="ml-auto text-[10px] font-medium">已归档</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+function formatTime(d: Date) {
+  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
+/**
+ * 「九月彩虹桥 · 读书大富翁」活动主页面。
+ * 读书/打卡/投骰在群内完成，这里展示大富翁大地图与每队当前格子 + buff/debuff，
+ * 队长录入骰子点数后由服务端程序化结算。
+ */
 export function HellBoardView() {
   const teams = useActivityStore((s) => s.teams)
-  const selectedTile = useActivityStore((s) => s.selectedTile)
-  const selectTile = useActivityStore((s) => s.selectTile)
   const loading = useActivityStore((s) => s.loading)
   const error = useActivityStore((s) => s.error)
   const archived = useActivityStore((s) => s.archived)
-  const myMemberId = useActivityStore((s) => s.myMemberId)
   const enrolled = useActivityStore((s) => s.enrolled)
+  const selectedTile = useActivityStore((s) => s.selectedTile)
+  const selectTile = useActivityStore((s) => s.selectTile)
+  const lastOutcome = useActivityStore((s) => s.lastOutcome)
+  const closeOutcome = useActivityStore((s) => s.closeOutcome)
+  const clearError = useActivityStore((s) => s.clearError)
   const loadAll = useActivityStore((s) => s.loadAll)
   const refresh = useActivityStore((s) => s.refresh)
 
   const currentTeam = useCurrentTeam()
   const isCaptain = useIsCaptain()
-  const role = useAuthStore((s) => s.user?.role)
-  const canReview = role === 'admin' || role === 'moderator'
   const clearAuth = useAuthStore((s) => s.clearAuth)
-  const [showCheckInForm, setShowCheckInForm] = useState(false)
-  const [sideTab, setSideTab] = useState<SideTab>('team')
+
   const [topView, setTopView] = useState<TopView>('board')
-  // 队伍工具（时间线 / 补录 / 管理）从队伍卡上提到页头右上角，避免卡片被按钮撑高
   const [showTimeline, setShowTimeline] = useState(false)
-  const [showTeamInit, setShowTeamInit] = useState(false)
-  const [showTeamManage, setShowTeamManage] = useState(false)
-  const [showMyProfile, setShowMyProfile] = useState(false)
-  // 向下一格进发：队长手动选择前进格数（替代掷骰随机点数）
-  const [showAdvance, setShowAdvance] = useState(false)
-  // 保底前进：消耗 40 本保底计数，可摇骰或自选步数
-  const [showFallbackAdvance, setShowFallbackAdvance] = useState(false)
-  // 常驻手动移动：无需打卡审核，随时点亮当前格并前进
-  const [showManualMove, setShowManualMove] = useState(false)
+  const [showRules, setShowRules] = useState(false)
+  const [ranking, setRanking] = useState<RankingRow[]>([])
+  const [rankingLoading, setRankingLoading] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
-    void loadAll()
+    void loadAll().then(() => setLastUpdated(new Date()))
   }, [loadAll])
 
   useEffect(() => {
     if (archived) return
     const timer = setInterval(() => {
-      void refresh()
+      void refresh().then((ok) => { if (ok) setLastUpdated(new Date()) })
     }, POLL_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [archived, refresh])
 
+  const manualRefresh = async () => {
+    setRefreshing(true)
+    const ok = await refresh()
+    setLastUpdated(new Date())
+    setRefreshing(false)
+    if (!ok) {
+      // error already set in store
+    }
+  }
+
+  // 榜单数据按需加载
+  useEffect(() => {
+    if (topView !== 'ranking') return
+    let cancelled = false
+    setRankingLoading(true)
+    api.fetchRanking()
+      .then((rows) => { if (!cancelled) setRanking(rows) })
+      .catch(() => { if (!cancelled) setRanking([]) })
+      .finally(() => { if (!cancelled) setRankingLoading(false) })
+    return () => { cancelled = true }
+  }, [topView])
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f7f6ed]">
-        <div className="flex flex-col items-center gap-3 text-emerald-800">
-          <Loader2 className="size-7 animate-spin" />
-          <p className="text-xs font-bold tracking-[0.18em]">正在摆好棋盘</p>
+      <div className="min-h-[100dvh] bg-[#f7f6ed] [background-image:radial-gradient(#d6d3c5_0.8px,transparent_0.8px)] [background-size:18px_18px]">
+        <div className="mx-auto max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7">
+          <MapSkeleton />
         </div>
       </div>
     )
@@ -202,11 +106,9 @@ export function HellBoardView() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f7f6ed] px-6 text-center text-stone-800">
         <div className="flex size-14 items-center justify-center rounded-lg border-2 border-stone-800 bg-[#ffd166] shadow-[4px_4px_0_#292524]">
-          <BookOpen className="size-6" />
+          <BookHeart className="size-6" />
         </div>
-        <p className="max-w-md text-sm font-medium">
-          {error ?? '活动还没有配置小组，请等待运营完成名单录入'}
-        </p>
+        <p className="max-w-md text-sm font-medium">{error ?? '活动还没有配置队伍，请等待运营完成名单录入'}</p>
         <button
           type="button"
           onClick={() => void loadAll()}
@@ -220,58 +122,64 @@ export function HellBoardView() {
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-[#f7f6ed] text-stone-900 [background-image:radial-gradient(#d6d3c5_0.8px,transparent_0.8px)] [background-size:18px_18px]">
-      <div className="mx-auto max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7 lg:py-4">
-        <header className="mb-4 border-b-2 border-stone-800 pb-3 lg:mb-4">
+      <div className="mx-auto max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7">
+        {/* 归档横幅 */}
+        {archived && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border-2 border-amber-500 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+            <span aria-hidden className="size-2 rounded-full bg-amber-500" />
+            活动已结束，当前为只读归档数据
+          </div>
+        )}
+
+        {/* 页头 */}
+        <header className="mb-4 border-b-2 border-stone-800 pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="hidden size-10 shrink-0 rotate-[-3deg] items-center justify-center rounded-lg border-2 border-stone-800 bg-[#ffd166] shadow-[4px_4px_0_#292524] sm:flex">
-                <BookOpen className="size-5" />
+              <div className="hidden size-11 shrink-0 rotate-[-3deg] items-center justify-center rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fff1c2] to-[#ffd166] shadow-[4px_4px_0_#292524] sm:flex">
+                <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: 'conic-gradient(from 90deg, #e11d48,#f97316,#eab308,#22c55e,#06b6d4,#3b82f6,#8b5cf6,#e11d48)' }} />
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-lg font-black text-stone-900 sm:text-xl lg:text-2xl">无限循环读书地狱</h1>
-                  {/* 「我的」：就近提供昵称修改入口，不必跳去设置页 */}
-                  <button
-                    type="button"
-                    onClick={() => setShowMyProfile(true)}
-                    title="我的资料 / 改昵称"
-                    className="inline-flex h-7 items-center gap-1 rounded-md border-2 border-stone-800 bg-white px-2 text-[11px] font-bold shadow-[2px_2px_0_#292524] transition-all hover:-translate-y-0.5 hover:bg-[#fff4cf] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                  >
-                    <UserRound aria-hidden className="size-3" />
-                    我的
-                  </button>
+                  <h1 className="text-lg font-black text-stone-900 sm:text-xl lg:text-2xl">九月彩虹桥 · 读书大富翁</h1>
+                  {archived && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">已结束</span>}
+                  {!currentTeam && <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-bold text-stone-600">观战中</span>}
                 </div>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-stone-600 lg:text-sm">
-                  <span className="inline-flex items-center gap-1"><Sparkles className="size-3.5 text-amber-600" />推理小说群月度活动</span>
-                  {archived && <span className="rounded bg-amber-100 px-1.5 py-0.5 font-bold text-amber-800">已结束 · 只读归档</span>}
-                  {!currentTeam && <span className="rounded bg-stone-200 px-1.5 py-0.5 font-bold text-stone-600">观战中</span>}
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-stone-600 lg:text-sm">
+                  <span className="inline-flex items-center gap-1">
+                    <BookHeart className="size-3.5 text-amber-600" />
+                    群里读书香色 · 集齐 7 色投骰 · 走完 100 格夺冠军
+                  </span>
                 </p>
               </div>
             </div>
+
             <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
-              {canReview && (
-                <Link
-                  href="/activity/hell-board/review"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold shadow-[2px_2px_0_#292524] transition-transform hover:-translate-y-0.5 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
-                >
-                  <Gavel className="size-3.5" />
-                  终审台
-                </Link>
-              )}
-              {/* 队长专属操作收进下拉；本队时间线已下移到队伍卡头像右侧 */}
-              {currentTeam && isCaptain && (
-                <CaptainMenu
-                  archived={archived}
-                  onOpenInit={() => setShowTeamInit(true)}
-                  onOpenManage={() => setShowTeamManage(true)}
-                />
-              )}
+              {/* 刷新状态 */}
+              <button
+                type="button"
+                onClick={() => void manualRefresh()}
+                disabled={refreshing}
+                title="手动刷新数据"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-2.5 text-[10px] font-bold text-stone-500 shadow-[2px_2px_0_#292524] transition-all hover:text-stone-800 active:translate-x-px active:translate-y-px active:shadow-none disabled:opacity-60"
+              >
+                <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+                <span className="hidden sm:inline">{lastUpdated ? formatTime(lastUpdated) : '刷新'}</span>
+              </button>
+              {/* 玩法说明 */}
+              <button
+                type="button"
+                onClick={() => setShowRules(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-amber-700 active:translate-x-px active:translate-y-px active:shadow-none"
+              >
+                <CircleHelp className="size-3.5" />
+                <span className="hidden sm:inline">玩法</span>
+              </button>
               <button
                 type="button"
                 onClick={clearAuth}
                 title="退出登录"
                 aria-label="退出登录"
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-rose-600 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-rose-600 active:translate-x-px active:translate-y-px active:shadow-none"
               >
                 <LogOut className="size-3.5" />
                 <span className="hidden sm:inline">退出</span>
@@ -280,189 +188,103 @@ export function HellBoardView() {
           </div>
         </header>
 
-        {/* 顶部导航：棋盘为默认视图；审核池 / 全部队伍内容量大，单独整页展示 */}
-        <nav
-          aria-label="页面视图切换"
-          className="mb-4 grid grid-cols-2 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524] sm:flex"
-        >
-          {TOP_VIEWS.map(([key, label]) => (
+        {/* 顶部视图切换 */}
+        <nav aria-label="页面视图切换" className="mb-4 grid grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]">
+          {(
+            [
+              ['board', '棋盘', MapIcon],
+              ['ranking', '进度榜', Trophy],
+              ['teams', '全部队伍', Users],
+            ] as const
+          ).map(([key, label, Icon]) => (
             <button
               key={key}
               type="button"
               aria-current={topView === key ? 'page' : undefined}
               onClick={() => setTopView(key)}
               className={cn(
-                'h-9 flex-1 rounded-md text-xs font-bold transition-colors sm:px-4',
-                topView === key
-                  ? 'bg-[#ffd166] text-stone-900'
-                  : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
+                'flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-bold transition-colors',
+                topView === key ? 'bg-[#ffd166] text-stone-900' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
               )}
             >
+              <Icon className="size-3.5" />
               {label}
             </button>
           ))}
         </nav>
 
         {topView === 'board' ? (
-          // xl 下棋盘在左、右栏独立成列：右栏吸顶且高度限制在视口内，
-          // 面板区因此始终有界，内容多时不撑高整页导致溢出
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_370px] xl:gap-5">
-          {/* 棋盘列与右栏同高：右栏被钉在 calc(100dvh-6rem)，棋盘容器取同一高度后，
-              内部格子按比例拉长填满，两列卡片下沿即可对齐 */}
-          <div className="min-w-0 xl:h-[calc(100dvh-6rem)]">
-            <div className="mx-auto flex max-w-[430px] rounded-lg border-2 border-stone-800 bg-[#dff3e7] p-2 shadow-[5px_5px_0_#292524] md:max-w-none md:p-3 xl:h-full">
-              <BoardGrid teams={teams} currentTeam={currentTeam} onSelectTile={selectTile} />
-            </div>
-          </div>
-
-          {/* 右栏承载打卡主链路：任务进度与打卡入口置顶，队伍/榜单/我的打卡收进切换栏，
-              使电脑端与棋盘同屏，打卡无需滚动。高度 = 视口减去顶部页头与边距，
-              超出部分由面板自身滚动 */}
-          <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:h-[calc(100dvh-6rem)] xl:flex-col">
-            <div className="xl:min-h-0 xl:shrink xl:overflow-y-auto">
-              {currentTeam ? (
-                <CurrentTaskPanel
-                  team={currentTeam}
-                  isCaptain={isCaptain}
-                  readOnly={archived}
-                  onOpenCheckIn={() => setShowCheckInForm(true)}
-                  onOpenAdvance={() => setShowAdvance(true)}
-                  onOpenFallbackAdvance={() => setShowFallbackAdvance(true)}
-                  onOpenManualMove={() => setShowManualMove(true)}
-                />
-              ) : (
-                <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
-                  <p className="flex items-center gap-2 text-sm font-black"><Users className="size-4 text-emerald-700" />观战模式</p>
-                  <p className="mt-1.5 text-xs leading-relaxed text-stone-600">
-                    {enrolled
-                      ? '你已报名，等待选择小组加入后即可打卡与掷骰。'
-                      : '你已登录，但不在本次活动的任何小组中。报名并选择小组后即可参与。'}
-                  </p>
-                  {!archived && <EnrollWizard />}
-                </div>
-              )}
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-5">
+            {/* 大地图 */}
+            <div className="min-w-0">
+              <div className="h-[48vh] min-h-[300px] w-full lg:h-[calc(100dvh-9.5rem)]">
+                <BoardMap onSelectTile={selectTile} />
+              </div>
             </div>
 
-            <div
-              role="tablist"
-              aria-label="侧边栏切换"
-              className="sticky top-2 z-10 grid shrink-0 grid-cols-3 gap-1 rounded-lg border-2 border-stone-800 bg-white p-1 shadow-[3px_3px_0_#292524]"
-            >
-              {SIDE_TABS.map(([key, label]) => (
-                <button
-                  key={key}
-                  id={`side-tab-${key}`}
-                  role="tab"
-                  type="button"
-                  aria-selected={sideTab === key}
-                  aria-controls={`side-panel-${key}`}
-                  onClick={() => setSideTab(key)}
-                  className={cn(
-                    'rounded px-1 py-2 text-xs font-bold transition-colors',
-                    sideTab === key
-                      ? 'bg-[#ffd166] text-stone-900'
-                      : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900',
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* 面板区占满右栏剩余高度（min-h-0 允许收缩到有界高度），
-                内容超长时由各面板内部的 flex-1 + overflow-y-auto 滚动。
-                此处不设 overflow：否则会裁掉卡片 4px 硬阴影，且 overflow-x 会被迫变成 auto */}
-            <div className="min-h-[360px] h-[min(70dvh,620px)] xl:min-h-0 xl:flex-1">
-              <div
-                id="side-panel-team"
-                role="tabpanel"
-                aria-labelledby="side-tab-team"
-                hidden={sideTab !== 'team'}
-                className="xl:h-full"
-              >
+            {/* 右侧栏 */}
+            <aside className="space-y-3 xl:sticky xl:top-4 xl:flex xl:h-[calc(100dvh-9.5rem)] xl:flex-col">
+              <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-0.5">
                 {currentTeam ? (
-                  <TeamPanel
+                  <RainbowPanel
                     team={currentTeam}
-                    currentMemberId={myMemberId ?? ''}
+                    isCaptain={isCaptain}
+                    archived={archived}
                     onOpenTimeline={() => setShowTimeline(true)}
                   />
                 ) : (
-                  <p className="rounded-lg border-2 border-stone-800 bg-white p-4 text-xs text-stone-600 shadow-[3px_3px_0_#292524] xl:h-full">
-                    你不在本次活动的小组中，可查看棋盘与榜单
-                  </p>
+                  <div className="rounded-lg border-2 border-stone-800 bg-white p-4 shadow-[4px_4px_0_#292524]">
+                    <p className="flex items-center gap-2 text-sm font-black">
+                      <Users className="size-4 text-emerald-700" />
+                      观战模式
+                    </p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-stone-600">
+                      {enrolled
+                        ? '你已报名，选择小组并认领一个彩虹色后即可参与。'
+                        : '你已登录，但不在本次活动的任何小组中，可先报名再入队。'}
+                    </p>
+                    <EnrollWizard />
+                  </div>
                 )}
               </div>
-              <div
-                id="side-panel-ranking"
-                role="tabpanel"
-                aria-labelledby="side-tab-ranking"
-                hidden={sideTab !== 'ranking'}
-                className="xl:h-full"
-              >
-                <RankingPanel />
-              </div>
-              <div
-                id="side-panel-mine"
-                role="tabpanel"
-                aria-labelledby="side-tab-mine"
-                hidden={sideTab !== 'mine'}
-                className="xl:h-full"
-              >
-                <MyCheckInsPanel />
-              </div>
-            </div>
-          </aside>
-        </div>
-        ) : (
-          <div className="h-[calc(100dvh-11rem)] min-h-[420px] w-full lg:h-[calc(100dvh-8rem)]">
-            {topView === 'feed' && <ActivityFeedPanel />}
-            {topView === 'pool' && <VotePoolPanel />}
-            {topView === 'teams' && <AllTeamsPanel />}
+            </aside>
           </div>
+        ) : topView === 'ranking' ? (
+          <div className="mx-auto max-w-3xl">
+            {rankingLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="size-6 animate-spin text-amber-600" />
+              </div>
+            ) : (
+              <RankPanel rows={ranking} />
+            )}
+          </div>
+        ) : (
+          <TeamsOverview teams={teams} myTeamId={currentTeam?.id ?? null} />
         )}
       </div>
 
-      {selectedTile !== null && (
-        <TileDetailDialog tileIndex={selectedTile} onClose={() => selectTile(null)} />
-      )}
-
-      {showCheckInForm && currentTeam && (
-        <CheckInFormDialog
-          tileIndex={currentTeam.position}
-          onClose={() => setShowCheckInForm(false)}
-        />
-      )}
-
+      {selectedTile !== null && <TileInfoDialog index={selectedTile} onClose={() => selectTile(null)} />}
       {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
+      {lastOutcome && <RollResultDialog outcome={lastOutcome} onClose={closeOutcome} />}
+      {showRules && <RulesDialog open={showRules} onClose={() => setShowRules(false)} />}
 
-      {showAdvance && currentTeam && (
-        <AdvanceDialog onClose={() => setShowAdvance(false)} />
-      )}
-
-      {showFallbackAdvance && currentTeam && (
-        <FallbackAdvanceDialog onClose={() => setShowFallbackAdvance(false)} />
-      )}
-
-      {showManualMove && currentTeam && (
-        <ManualMoveDialog onClose={() => setShowManualMove(false)} />
-      )}
-
-      {showMyProfile && <MyProfileDialog onClose={() => setShowMyProfile(false)} />}
-
-      {showTeamInit && currentTeam && (
-        <TeamInitDialog team={currentTeam} onClose={() => setShowTeamInit(false)} />
-      )}
-
-      {showTeamManage && currentTeam && (
-        <TeamManageDialog team={currentTeam} onClose={() => setShowTeamManage(false)} />
-      )}
+      <ToastHost />
 
       {error && teams.length > 0 && (
         <div
-          role="status"
-          className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border-2 border-stone-900 bg-[#ff7b6b] px-4 py-2 text-xs font-bold text-white shadow-[4px_4px_0_#292524]"
+          role="alert"
+          className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-md border-2 border-stone-900 bg-[#ff7b6b] px-4 py-2 text-xs font-bold text-white shadow-[4px_4px_0_#292524]"
         >
-          {error}
+          <span className="min-w-0">{error}</span>
+          <button
+            type="button"
+            aria-label="关闭错误提示"
+            onClick={clearError}
+            className="shrink-0 rounded p-0.5 hover:bg-white/20"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

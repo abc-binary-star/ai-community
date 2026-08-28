@@ -1,138 +1,91 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import {
-  BookOpen,
-  Dices,
-  Flame,
-  Hourglass,
-  LifeBuoy,
-  Loader2,
-  ShieldCheck,
-  Star,
-  Wrench,
-  X,
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { History } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { fetchTimeline } from '../lib/api'
-import type { TimelineEvent, TimelineEventType } from '../lib/types'
+import { useActivityStore } from '../lib/store'
+import { Dialog, DialogCloseButton } from './dialog'
 
-/** 时间线事件类型 → 展示配置（图标 / 配色 / 名称） */
-const EVENT_META: Record<
-  TimelineEventType,
-  { icon: typeof Star; label: string; iconClass: string }
-> = {
-  checkin: { icon: BookOpen, label: '打卡', iconClass: 'bg-emerald-100 text-emerald-700' },
-  review: { icon: ShieldCheck, label: '审核', iconClass: 'bg-sky-100 text-sky-700' },
-  roll: { icon: Dices, label: '掷骰', iconClass: 'bg-violet-100 text-violet-700' },
-  lit: { icon: Star, label: '点亮', iconClass: 'bg-amber-100 text-amber-700' },
-  judgement: { icon: Flame, label: '判定', iconClass: 'bg-orange-100 text-orange-700' },
-  fallback: { icon: LifeBuoy, label: '保底', iconClass: 'bg-teal-100 text-teal-700' },
-  timer: { icon: Hourglass, label: '计时', iconClass: 'bg-rose-100 text-rose-700' },
-  manual: { icon: Wrench, label: '人工', iconClass: 'bg-stone-200 text-stone-600' },
+const TYPE_META: Record<string, { label: string; cls: string }> = {
+  roll: { label: '掷骰', cls: 'bg-sky-100 text-sky-800' },
+  dice: { label: '万能骰子', cls: 'bg-violet-100 text-violet-800' },
+  cycle: { label: '彩虹集齐', cls: 'bg-rose-100 text-rose-700' },
+  tile: { label: '格效', cls: 'bg-amber-100 text-amber-800' },
+  win: { label: '冲线', cls: 'bg-amber-200 text-amber-900' },
+  color: { label: '颜色', cls: 'bg-emerald-100 text-emerald-800' },
+  manual: { label: '运营修正', cls: 'bg-stone-200 text-stone-700' },
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+const FILTERS = [
+  { key: 'all', label: '全部' },
+  { key: 'roll', label: '掷骰' },
+  { key: 'tile', label: '格效' },
+  { key: 'cycle', label: '彩虹' },
+  { key: 'dice', label: '道具' },
+] as const
 
-/**
- * 本队时间线（PRD 10.3）：队伍全部动态的留痕视图，
- * 覆盖打卡 / 审核 / 掷骰 / 点亮 / 判定 / 保底 / 计时 / 人工修正，最新在前。
- */
+/** 本队时间线：掷骰 / 格子效果 / 彩虹 / 道具等留痕，支持类型筛选 */
 export function TimelineDialog({ onClose }: { onClose: () => void }) {
-  const [events, setEvents] = useState<TimelineEvent[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const timeline = useActivityStore((s) => s.timeline)
+  const [filter, setFilter] = useState<string>('all')
 
-  useEffect(() => {
-    let alive = true
-    fetchTimeline()
-      .then((items) => {
-        if (alive) setEvents(items)
-      })
-      .catch((err) => {
-        if (alive) setError(err instanceof Error ? err.message : '时间线加载失败')
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
+  const filtered = useMemo(() => {
+    if (filter === 'all') return timeline
+    if (filter === 'dice') return timeline.filter((e) => e.type === 'dice' || e.type === 'manual')
+    return timeline.filter((e) => e.type === filter)
+  }, [timeline, filter])
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="timeline-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-lg border-2 border-stone-800 bg-[#fffdf5] shadow-[6px_6px_0_#292524] sm:rounded-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 p-5 pb-3">
-          <div>
-            <h2 id="timeline-title" className="text-lg font-black text-stone-900">
-              本队时间线
-            </h2>
-            <p className="mt-0.5 text-xs text-stone-500">
-              队伍全部动态留痕，按时间倒序 · 最近 100 条
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="关闭"
-            className="rounded-lg p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-          {error ? (
-            <p role="alert" className="rounded-md border-2 border-rose-300 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
-              {error}
-            </p>
-          ) : events === null ? (
-            <p className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-xs text-stone-400">
-              <Loader2 className="size-3.5 animate-spin" />正在加载时间线…
-            </p>
-          ) : events.length === 0 ? (
-            <p className="rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-xs text-stone-500">
-              暂无动态，队伍的点亮 / 打卡 / 掷骰记录会出现在这里。
-            </p>
-          ) : (
-            <ol className="relative space-y-4 before:absolute before:bottom-1 before:left-[13px] before:top-1 before:w-px before:bg-stone-300">
-              {events.map((ev) => {
-                const meta = EVENT_META[ev.type] ?? EVENT_META.manual
-                const Icon = meta.icon
-                return (
-                  <li key={ev.id} className="relative flex items-start gap-3">
-                    <span
-                      className={cn(
-                        'z-10 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-[#fffdf5] shadow-[0_0_0_1px_rgba(41,37,36,0.15)]',
-                        meta.iconClass,
-                      )}
-                    >
-                      <Icon className="size-3.5" />
-                    </span>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-xs font-bold leading-relaxed text-stone-800">{ev.text}</p>
-                      <p className="mt-0.5 text-[10px] font-medium tabular-nums text-stone-400">
-                        {meta.label} · {formatTime(ev.createdAt)}
-                      </p>
-                    </div>
-                  </li>
-                )
-              })}
-            </ol>
-          )}
-        </div>
+    <Dialog open onClose={onClose} className="max-w-md" labelledBy="timeline-title">
+      <div className="flex items-center gap-2 border-b-2 border-stone-800 px-4 py-3">
+        <History className="size-4 text-amber-700" />
+        <p id="timeline-title" className="text-sm font-black text-stone-900">本队时间线</p>
+        <DialogCloseButton onClose={onClose} />
       </div>
-    </div>
+
+      {/* 类型筛选 */}
+      <div className="flex gap-1 border-b border-[#e5d9b8] px-3 py-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={cn(
+              'rounded-full px-2.5 py-1 text-[10px] font-black transition-colors',
+              filter === f.key
+                ? 'bg-stone-800 text-white'
+                : 'bg-stone-100 text-stone-500 hover:bg-stone-200',
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4" style={{ maxHeight: '55dvh' }}>
+        {filtered.length === 0 ? (
+          <p className="py-10 text-center text-xs text-stone-500">
+            {timeline.length === 0
+              ? '还没有记录：集齐一轮彩虹开始掷骰后，这里会滚动更新'
+              : '当前筛选下暂无记录'}
+          </p>
+        ) : (
+          <ul className="space-y-2.5">
+            {filtered.map((e) => {
+              const meta = TYPE_META[e.type] ?? { label: '事件', cls: 'bg-stone-100 text-stone-500' }
+              return (
+                <li key={e.id} className="flex gap-2">
+                  <span className={cn('mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black', meta.cls)}>{meta.label}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-medium leading-snug text-stone-700">{e.text}</p>
+                    <p className="mt-0.5 text-[10px] tabular-nums text-stone-400">{e.createdAt}</p>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </Dialog>
   )
 }

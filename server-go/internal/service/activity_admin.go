@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
@@ -13,364 +11,283 @@ import (
 	"gorm.io/gorm"
 )
 
-// 运营后台能力（PRD 第 13 节）：小组与成员名单维护、格子任务文案调整、
-// 手工修正队伍位置与点亮状态（带理由留痕）、结果与抽奖名单导出。
+// 运营后台：队伍/成员维护、格子调整、手工修正（带理由留痕）、结果导出。
 
-// CreateTeam 新建小组
+// ListTeams 全部队伍（管理视角）
+func (s *ActivityService) ListTeams(ctx context.Context) ([]types.ActivityTeamDTO, error) {
+	return s.ListBoardTeams(ctx)
+}
+
+// CreateTeam 创建队伍
 func (s *ActivityService) CreateTeam(ctx context.Context, req types.ActivityTeamUpsertReq) (*types.ActivityTeamDTO, error) {
-	team := model.ActivityTeam{
-		Name:     strings.TrimSpace(req.Name),
-		Color:    strings.TrimSpace(req.Color),
-		Emblem:   strings.TrimSpace(req.Emblem),
-		Position: 1,
-		Status:   model.TeamStatusInProgress,
-		Lap:      1,
-	}
-	if team.Name == "" || team.Color == "" {
-		return nil, ErrActivityInvalidInput
-	}
-	if err := dal.DB.WithContext(ctx).Create(&team).Error; err != nil {
+	team := &model.ActivityTeam{Name: req.Name, Color: req.Color, Emblem: req.Emblem}
+	if err := dal.DB.WithContext(ctx).Create(team).Error; err != nil {
 		return nil, err
 	}
-	dto := teamToDTO(&team, nil, nil)
+	dto := s.teamToDTO(team)
 	return &dto, nil
 }
 
-// UpdateTeam 修改小组名称与配色（管理员/版主）。emblem 非空时同样受全局唯一约束
-func (s *ActivityService) UpdateTeam(ctx context.Context, teamID string, req types.ActivityTeamUpsertReq) error {
-	name := strings.TrimSpace(req.Name)
-	color := strings.TrimSpace(req.Color)
-	if name == "" || color == "" {
-		return ErrActivityInvalidInput
-	}
-	emblem := strings.TrimSpace(req.Emblem)
-	if emblem != "" {
-		var used int64
-		if err := dal.DB.WithContext(ctx).Model(&model.ActivityTeam{}).
-			Where("emblem = ? AND id <> ?", emblem, teamID).Count(&used).Error; err != nil {
-			return err
-		}
-		if used > 0 {
-			return ErrActivityEmblemTaken
-		}
-	}
-	res := dal.DB.WithContext(ctx).Model(&model.ActivityTeam{}).Where("id = ?", teamID).
-		Updates(map[string]any{"name": name, "color": color, "emblem": emblem})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrActivityTeamNotFound
-	}
-	return nil
-}
-
-// DeleteTeam 删除小组及其成员与记录
-func (s *ActivityService) DeleteTeam(ctx context.Context, teamID string) error {
-	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&model.ActivityMember{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ActivityTeamProgress{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ActivityEvent{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ActivityDiceRoll{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		// 审核日志按书目关联、点赞按打卡关联，先清关联表再删书目/打卡，避免悬挂数据
-		if err := tx.Delete(&model.ActivityReview{},
-			"book_id IN (SELECT id FROM activity_checkin_books WHERE team_id = ?)", teamID).Error; err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ActivityBookVote{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ActivityCheckInLike{},
-			"check_in_id IN (SELECT id FROM activity_checkins WHERE team_id = ?)", teamID).Error; err != nil {
-			return err
-		}
-		// 打卡与书目一并清理，避免残留数据污染榜单与书库
-		if err := tx.Delete(&model.ActivityCheckInBook{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ActivityCheckIn{}, "team_id = ?", teamID).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&model.ActivityTeam{}, "id = ?", teamID).Error
-	})
-}
-
-// AddMember 按用户名把社区用户加入小组。
-// 一名用户只能属于一个小组，重复加入直接报错而非静默改组。
-func (s *ActivityService) AddMember(ctx context.Context, teamID string, req types.ActivityMemberUpsertReq) (*types.ActivityMemberDTO, error) {
-	var team model.ActivityTeam
-	if err := dal.DB.WithContext(ctx).First(&team, "id = ?", teamID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, ErrActivityTeamNotFound
-		}
+// UpdateTeam 更新队伍名称/配色/徽章
+func (s *ActivityService) UpdateTeam(ctx context.Context, teamID string, req types.ActivityTeamUpsertReq) (*types.ActivityTeamDTO, error) {
+	team, err := s.getTeam(ctx, teamID)
+	if err != nil {
 		return nil, err
 	}
+	if req.Name != "" {
+		team.Name = req.Name
+	}
+	if req.Color != "" {
+		team.Color = req.Color
+	}
+	if req.Emblem != "" {
+		team.Emblem = req.Emblem
+	}
+	if err := dal.DB.WithContext(ctx).Model(team).Select("name", "color", "emblem").Updates(team).Error; err != nil {
+		return nil, err
+	}
+	members, err := s.loadTeamMembers(ctx, team.ID)
+	if err != nil {
+		return nil, err
+	}
+	team.Members = members
+	dto := s.teamToDTO(team)
+	return &dto, nil
+}
 
+// DeleteTeam 删除队伍（有成员时拒绝）
+func (s *ActivityService) DeleteTeam(ctx context.Context, teamID string) error {
+	team, err := s.getTeam(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	var count int64
+	if err := dal.DB.WithContext(ctx).Model(&model.ActivityMember{}).Where("team_id = ?", teamID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return &ActivityError{Msg: "队伍中还有成员，请先移除全部成员", Code: 409}
+	}
+	return dal.DB.WithContext(ctx).Delete(team).Error
+}
+
+// AddMember 运营把报名用户加入队伍（自动分配第一个未认领彩虹色）
+func (s *ActivityService) AddMember(ctx context.Context, teamID string, req types.ActivityMemberUpsertReq) (*types.ActivityMemberDTO, error) {
 	var user model.User
-	if err := dal.DB.WithContext(ctx).First(&user, "username = ?", strings.TrimSpace(req.Username)).Error; err != nil {
+	if err := dal.DB.WithContext(ctx).Where("username = ?", req.Username).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, &ActivityError{Msg: "用户不存在", Code: 404}
 		}
 		return nil, err
 	}
 
-	member := model.ActivityMember{
-		TeamID:    teamID,
-		UserID:    user.ID,
-		IsCaptain: req.IsCaptain,
-	}
+	var out *types.ActivityMemberDTO
 	err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 一用户一组的检查放事务内：并发请求同时通过事务外检查时，
-		// 由唯一索引（idx_activity_members_user）兜底拦截第二条插入
-		var existing int64
-		if err := tx.Model(&model.ActivityMember{}).
-			Where("user_id = ?", user.ID).Count(&existing).Error; err != nil {
+		var dup model.ActivityMember
+		e := tx.Where("user_id = ?", user.ID).First(&dup).Error
+		if e == nil {
+			return ErrActivityAlreadyInTeam
+		}
+		if e != gorm.ErrRecordNotFound {
+			return e
+		}
+		team, err := s.getTeamTxLocked(tx, teamID)
+		if err != nil {
 			return err
 		}
-		if existing > 0 {
-			return &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
-		}
-		// 每组仅一名队长：设新队长时清掉旧队长标记
-		if req.IsCaptain {
-			if err := tx.Model(&model.ActivityMember{}).Where("team_id = ?", teamID).
-				Update("is_captain", false).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Create(&member).Error; err != nil {
-			if isUniqueViolation(err) {
-				return &ActivityError{Msg: "该用户已在某个小组中", Code: 409}
-			}
+		var memberCount int64
+		if err := tx.Model(&model.ActivityMember{}).Where("team_id = ?", teamID).Count(&memberCount).Error; err != nil {
 			return err
 		}
+		if memberCount >= hellboard.MaxTeamSize {
+			return ErrActivityTeamFull
+		}
+		claimed := map[string]bool{}
+		var members []model.ActivityMember
+		if err := tx.Where("team_id = ?", teamID).Find(&members).Error; err != nil {
+			return err
+		}
+		for _, m := range members {
+			claimed[m.Color] = true
+		}
+		color := hellboard.FirstUnclaimedColor(claimed)
+		if color == "" {
+			return &ActivityError{Msg: "七色已认领完，请先协商调色", Code: 409}
+		}
+		var en model.ActivityEnrollment
+		nickname := ""
+		if err := tx.Where("user_id = ?", user.ID).First(&en).Error; err == nil {
+			nickname = en.Nickname
+		}
+		m := &model.ActivityMember{
+			TeamID: team.ID, UserID: user.ID, Nickname: nickname, Color: color, IsCaptain: req.IsCaptain,
+		}
+		if err := tx.Create(m).Error; err != nil {
+			return err
+		}
+		var full model.ActivityMember
+		if err := tx.Preload("User").First(&full, "id = ?", m.ID).Error; err != nil {
+			return err
+		}
+		d := memberToDTO(full)
+		out = &d
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	member.User = user
-	return &types.ActivityMemberDTO{
-		ID:        member.ID,
-		UserID:    member.UserID,
-		Name:      displayNameOf(&user),
-		AvatarURL: avatarOf(&user),
-		IsCaptain: member.IsCaptain,
-	}, nil
+	return out, nil
 }
 
-// RemoveMember 移出成员
+// RemoveMember 移除成员
 func (s *ActivityService) RemoveMember(ctx context.Context, memberID string) error {
-	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var member model.ActivityMember
-		if err := tx.First(&member, "id = ?", memberID).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return &ActivityError{Msg: "成员不存在", Code: 404}
-			}
-			return err
+	var m model.ActivityMember
+	if err := dal.DB.WithContext(ctx).First(&m, "id = ?", memberID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrActivityMemberNotFound
 		}
-		// 已离队成员的投票一并删除：残留票会被票数统计继续计入，推动书目通过
-		if err := tx.Delete(&model.ActivityBookVote{}, "voter_member_id = ?", memberID).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&model.ActivityMember{}, "id = ?", memberID).Error
-	})
+		return err
+	}
+	return dal.DB.WithContext(ctx).Delete(&model.ActivityMember{}, "id = ?", memberID).Error
 }
 
-// SetCaptain 指定队长
+// SetCaptain 设置成员为队长（先清空同队其他队长标记）
 func (s *ActivityService) SetCaptain(ctx context.Context, memberID string) error {
-	var member model.ActivityMember
-	if err := dal.DB.WithContext(ctx).First(&member, "id = ?", memberID).Error; err != nil {
+	var m model.ActivityMember
+	if err := dal.DB.WithContext(ctx).First(&m, "id = ?", memberID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return &ActivityError{Msg: "成员不存在", Code: 404}
+			return ErrActivityMemberNotFound
 		}
 		return err
 	}
 	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.ActivityMember{}).Where("team_id = ?", member.TeamID).
+		if err := tx.Model(&model.ActivityMember{}).
+			Where("team_id = ? AND is_captain = ?", m.TeamID, true).
 			Update("is_captain", false).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.ActivityMember{}).Where("id = ?", memberID).
-			Update("is_captain", true).Error
+		return tx.Model(&model.ActivityMember{}).Where("id = ?", memberID).Update("is_captain", true).Error
 	})
 }
 
-// UpdateTile 调整格子任务文案与目标值
-func (s *ActivityService) UpdateTile(ctx context.Context, index int, req types.ActivityTileUpdateReq) error {
-	title := strings.TrimSpace(req.Title)
-	if title == "" || req.Target <= 0 {
-		return ErrActivityInvalidInput
+// UpdateTile 调整格子定义（Kind 空表示不修改）
+func (s *ActivityService) UpdateTile(ctx context.Context, index int, req types.ActivityTileUpdateReq) (*types.ActivityTileDTO, error) {
+	tile, err := s.getTile(ctx, index)
+	if err != nil {
+		return nil, err
 	}
-	res := dal.DB.WithContext(ctx).Model(&model.ActivityTile{}).Where("tile_index = ?", index).
-		Updates(map[string]any{"title": title, "target": req.Target})
-	if res.Error != nil {
-		return res.Error
+	if req.Kind != "" {
+		tile.Kind = req.Kind
 	}
-	if res.RowsAffected == 0 {
-		return ErrActivityTileNotFound
+	if req.Title != "" {
+		tile.Title = req.Title
 	}
-	return nil
+	if req.Effect != "" {
+		tile.Effect = req.Effect
+	}
+	if req.Param != 0 {
+		tile.Param = req.Param
+	}
+	if req.Twin != 0 {
+		tile.Twin = req.Twin
+	}
+	if err := dal.DB.WithContext(ctx).Model(tile).Select("kind", "title", "effect", "param", "twin").Updates(tile).Error; err != nil {
+		return nil, err
+	}
+	dto := tileToDTO(tile)
+	return &dto, nil
 }
 
-// ManualFix 手工修正队伍位置与点亮状态，必须带理由并写入时间线（PRD 第 13 节）
-func (s *ActivityService) ManualFix(ctx context.Context, adminID, teamID string, req types.ActivityManualFixReq) error {
-	reason := strings.TrimSpace(req.Reason)
-	if reason == "" {
-		return ErrActivityReasonMissing
+// ManualFix 手工修正队伍状态（必须带理由，留痕到时间线）
+func (s *ActivityService) ManualFix(ctx context.Context, teamID string, req types.ActivityManualFixReq) (*types.ActivityTeamDTO, error) {
+	team, err := s.getTeamLockedForUpdate(ctx, teamID)
+	if err != nil {
+		return nil, err
 	}
-	now := time.Now()
-
-	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var team model.ActivityTeam
-		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", teamID).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return ErrActivityTeamNotFound
-			}
+	st, err := hellboard.TeamStateFromModel(team)
+	if err != nil {
+		return nil, err
+	}
+	if req.Position != nil {
+		st.Position = clampPos(*req.Position)
+	}
+	if req.Points != nil {
+		st.Points = max(0, *req.Points)
+		// 修正后把积分按规则兑换，保持资产口径一致
+		st.ExchangePoints()
+	}
+	if req.UniversalDice != nil {
+		st.UniversalDice = max(0, *req.UniversalDice)
+	}
+	if req.RollChances != nil {
+		st.RollChances = max(0, *req.RollChances)
+	}
+	if err := hellboard.ApplyTeamState(team, st); err != nil {
+		return nil, err
+	}
+	team.Status = hellboard.DerivedStatus(st)
+	if err := dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(team).Select(
+			"position", "points", "universal_dice", "roll_chances", "rainbow_count",
+			"week_min_delta", "color_blocks", "buffs", "status",
+		).Updates(team).Error; err != nil {
 			return err
 		}
-
-		changes := []string{}
-
-		if req.Position != nil {
-			p := *req.Position
-			if p < 1 || p > hellboard.TileCount {
-				return ErrActivityInvalidInput
-			}
-			if p != team.Position {
-				changes = append(changes, fmt.Sprintf("位置 第 %d 格 → 第 %d 格", team.Position, p))
-				team.Position = p
-				// 换格后当前格任务进度失效清零；保底计数为全队全局累计，随位置保留
-				team.TileProgress = 0
-				team.TimerEndsAt = nil
-				team.Status = model.TeamStatusInProgress
-			}
-		}
-
-		for _, idx := range req.LitTiles {
-			if idx < 1 || idx > hellboard.TileCount {
-				return ErrActivityInvalidInput
-			}
-			if err := s.markLitTx(tx, &team, idx, model.LitReasonManual, now); err != nil {
-				return err
-			}
-			changes = append(changes, fmt.Sprintf("标记点亮第 %d 格", idx))
-		}
-
-		for _, idx := range req.UnlitTiles {
-			if idx < 1 || idx > hellboard.TileCount {
-				return ErrActivityInvalidInput
-			}
-			if err := tx.Model(&model.ActivityTeamProgress{}).
-				Where("team_id = ? AND tile_index = ?", teamID, idx).
-				Updates(map[string]any{"lit": false, "lit_reason": "", "lit_at": nil}).Error; err != nil {
-				return err
-			}
-			changes = append(changes, fmt.Sprintf("取消点亮第 %d 格", idx))
-		}
-
-		if len(changes) == 0 {
-			return ErrActivityInvalidInput
-		}
-
-		litTiles, err := s.litTilesTx(tx, teamID)
-		if err != nil {
-			return err
-		}
-		tile, err := s.getTileTx(tx, team.Position)
-		if err != nil {
-			return err
-		}
-		team.Status = hellboard.DeriveStatus(&team, tile, len(litTiles))
-
-		if err := tx.Model(&model.ActivityTeam{}).Where("id = ?", teamID).
-			Updates(map[string]any{
-				"position":       team.Position,
-				"tile_progress":  team.TileProgress,
-				"fallback_count": team.FallbackCount,
-				"status":         team.Status,
-				"timer_ends_at":  team.TimerEndsAt,
-				"last_lit_at":    team.LastLitAt,
-			}).Error; err != nil {
-			return err
-		}
-
-		return s.addEvent(tx, teamID, model.EventTypeManual,
-			fmt.Sprintf("管理员手工修正：%s。理由：%s", strings.Join(changes, "；"), reason))
-	})
+		return s.addEvent(tx, team.ID, model.EventTypeManual, "运营修正："+req.Reason)
+	}); err != nil {
+		return nil, err
+	}
+	members, err := s.loadTeamMembers(ctx, team.ID)
+	if err != nil {
+		return nil, err
+	}
+	team.Members = members
+	dto := s.teamToDTO(team)
+	return &dto, nil
 }
 
-// BatchApprove 批量确认 AI 通过项（PRD 9.3）。
-// 逐条走完整审核流程而非批量 UPDATE，确保进度累加与审计日志不被绕过。
-func (s *ActivityService) BatchApprove(ctx context.Context, reviewerID string, bookIDs []string) (int, error) {
-	if len(bookIDs) == 0 {
-		return 0, ErrActivityInvalidInput
-	}
-	approved := 0
-	for _, id := range bookIDs {
-		if _, err := s.Review(ctx, reviewerID, id, types.ActivityReviewReq{Action: "approve"}); err != nil {
-			// 单条失败不中断批量，跳过继续
-			continue
-		}
-		approved++
-	}
-	return approved, nil
-}
-
-// ExportResults 导出活动结果与抽奖名单（PRD 第 13 节）。
-// 已完成 20 格点亮的队伍进入抽奖名单（验收标准 7）。
+// ExportResults 导出当前战况（运营留档）
 func (s *ActivityService) ExportResults(ctx context.Context) (map[string]any, error) {
-	litRanking, err := s.GetLitRanking(ctx, "")
+	snapshot, err := s.GetBoard(ctx, "")
 	if err != nil {
 		return nil, err
 	}
-	litCounts, err := s.litCounts(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var teams []model.ActivityTeam
-	if err := dal.DB.WithContext(ctx).Find(&teams).Error; err != nil {
-		return nil, err
-	}
-	lottery := make([]map[string]any, 0)
-	var members []model.ActivityMember
-	if err := dal.DB.WithContext(ctx).Preload("User").Find(&members).Error; err != nil {
-		return nil, err
-	}
-	membersByTeam := map[string][]model.ActivityMember{}
-	for i := range members {
-		membersByTeam[members[i].TeamID] = append(membersByTeam[members[i].TeamID], members[i])
-	}
-	for i := range teams {
-		t := &teams[i]
-		if litCounts[t.ID] < hellboard.TileCount {
-			continue
-		}
-		names := make([]string, 0, len(membersByTeam[t.ID]))
-		for j := range membersByTeam[t.ID] {
-			names = append(names, memberNameOf(&membersByTeam[t.ID][j]))
-		}
-		lottery = append(lottery, map[string]any{
-			"teamId":   t.ID,
-			"teamName": t.Name,
-			"members":  names,
+	rows := make([]map[string]any, 0, len(snapshot.Teams))
+	for _, t := range snapshot.Teams {
+		rows = append(rows, map[string]any{
+			"name":          t.Name,
+			"position":      t.Position,
+			"points":        t.Points,
+			"universalDice": t.UniversalDice,
+			"rollChances":   t.RollChances,
+			"rainbowCount":  t.RainbowCount,
+			"buffs":         t.Buffs,
 		})
 	}
-
-	now := time.Now()
 	return map[string]any{
-		"exportedAt":   now.Format(time.RFC3339),
-		"archived":     hellboard.IsArchived(now),
-		"litRanking":   litRanking,
-		"lotteryTeams": lottery,
+		"exportedAt": time.Now().Format("2006-01-02 15:04:05"),
+		"teams":      rows,
 	}, nil
+}
+
+// getTile 读取格子定义
+func (s *ActivityService) getTile(ctx context.Context, index int) (*model.ActivityTile, error) {
+	var t model.ActivityTile
+	if err := dal.DB.WithContext(ctx).First(&t, "tile_index = ?", index).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrActivityTileNotFound
+		}
+		return nil, err
+	}
+	return &t, nil
+}
+
+func clampPos(p int) int {
+	if p < 0 {
+		return 0
+	}
+	if p > hellboard.WinTile {
+		return hellboard.WinTile
+	}
+	return p
 }

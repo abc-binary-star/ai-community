@@ -8,7 +8,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "test": "tsx --test lib/*.test.ts",
+    "test": "tsx --test lib/*.test.ts app/activity/hell-board/lib/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "format:check": "prettier --check ."

@@ -5,5 +5,7 @@ packages:
   # 后端已迁移至 server-go/（Go + Hertz + GORM），不纳入 pnpm 工作区
   # Python 包通过各自 pyproject.toml 管理，不纳入 pnpm 工作区
 allowBuilds:
-  esbuild: set this to true or false
-  unrs-resolver: set this to true or false
+  # 这两个依赖分别提供前端构建器和 Node 原生模块解析器，安装时需要执行
+  # postinstall 才能选择当前平台的预构建二进制；其余依赖仍保持默认禁止构建。
+  esbuild: true
+  unrs-resolver: true

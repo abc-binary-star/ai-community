@@ -10,6 +10,7 @@
     "dev": "pnpm --filter web dev",
     "dev:server": "cd server-go && go run ./cmd/server",
     "dev:all": "bash scripts/dev.sh",
+    "dev:all:early": "bash scripts/dev.sh --early",
     "dev:restart": "bash scripts/dev.sh --restart",
     "build": "pnpm --filter web build && cd server-go && go build -o bin/server ./cmd/server",
     "format:check": "prettier --check package.json packages/*/package.json .github/workflows/*.yml",

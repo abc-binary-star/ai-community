@@ -180,6 +180,12 @@
   }
 }
 
+@layer components {
+  .map-control-button {
+    @apply inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#766555] bg-white/90 font-black text-[#514337] shadow-[0_2px_0_rgba(81,67,55,0.28)] transition-[transform,background-color,box-shadow] hover:bg-[#fff0bd] active:translate-y-[2px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-white/90 disabled:active:translate-y-0 disabled:active:shadow-[0_2px_0_rgba(81,67,55,0.28)];
+  }
+}
+
 @layer utilities {
   /* ============================================================
      Safe Area / 移动端键盘工具栏与 IME 适配工具类
@@ -361,4 +367,15 @@ pre[class*="language-"] {
 .token.important,
 .token.variable {
   color: hsl(var(--ch-gaming));
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

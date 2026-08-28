@@ -10,17 +10,15 @@ import (
 	"github.com/abc-binary-star/ai-community/server-go/internal/pkg/hellboard"
 	"github.com/abc-binary-star/ai-community/server-go/internal/types"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// RollDice 队长掷骰前进（P0-1 队伍级掷骰）。
-//
-// 全流程在一个事务内完成，队伍行加排他锁：
-// 同队伍同时刻仅允许一次进行中的掷骰（PRD 第 12 节幂等与并发保护）。
-func (s *ActivityService) RollDice(ctx context.Context, userID string) (*types.ActivityRollResultDTO, error) {
-	now := time.Now()
-	if err := s.requireWritable(now); err != nil {
-		return nil, err
-	}
+// 弈骰流程：群里读完打卡、投出骰子后，由本队队长在这里录入点数。
+// 服务端权威：按 100 格地图规则移动队伍、结算格子效果（前进/后退/互换/特殊
+// 功能/buff）、累计积分并自动兑换万能骰子、判定冲线。前端只负责表现与展示。
+
+// RecordRoll 录入一次普通掷骰（消耗 1 次掷骰机会）。
+func (s *ActivityService) RecordRoll(ctx context.Context, userID string, req types.ActivityRollReq) (*types.ActivityRollResultDTO, error) {
 	me, err := s.requireMember(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -28,356 +26,264 @@ func (s *ActivityService) RollDice(ctx context.Context, userID string) (*types.A
 	if !me.IsCaptain {
 		return nil, ErrActivityNotCaptain
 	}
+	if err := s.requireWritable(time.Now()); err != nil {
+		return nil, err
+	}
 
-	var out types.ActivityRollResultDTO
+	tiles := s.tileMap(ctx)
+	var out *types.ActivityRollResultDTO
 	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var team model.ActivityTeam
-		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", me.TeamID).Error; err != nil {
-			return err
-		}
-		if err := s.checkRollableTx(tx, &team, now); err != nil {
-			return err
-		}
-		value := hellboard.RollDice()
-		return s.moveTeamTx(tx, &team, me, value, now, &out, "")
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// AdvanceTeam 队长手动前进指定格数（1–6 格，替代掷骰）。
-//
-// 与 RollDice 共用同一套前进逻辑，仅步数由队长指定而非随机生成，
-// 供不想用程序摇骰子的队伍使用（同样仅待前进态可用、点亮离开格）。
-func (s *ActivityService) AdvanceTeam(ctx context.Context, userID string, steps int) (*types.ActivityRollResultDTO, error) {
-	now := time.Now()
-	if err := s.requireWritable(now); err != nil {
-		return nil, err
-	}
-	me, err := s.requireMember(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !me.IsCaptain {
-		return nil, ErrActivityNotCaptain
-	}
-	if steps < 1 || steps > hellboard.DiceFaces {
-		return nil, ErrActivityInvalidInput
-	}
-
-	var out types.ActivityRollResultDTO
-	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var team model.ActivityTeam
-		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", me.TeamID).Error; err != nil {
-			return err
-		}
-		if err := s.checkRollableTx(tx, &team, now); err != nil {
-			return err
-		}
-		return s.moveTeamTx(tx, &team, me, steps, now, &out, "")
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// ManualAdvanceTeam 队长常驻手动移动：不依赖打卡审核，任意时刻点亮当前格并前进。
-//
-// 供线下推进进度的队伍使用（大家不在网站上打卡，由队长手动同步棋盘）：
-// 当前格按「队长手动移动」点亮（reason=manual），随后前进队长自选步数。
-// 与普通前进共用 moveTeamTx，落点 / 计时 / 轮次 / 完成判定规则完全一致；
-// 仅校验队长身份、步数 1–6 与计时 / 完成状态，不做「任务已达成」前置要求。
-func (s *ActivityService) ManualAdvanceTeam(ctx context.Context, userID string, steps int) (*types.ActivityRollResultDTO, error) {
-	now := time.Now()
-	if err := s.requireWritable(now); err != nil {
-		return nil, err
-	}
-	me, err := s.requireMember(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !me.IsCaptain {
-		return nil, ErrActivityNotCaptain
-	}
-	if steps < 1 || steps > hellboard.DiceFaces {
-		return nil, ErrActivityInvalidInput
-	}
-
-	var out types.ActivityRollResultDTO
-	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var team model.ActivityTeam
-		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", me.TeamID).Error; err != nil {
-			return err
-		}
-		// 计时到期先结算；结算后仍在计时中则拒绝（惩罚不可通过手动移动跳过）
-		if hellboard.TimerExpired(&team, now) {
-			if err := s.settleTimerTx(tx, &team, now); err != nil {
-				return err
-			}
-			if err := tx.First(&team, "id = ?", team.ID).Error; err != nil {
-				return err
-			}
-		}
-		if team.Status == model.TeamStatusTimerRunning {
-			return ErrActivityTimerRunning
-		}
-		if team.Status == model.TeamStatusCompleted {
-			return ErrActivityCompleted
-		}
-		return s.moveTeamTx(tx, &team, me, steps, now, &out, model.LitReasonManual)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// FallbackAdvance 保底前进：消耗 40 本全局保底计数，点亮当前格并前进。
-//
-// 由队长手动触发（不自动执行）：任务未完成时，用全队累计通过的 40 本书
-// 换当前格点亮与前进。前进方式与掷骰 / 手动前进一致：
-//   - steps 为 0 时摇骰子（服务端随机生成 1–6 点）；
-//   - steps 为 1–6 时按队长自选步数前进（适用于不想摇骰的队伍）。
-//
-// 前进规则（离开格点亮方式、落入第 8 格计时、轮次、完成判定）完全复用 moveTeamTx。
-func (s *ActivityService) FallbackAdvance(ctx context.Context, userID string, steps int) (*types.ActivityRollResultDTO, error) {
-	now := time.Now()
-	if err := s.requireWritable(now); err != nil {
-		return nil, err
-	}
-	me, err := s.requireMember(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !me.IsCaptain {
-		return nil, ErrActivityNotCaptain
-	}
-	if steps < 0 || steps > hellboard.DiceFaces {
-		return nil, ErrActivityInvalidInput
-	}
-
-	var out types.ActivityRollResultDTO
-	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var team model.ActivityTeam
-		if err := tx.Clauses(lockForUpdate()).First(&team, "id = ?", me.TeamID).Error; err != nil {
-			return err
-		}
-		if team.Status == model.TeamStatusTimerRunning {
-			return ErrActivityTimerRunning
-		}
-		if team.Status == model.TeamStatusCompleted {
-			return ErrActivityCompleted
-		}
-		if team.FallbackCount < hellboard.FallbackThreshold {
-			return ErrActivityFallbackNotReady
-		}
-		// 当前格已点亮（如绕圈回到已点亮格）时直接走普通前进，不消耗保底
-		litTiles, err := s.litTilesTx(tx, team.ID)
+		team, err := s.getTeamTxLocked(tx, me.TeamID)
 		if err != nil {
 			return err
 		}
-		if _, lit := litTiles[team.Position]; lit {
+		if team.Status == model.TeamStatusCompleted {
+			return ErrActivityCompleted
+		}
+		st, err := hellboard.TeamStateFromModel(team)
+		if err != nil {
+			return err
+		}
+		if !st.ConsumeRollChance() {
 			return ErrActivityNotRollable
 		}
-
-		// 自选步数缺省（0）时摇骰子生成随机点数
-		if steps == 0 {
-			steps = hellboard.RollDice()
-		}
-		// 先按保底前进：moveTeamTx 内部此时 FallbackCount 仍 ≥ 40，
-		// LitReasonFor 会把离开格记为「保底完成」点亮；随后再消耗计数。
-		if err := s.moveTeamTx(tx, &team, me, steps, now, &out, ""); err != nil {
+		outcome := st.Roll(req.Value, false, tiles, hellboard.RandStep, hellboard.RandLucky)
+		if err := s.persistRollTx(ctx, tx, team, me, st, outcome, false); err != nil {
 			return err
 		}
-		team.FallbackCount -= hellboard.FallbackThreshold
-		if team.FallbackCount < 0 {
-			team.FallbackCount = 0
-		}
-		if err := tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).
-			Update("fallback_count", team.FallbackCount).Error; err != nil {
-			return err
-		}
-		out.Team.FallbackCount = team.FallbackCount
-		return s.addEvent(tx, team.ID, model.EventTypeFallback,
-			fmt.Sprintf("消耗 %d 本保底计数，向下一格进发（前进 %d 格）", hellboard.FallbackThreshold, steps))
+		out, err = s.rollResultDTO(ctx, team, me, outcome)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &out, nil
+	return out, nil
 }
 
-// checkRollableTx 掷骰 / 手动前进的前置校验（需在事务内且队伍行已加锁）：
-// 计时到期先结算，随后校验状态为待前进。
-func (s *ActivityService) checkRollableTx(tx *gorm.DB, team *model.ActivityTeam, now time.Time) error {
-	// 计时到期先结算，让「到期后立刻前进」这条路径可用
-	if hellboard.TimerExpired(team, now) {
-		if err := s.settleTimerTx(tx, team, now); err != nil {
+// UseUniversalDice 使用 1 枚万能骰子（无视当前格子效果，不消耗掷骰机会）。
+func (s *ActivityService) UseUniversalDice(ctx context.Context, userID string, req types.ActivityRollReq) (*types.ActivityRollResultDTO, error) {
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !me.IsCaptain {
+		return nil, ErrActivityNotCaptain
+	}
+	if err := s.requireWritable(time.Now()); err != nil {
+		return nil, err
+	}
+
+	tiles := s.tileMap(ctx)
+	var out *types.ActivityRollResultDTO
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		team, err := s.getTeamTxLocked(tx, me.TeamID)
+		if err != nil {
 			return err
 		}
-		if err := tx.First(team, "id = ?", team.ID).Error; err != nil {
+		if team.Status == model.TeamStatusCompleted {
+			return ErrActivityCompleted
+		}
+		st, err := hellboard.TeamStateFromModel(team)
+		if err != nil {
 			return err
 		}
+		outcome := st.UseUniversalDice(req.Value, tiles, hellboard.RandStep, hellboard.RandLucky)
+		if len(outcome.Results) > 0 && contains(outcome.Results, "道具封印") {
+			if err := s.applyStateTx(tx, team, st); err != nil {
+				return err
+			}
+			s.addEvent(tx, team.ID, model.EventTypeTile, "道具封印：本次使用万能骰子被禁止")
+			out, err = s.rollResultDTO(ctx, team, me, outcome)
+			return err
+		}
+		if err := s.persistRollTx(ctx, tx, team, me, st, outcome, true); err != nil {
+			return err
+		}
+		out, err = s.rollResultDTO(ctx, team, me, outcome)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
-	if team.Status == model.TeamStatusTimerRunning {
-		return ErrActivityTimerRunning
-	}
-	if team.Status == model.TeamStatusCompleted {
-		return ErrActivityCompleted
-	}
-	if team.Status != model.TeamStatusAwaitingRoll {
-		return ErrActivityNotRollable
-	}
-	return nil
+	return out, nil
 }
 
-// moveTeamTx 队伍前进公共逻辑：点亮离开格 → 前进 steps 步 → 处理计时 / 轮次 / 状态。
-// 掷骰（RollDice）与手动前进（AdvanceTeam）共用，保证各路径状态机一致。
-// litReason 非空时强制用该点亮方式（队长常驻手动移动传 manual）；为空时由
-// LitReasonFor 按任务达成 / 保底完成自动判定。
-// 前置条件：队伍已锁定且通过对应前进路径的前置校验。
-func (s *ActivityService) moveTeamTx(tx *gorm.DB, team *model.ActivityTeam, me *model.ActivityMember, steps int, now time.Time, out *types.ActivityRollResultDTO, litReason string) error {
-	leavingTile, err := s.getTileTx(tx, team.Position)
+// CompleteCycle 声明本轮彩虹集齐：群里 7 色色块集齐后由队长在 App 内登记，
+// 获得 1 次掷骰机会（受彩虹加成/卡顿 buff 修正）。
+func (s *ActivityService) CompleteCycle(ctx context.Context, userID string) (*types.ActivityTeamDTO, error) {
+	me, err := s.requireMember(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if !me.IsCaptain {
+		return nil, ErrActivityNotCaptain
+	}
+	if err := s.requireWritable(time.Now()); err != nil {
+		return nil, err
 	}
 
-	// 离开的格子首次达成才点亮；已点亮格子重复完成不重复计数（P0-4）
-	litBefore, err := s.litTilesTx(tx, team.ID)
-	if err != nil {
-		return err
-	}
-	_, alreadyLit := litBefore[team.Position]
-	reason := hellboard.LitReasonFor(team, leavingTile)
-	if litReason != "" {
-		reason = litReason
-	}
-	if err := s.markLitTx(tx, team, team.Position, reason, now); err != nil {
-		return err
-	}
-	if !alreadyLit {
-		out.LitTile = team.Position
-		out.LitReason = reason
-	}
-
-	from := team.Position
-	to := hellboard.Advance(from, steps)
-	landedPenalty := to == hellboard.PenaltyTileIndex
-
-	team.Position = to
-	// 离开格子后任务进度清零；保底计数为全队全局累计，跨格不清零（P1-5 全局保底）
-	team.TileProgress = 0
-	if hellboard.CrossesStart(from, steps) {
-		team.Lap++
-	}
-	if landedPenalty {
-		// 前进落入第 8 格的那一刻启动 72 小时计时（P1-6）
-		ends := now.Add(hellboard.PenaltyHours * time.Hour)
-		team.Status = model.TeamStatusTimerRunning
-		team.TimerEndsAt = &ends
-	} else {
-		team.Status = model.TeamStatusInProgress
-		team.TimerEndsAt = nil
-	}
-
-	litAfter, err := s.litTilesTx(tx, team.ID)
-	if err != nil {
-		return err
-	}
-	// 20 格全部点亮即完成，棋子保留在终局位置（验收标准 7）
-	if len(litAfter) >= hellboard.TileCount {
-		team.Status = model.TeamStatusCompleted
-		team.TimerEndsAt = nil
-	}
-
-	if err := tx.Model(&model.ActivityTeam{}).Where("id = ?", team.ID).
-		Updates(map[string]any{
-			"position":       team.Position,
-			"tile_progress":  team.TileProgress,
-			"fallback_count": team.FallbackCount,
-			"lap":            team.Lap,
-			"status":         team.Status,
-			"timer_ends_at":  team.TimerEndsAt,
-			"last_lit_at":    team.LastLitAt,
-		}).Error; err != nil {
-		return err
-	}
-
-	if err := tx.Create(&model.ActivityDiceRoll{
-		TeamID:   team.ID,
-		RollerID: me.ID,
-		Value:    steps,
-		FromTile: from,
-		ToTile:   to,
-		Lap:      team.Lap,
-	}).Error; err != nil {
-		return err
-	}
-
-	// 时间线留痕（PRD 10.3）
-	if out.LitTile != 0 {
-		label := "任务达成"
-		switch reason {
-		case model.LitReasonFallback:
-			label = "保底完成"
-		case model.LitReasonManual:
-			label = "队长手动移动"
-		}
-		if err := s.addEvent(tx, team.ID, model.EventTypeLit,
-			fmt.Sprintf("第 %d 格已点亮（%s）", from, label)); err != nil {
+	var teamDTO *types.ActivityTeamDTO
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		team, err := s.getTeamTxLocked(tx, me.TeamID)
+		if err != nil {
 			return err
 		}
-	}
-	if err := s.addEvent(tx, team.ID, model.EventTypeRoll,
-		fmt.Sprintf("队伍前进 %d 格，棋子从第 %d 格到第 %d 格", steps, from, to)); err != nil {
-		return err
-	}
-	if landedPenalty {
-		if err := s.addEvent(tx, team.ID, model.EventTypeTimer,
-			fmt.Sprintf("落入第 %d 格，启动 %d 小时惩罚计时", hellboard.PenaltyTileIndex, hellboard.PenaltyHours)); err != nil {
+		if team.Status == model.TeamStatusCompleted {
+			return ErrActivityCompleted
+		}
+		st, err := hellboard.TeamStateFromModel(team)
+		if err != nil {
 			return err
 		}
-	}
-	if team.Status == model.TeamStatusCompleted {
-		if err := s.addEvent(tx, team.ID, model.EventTypeLit,
-			"20 格全部点亮，本队完成活动并进入抽奖名单"); err != nil {
+		chances := st.GrantCycle()
+		if err := s.applyStateTx(tx, team, st); err != nil {
 			return err
 		}
-	}
-
-	members, err := s.teamMembersTx(tx, team.ID)
+		_ = s.addEvent(tx, team.ID, model.EventTypeCycle,
+			fmt.Sprintf("本轮彩虹集齐，获得 %d 次掷骰机会（累计 %d）", max(chances, 0), st.RollChances))
+		members, err := s.loadTeamMembersTx(tx, team.ID)
+		if err != nil {
+			return err
+		}
+		team.Members = members
+		dto := s.teamToDTO(team)
+		teamDTO = &dto
+		return nil
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out.Value = steps
-	out.FromTile = from
-	out.ToTile = to
-	out.TimerStarted = landedPenalty
-	out.Team = teamToDTO(team, members, litAfter)
-	return nil
+	return teamDTO, nil
 }
 
-// getTileTx 事务内读取格子定义
-func (s *ActivityService) getTileTx(tx *gorm.DB, index int) (*model.ActivityTile, error) {
-	var t model.ActivityTile
-	if err := tx.First(&t, "tile_index = ?", index).Error; err != nil {
+// --- 内部辅助 ---
+
+// tileMap 读取百格定义；返回按格号取定义的闭包（供引擎结算用）
+func (s *ActivityService) tileMap(ctx context.Context) func(int) *hellboard.TileDef {
+	var tiles []model.ActivityTile
+	if err := dal.DB.WithContext(ctx).Order("tile_index asc").Find(&tiles).Error; err != nil || len(tiles) == 0 {
+		// 兜底用内置表
+		m := hellboard.TilesByIndex()
+		return func(i int) *hellboard.TileDef { return m[i] }
+	}
+	m := make(map[int]*hellboard.TileDef, len(tiles))
+	for i := range tiles {
+		t := tiles[i]
+		m[t.Index] = &hellboard.TileDef{
+			Index:  t.Index,
+			Kind:   hellboard.TileKind(t.Kind),
+			Title:  t.Title,
+			Effect: hellboard.EffectKey(t.Effect),
+			Param:  t.Param,
+			Twin:   t.Twin,
+		}
+	}
+	return func(i int) *hellboard.TileDef { return m[i] }
+}
+
+// getTeamTxLocked 事务内读取队伍并加行级锁
+func (s *ActivityService) getTeamTxLocked(tx *gorm.DB, teamID string) (*model.ActivityTeam, error) {
+	var t model.ActivityTeam
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&t, "id = ?", teamID).Error
+	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, ErrActivityTileNotFound
+			return nil, ErrActivityTeamNotFound
 		}
 		return nil, err
 	}
 	return &t, nil
 }
 
-// teamMembersTx 事务内读取队伍成员
-func (s *ActivityService) teamMembersTx(tx *gorm.DB, teamID string) ([]model.ActivityMember, error) {
-	var members []model.ActivityMember
-	if err := tx.Preload("User").Where("team_id = ?", teamID).
-		Order("created_at asc").Find(&members).Error; err != nil {
+// applyStateTx 把引擎状态写回队伍模型并落库；状态随冲线翻转
+func (s *ActivityService) applyStateTx(tx *gorm.DB, team *model.ActivityTeam, st hellboard.TeamGameState) error {
+	if err := hellboard.ApplyTeamState(team, st); err != nil {
+		return err
+	}
+	team.Status = hellboard.DerivedStatus(st)
+	return tx.Model(team).Select(
+		"position", "points", "universal_dice", "roll_chances", "rainbow_count",
+		"week_min_delta", "color_blocks", "buffs", "status", "champion_at",
+	).Updates(team).Error
+}
+
+// persistRollTx 落库一次掷骰/万能骰子结算（含事件、冲线）
+func (s *ActivityService) persistRollTx(ctx context.Context, tx *gorm.DB, team *model.ActivityTeam, me *model.ActivityMember, st hellboard.TeamGameState, outcome *hellboard.RollOutcome, isUniversal bool) error {
+	if err := s.applyStateTx(tx, team, st); err != nil {
+		return err
+	}
+
+	rollType := model.EventTypeRoll
+	rollDesc := fmt.Sprintf("掷骰：%d 点，%d → %d 格", outcome.DiceValue, outcome.From, outcome.To)
+	if isUniversal {
+		rollType = model.EventTypeDice
+		rollDesc = fmt.Sprintf("万能骰子：%d 点，%d → %d 格（无视格子效果）", outcome.DiceValue, outcome.From, outcome.To)
+	}
+	_ = s.addEvent(tx, team.ID, rollType, rollDesc)
+	for _, r := range outcome.Results {
+		if r == "" {
+			continue
+		}
+		_ = s.addEvent(tx, team.ID, model.EventTypeTile, r)
+	}
+	if outcome.Points != 0 {
+		_ = s.addEvent(tx, team.ID, model.EventTypeRoll, fmt.Sprintf("团队积分 +%d（当前 %d）", outcome.Points, st.Points))
+	}
+	if outcome.DiceExchanged > 0 {
+		_ = s.addEvent(tx, team.ID, model.EventTypeDice, fmt.Sprintf("积分满额自动兑换万能骰子 +%d（持有 %d）", outcome.DiceExchanged, st.UniversalDice))
+	}
+
+	// 骰子记录留痕
+	if err := tx.Create(&model.ActivityDiceRoll{
+		TeamID:   team.ID,
+		RollerID: me.ID,
+		Value:    outcome.DiceValue,
+		FromTile: outcome.From,
+		ToTile:   outcome.To,
+		Lap:      1,
+	}).Error; err != nil {
+		return err
+	}
+
+	// 冲线：首位到达 100 格成为冠军
+	if outcome.Won && team.ChampionAt == nil {
+		now := time.Now()
+		team.Status = model.TeamStatusCompleted
+		team.ChampionAt = &now
+		if err := tx.Model(team).Updates(map[string]any{"status": model.TeamStatusCompleted, "champion_at": now}).Error; err != nil {
+			return err
+		}
+		_ = s.addEvent(tx, team.ID, model.EventTypeWin, "🎉 冲线获胜：率先走完 100 格，成为《九月彩虹桥》总冠军！")
+	}
+	return nil
+}
+
+// rollResultDTO 结算结果转 DTO
+func (s *ActivityService) rollResultDTO(ctx context.Context, team *model.ActivityTeam, me *model.ActivityMember, outcome *hellboard.RollOutcome) (*types.ActivityRollResultDTO, error) {
+	members, err := s.loadTeamMembers(ctx, team.ID)
+	if err != nil {
 		return nil, err
 	}
-	return members, nil
+	team.Members = members
+	teamDTO := s.teamToDTO(team)
+	return &types.ActivityRollResultDTO{
+		Value:         outcome.DiceValue,
+		FromTile:      outcome.From,
+		ToTile:        outcome.To,
+		Moved:         outcome.Moved,
+		Points:        outcome.Points,
+		DiceExchanged: outcome.DiceExchanged,
+		Results:       outcome.Results,
+		Effects:       outcome.Effects,
+		Won:           outcome.Won,
+		Team:          teamDTO,
+	}, nil
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

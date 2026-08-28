@@ -7,113 +7,111 @@ import (
 	"gorm.io/gorm"
 )
 
-// 活动「无限循环读书地狱」数据模型。
-// 表统一加 activity_ 前缀，与社区业务表解耦（PRD 第 12 节隔离要求）。
+// 活动「九月彩虹桥 · 读书大富翁」数据模型。
+// 表统一加 activity_ 前缀，与社区业务表解耦（隔离要求同旧玩法）。
 
-// 任务类型，驱动 AI 初审的校验字段（PRD 第 6 / 9 节）
+// 彩虹七色：成员认领色，与书籍封面主色调匹配即为有效色块
 const (
-	TaskTypeTitleLength       = "title-length"
-	TaskTypeCoverColor        = "cover-color"
-	TaskTypeGenre             = "genre"
-	TaskTypeAuthorNationality = "author-nationality"
-	TaskTypeSameAuthor        = "same-author"
-	TaskTypePlainCount        = "plain-count"
-	TaskTypeTotalWords        = "total-words"
-	TaskTypeTotalDuration     = "total-duration"
-	TaskTypeGroupCross        = "group-cross"
-	TaskTypeTimedPenalty      = "timed-penalty"
+	RainbowColorRed    = "red"
+	RainbowColorOrange = "orange"
+	RainbowColorYellow = "yellow"
+	RainbowColorGreen  = "green"
+	RainbowColorCyan   = "cyan"
+	RainbowColorBlue   = "blue"
+	RainbowColorPurple = "purple"
 )
 
-// 特殊判定规则：全员各掷一次骰，全部满足才通过（P0-2）
+// 格子类型：100 格均分五类，每类 20 格
 const (
-	RuleAllOdd    = "all-odd"
-	RuleAllEven   = "all-even"
-	RuleAllBelow4 = "all-below-4"
-	RuleAllAbove3 = "all-above-3"
+	TileKindForward  = "forward"  // 前进格
+	TileKindBackward = "backward" // 后退格
+	TileKindSpecial  = "special"  // 特殊功能格
+	TileKindSwap     = "swap"     // 位置互换格
+	TileKindBlank    = "blank"    // 空白格
 )
 
-// 队伍状态机（PRD 7.2）
+// 队伍状态机（新玩法）
 const (
-	TeamStatusInProgress        = "in-progress"
-	TeamStatusAwaitingJudgement = "awaiting-judgement"
-	TeamStatusAwaitingRoll      = "awaiting-roll"
-	TeamStatusTimerRunning      = "timer-running"
-	TeamStatusCompleted         = "completed"
+	TeamStatusCollecting = "collecting" // 集齐彩虹进行中
+	TeamStatusReady      = "ready"      // 已有掷骰机会，可前进
+	TeamStatusCompleted  = "completed"  // 走完 100 格冲线获胜
 )
 
-// 点亮方式
-const (
-	LitReasonTask     = "task"
-	LitReasonFallback = "fallback"
-	LitReasonTimer    = "timer"
-	LitReasonManual   = "manual"
-	// LitReasonInitial 队长初始化时补录的已点亮格
-	LitReasonInitial = "initial"
-)
-
-// 审核状态流（PRD 9.1）
+// 审核状态流（沿用旧玩法，书目级审核）
 const (
 	ReviewStatusPendingAI  = "pending-ai"
 	ReviewStatusAIPassed   = "ai-passed"
 	ReviewStatusAIUnsure   = "ai-unsure"
 	ReviewStatusAIRejected = "ai-rejected"
-	// ReviewStatusInVoting 已进入队长投票池，等待过半赞成（情况一/二 AI 未过、情况三封面直接进入）
+	// ReviewStatusInVoting 已进入队长投票池，等待过半赞成
 	ReviewStatusInVoting = "in-voting"
 	ReviewStatusApproved = "approved"
 	ReviewStatusRejected = "rejected"
 	ReviewStatusRevoked  = "revoked"
 )
 
-// 时间线事件类型（PRD 10.3）
+// 时间线事件类型（新玩法）
 const (
-	EventTypeCheckIn   = "checkin"
-	EventTypeReview    = "review"
-	EventTypeRoll      = "roll"
-	EventTypeLit       = "lit"
-	EventTypeJudgement = "judgement"
-	EventTypeFallback  = "fallback"
-	EventTypeTimer     = "timer"
-	EventTypeManual    = "manual"
+	EventTypeCheckIn = "checkin"
+	EventTypeReview  = "review"
+	EventTypeRoll    = "roll"
+	EventTypeDice    = "dice"   // 万能骰子
+	EventTypeCycle   = "cycle"  // 彩虹集齐
+	EventTypeColor   = "color"  // 颜色认领
+	EventTypeTile    = "tile"   // 格子效果
+	EventTypeWin     = "win"    // 冲线获胜
+	EventTypeManual  = "manual" // 运营修正
 )
 
-// ActivityTile 格子定义，活动期内不变；运营可调整任务文案（PRD 第 13 节）
+// ActivityTile 格子静态定义，100 格均分五类；运营可调整文案与效果参数
 type ActivityTile struct {
-	// Index 即格子编号 1–20，直接做主键，天然保证唯一。
-	// 列名用 tile_index：index 在 PostgreSQL 中是保留字，裸用会导致 SQL 语法错误。
-	Index       int       `gorm:"column:tile_index;primaryKey;autoIncrement:false" json:"index"`
-	Title       string    `gorm:"size:100;not null" json:"title"`
-	TaskType    string    `gorm:"size:32;not null" json:"taskType"`
-	Target      int64     `gorm:"not null" json:"target"`
-	Unit        string    `gorm:"size:8;not null" json:"unit"`
-	SpecialRule string    `gorm:"size:32" json:"specialRule,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	// Index 即格子编号 1–100，直接做主键。
+	Index int `gorm:"column:tile_index;primaryKey;autoIncrement:false" json:"index"`
+	// Kind 格子类型：forward / backward / special / swap / blank
+	Kind string `gorm:"size:16;not null" json:"kind"`
+	// Title 面向用户的格子名（如「额外前进2格」「终点格」），可留空按类型兜底
+	Title string `gorm:"size:100" json:"title,omitempty"`
+	// Effect 特殊功能格的效果标识（special 类型必填）
+	Effect string `gorm:"size:32" json:"effect,omitempty"`
+	// Param 效果参数：前进/后退格数（0 表示随机 1–3）
+	Param int `gorm:"default:0" json:"param,omitempty"`
+	// Twin 双子格编号（swap 类型必填）
+	Twin      int       `gorm:"default:0" json:"twin,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 }
 
 func (ActivityTile) TableName() string { return "activity_tiles" }
 
-// ActivityTeam 小组。位置、点亮状态、保底计数全部由服务端维护（PRD 第 12 节服务端权威）
+// ActivityTeam 小组。位置、积分、万能骰子、Buff、彩虹进度全部由服务端维护（服务端权威）
 type ActivityTeam struct {
 	ID    string `gorm:"primaryKey" json:"id"`
 	Name  string `gorm:"size:50;not null" json:"name"`
 	Color string `gorm:"size:20;not null" json:"color"`
-	// Emblem 队伍标志形象 key（werewolf / detective / witch …），前端据此渲染桌游角色徽章
+	// Emblem 队伍彩虹徽章 key，前端据此渲染徽章盘面
 	Emblem string `gorm:"size:24" json:"emblem,omitempty"`
-	// Position 当前所在格编号 1–20
-	Position int    `gorm:"default:1;not null" json:"position"`
-	Status   string `gorm:"size:24;default:in-progress;not null;index" json:"status"`
-	// TileProgress 当前格任务累计完成量，仅统计符合条件且终审通过的书
-	TileProgress int64 `gorm:"default:0;not null" json:"tileProgress"`
-	// FallbackCount 全队全局保底计数：累计通过审核的书目数（跨格不清零），
-	// 满阈值点亮当前格后消耗阈值本数（P1-5 全局保底）
-	FallbackCount int `gorm:"default:0;not null" json:"fallbackCount"`
-	// TimerEndsAt 计时惩罚格到期时间，仅 timer-running 时有值（P1-6）
-	TimerEndsAt *time.Time `json:"timerEndsAt,omitempty"`
-	// Lap 已绕圈轮次，跨过第 20 格时累加
-	Lap int `gorm:"default:1;not null" json:"lap"`
-	// LastLitAt 最后一次点亮时间，周期结束时作并列比较依据（P1-7）
-	LastLitAt *time.Time `json:"lastLitAt,omitempty"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	// Members 队伍成员（关联关系，不落库）
+	Members []ActivityMember `gorm:"foreignKey:TeamID" json:"members"`
+	// Position 当前所在格编号 0–100：0 起点未出发，100 终点冲线
+	Position int    `gorm:"default:0;not null" json:"position"`
+	Status   string `gorm:"size:24;default:collecting;not null;index" json:"status"`
+	// Points 团队积累积分（每满 10 自动兑换后保留余数）
+	Points int `gorm:"default:0;not null" json:"points"`
+	// UniversalDice 万能骰子持有数
+	UniversalDice int `gorm:"default:0;not null" json:"universalDice"`
+	// RollChances 掷骰前进机会：每集齐一次完整彩虹 +1
+	RollChances int `gorm:"default:0;not null" json:"rollChances"`
+	// RainbowCount 已完成的彩虹周期总数
+	RainbowCount int `gorm:"default:0;not null" json:"rainbowCount"`
+	// WeekMinDelta 本周彩虹保底条数修正（保底扩容 -1）
+	WeekMinDelta int `gorm:"default:0;not null" json:"weekMinDelta"`
+	// ColorBlocks 当前彩虹周期内各颜色色块数（JSON：{"red":2,...}）
+	ColorBlocks string `gorm:"type:text" json:"colorBlocks,omitempty"`
+	// Buffs 生效中的持久效果（JSON 数组 [{kind,uses}]）
+	Buffs string `gorm:"type:text" json:"buffs,omitempty"`
+	// ChampionAt 冲线时间，非空表示队伍获胜
+	ChampionAt *time.Time `json:"championAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 func (ActivityTeam) TableName() string { return "activity_teams" }
@@ -125,7 +123,8 @@ func (t *ActivityTeam) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// ActivityMember 小组成员。小组与成员由运营后台预置，不做自由组队（PRD 第 2 节非目标）
+// ActivityMember 小组成员。小组固定 7 人，每人认领一种彩虹色（一人一色不重复）。
+// 颜色在一轮彩虹周期内不可换，集齐后可重新分配。
 type ActivityMember struct {
 	ID     string `gorm:"primaryKey" json:"id"`
 	TeamID string `gorm:"index;not null" json:"teamId"`
@@ -133,9 +132,10 @@ type ActivityMember struct {
 	UserID    string `gorm:"index;not null" json:"userId"`
 	User      User   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
 	IsCaptain bool   `gorm:"default:false" json:"isCaptain"`
-	// Nickname 活动内昵称：入队时从报名记录带入，榜单/成员列表展示用，
-	// 为空时回退到社区账号昵称
+	// Nickname 活动内昵称：入队时从报名记录带入，为空时回退到社区账号昵称
 	Nickname string `gorm:"size:50" json:"nickname,omitempty"`
+	// Color 认领的彩虹色（red/orange/yellow/green/cyan/blue/purple），空表示未认领
+	Color string `gorm:"size:16;index" json:"color,omitempty"`
 	// BookCount / WordCount 为终审通过的累计值，榜单直接取用
 	BookCount int       `gorm:"default:0;not null" json:"bookCount"`
 	WordCount int64     `gorm:"default:0;not null" json:"wordCount"`
@@ -222,30 +222,32 @@ func (c *ActivityCheckIn) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// ActivityCheckInBook 单条书目，打卡以「书」为最小单位（PRD 8.1）。
+// ActivityCheckInBook 单条书目，打卡以「书」为最小单位。
 // 审核状态挂在书目级，管理员可逐条通过或驳回。
 type ActivityCheckInBook struct {
 	ID        string `gorm:"primaryKey" json:"id"`
 	CheckInID string `gorm:"index;not null" json:"checkInId"`
-	// 冗余 team/member/tile 便于榜单与格子记录直接聚合，避免多表 join
-	TeamID    string `gorm:"index;not null" json:"teamId"`
-	MemberID  string `gorm:"index;not null" json:"memberId"`
-	TileIndex int    `gorm:"index;not null" json:"tileIndex"`
-	Lap       int    `gorm:"not null" json:"lap"`
-	// 必填三要素（PRD 8.1）
+	// 冗余 team/member 便于榜单直接聚合，避免多表 join
+	TeamID   string `gorm:"index;not null" json:"teamId"`
+	MemberID string `gorm:"index;not null" json:"memberId"`
+	Lap      int    `gorm:"not null" json:"lap"`
+	// 必填三要素
 	Title     string `gorm:"size:200;not null" json:"title"`
 	Author    string `gorm:"size:100;not null" json:"author"`
 	WordCount int64  `gorm:"not null" json:"wordCount"`
-	// DedupKey 归一化后的「成员 + 书名 + 作者」，唯一索引兜住并发重复提交（P1-8）
+	// DedupKey 归一化后的「成员 + 书名 + 作者」，唯一索引兜住并发重复提交
 	DedupKey        string `gorm:"size:320;uniqueIndex;not null" json:"-"`
 	DurationMinutes int    `gorm:"default:0" json:"durationMinutes,omitempty"`
 	CoverURL        string `gorm:"size:500" json:"coverUrl,omitempty"`
 	Genre           string `gorm:"size:50" json:"genre,omitempty"`
 	Note            string `gorm:"size:500" json:"note,omitempty"`
-	ReviewStatus    string `gorm:"size:24;default:pending-ai;not null;index" json:"reviewStatus"`
-	// CountsForTask 是否计入当前格任务进度，由人工终审时判定
+	// CoverColor 封面主色调（七彩虹色之一或 other），由 AI / 人工审核标注；
+	// 与成员认领色一致时，终审通过即点亮对应色块
+	CoverColor   string `gorm:"size:16;index" json:"coverColor,omitempty"`
+	ReviewStatus string `gorm:"size:24;default:pending-ai;not null;index" json:"reviewStatus"`
+	// CountsForTask 是否计入当前彩虹（色块计数），由人工终审时判定
 	CountsForTask bool `gorm:"default:true" json:"countsForTask"`
-	// AI 初审结论，Skipped 表示 AI 不可用直接入人工队列（PRD 9.4）
+	// AI 初审结论，Skipped 表示 AI 不可用直接入人工队列
 	AIStatus     string    `gorm:"size:16" json:"aiStatus,omitempty"`
 	AIConfidence float64   `gorm:"default:0" json:"aiConfidence,omitempty"`
 	AIReason     string    `gorm:"size:500" json:"aiReason,omitempty"`

@@ -233,80 +233,56 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	h.POST("/api/messages/conversations/:id/messages", middleware.Auth(), handler.SendMessage)
 	h.POST("/api/messages/conversations/:id/read", middleware.Auth(), handler.MarkConversationRead)
 
-	// --- 活动「无限循环读书地狱」路由 ---
-	// 挂在独立路由分组下，与社区业务解耦（PRD 第 12 节隔离要求）。
-	// 全部接口强制登录：活动页不开放游客浏览（P1-9 / 验收标准 9）。
+	// --- 活动「九月彩虹桥 · 读书大富翁」路由 ---
+	// 读/打卡/投骰在群内完成，App 做棋盘可视化与程序化结算：录入骰子点数后
+	// 由服务端按 100 格地图移动队伍并结算格子效果。全部接口强制登录。
 	activity := h.Group("/api/activity/hell-board", middleware.Auth())
 	activity.GET("/board", handler.GetActivityBoard)
-	activity.GET("/checkins", handler.ListActivityCheckIns)
-	activity.POST("/checkins", handler.CreateActivityCheckIn)
-	activity.PUT("/checkins/:id", handler.UpdateActivityCheckIn)
-	activity.DELETE("/checkins/:id", handler.DeleteActivityCheckIn)
-	// 我的打卡（三栏：未审核 / 已通过 / 已驳回）
-	activity.GET("/my-books", handler.ListActivityMyBooks)
-	// 审核池：全员可见（只读），队长通过 /vote-pool/:bookId/vote 投票
-	activity.GET("/vote-pool", handler.ListActivityVotePool)
-	activity.POST("/vote-pool/:bookId/vote", handler.CastActivityVote)
-	// 成员阅读档案与打卡点赞（「全部队伍」标签页）
-	activity.GET("/members/:memberId/checkins", handler.GetActivityMemberCheckIns)
-	activity.POST("/checkins/:id/like", handler.LikeActivityCheckIn)
-	activity.DELETE("/checkins/:id/like", handler.UnlikeActivityCheckIn)
+	// 队长录入群里掷出的骰子点数（1–6），程序结算移动 + 格子效果
 	activity.POST("/roll", handler.RollActivityDice)
-	activity.POST("/advance", handler.AdvanceActivityTeam)
-	activity.POST("/advance/fallback", handler.FallbackAdvanceActivityTeam)
-	activity.POST("/advance/manual", handler.ManualAdvanceActivityTeam)
-	activity.GET("/judgement", handler.GetActivityJudgement)
-	activity.POST("/judgement/roll", handler.RollActivityJudgement)
-	activity.GET("/tiles/:index", handler.GetActivityTileDetail)
+	// 使用万能骰子（无视当前格子效果，不消耗掷骰机会）
+	activity.POST("/universal-dice", handler.UseActivityUniversalDice)
+	// 队长登记本轮彩虹集齐（+1 掷骰机会）
+	activity.POST("/cycle", handler.CompleteActivityCycle)
 	activity.GET("/ranking", handler.GetActivityRanking)
-	activity.GET("/ranking/lit", handler.GetActivityLitRanking)
 	activity.GET("/timeline", handler.ListActivityTimeline)
-	// 活动大事件流：全员打卡 + 全场事件，未入组的观战用户也可查看
-	activity.GET("/feed", handler.ListActivityFeed)
-	activity.GET("/library", handler.ListActivityBookLibrary)
 	activity.POST("/enroll", handler.EnrollActivity)
-	// 反馈（bug / 需求）：登录用户即可提交，管理员在监督台（审批台）查看
+	// 反馈（bug / 需求）：登录用户即可提交，管理员查看并标记
 	activity.POST("/feedback", handler.CreateActivityFeedback)
 
-	// 队长管理（报名名单拉人 / 换队名 / 一次性选形象）
+	// 队长管理（队名/徽章/拉人/颜色）
 	captain := h.Group("/api/activity/hell-board/team", middleware.Auth())
 	captain.PUT("", handler.UpdateTeamByCaptain)
 	captain.GET("/enrollments", handler.ListActivityEnrollments)
 	captain.POST("/members", handler.AddTeamMemberByCaptain)
-	// 队长初始化队伍进度：补录活动已开始后的真实位置/已点亮格（幂等）
-	captain.POST("/initialize", handler.InitializeActivityTeam)
-	// 自助选组入队（可选成为队长）
+	// 自助选组入队（可选成为队长）+ 认领彩虹色
 	captain.POST("/join", handler.JoinActivityTeam)
-	// 入队后补选队长（队长位空缺时）：入队时没勾队长的成员也能成为队长
+	// 认领/更换彩虹色（一人一色不重复，集齐后可重新分配）
+	captain.POST("/color", handler.ClaimActivityColor)
+	// 入队后补选队长（队长位空缺时）
 	captain.POST("/claim-captain", handler.ClaimActivityCaptain)
-	// 退出队伍（选错队伍时退出重选）：仅在还没有任何打卡/掷骰/投票时允许
+	// 退出队伍（选错队伍时退出重选）：仅在没有掷骰记录时允许
 	captain.POST("/leave", handler.LeaveActivityTeam)
 	// 修改活动内昵称（榜单与成员名单的展示名）
 	captain.PUT("/nickname", handler.UpdateActivityNickname)
 
-	// 人工终审台与运营后台（PRD 9.3 / 第 13 节）
+	// 运营后台（队伍/成员/格子/手工修正/导出）
 	activityAdmin := h.Group("/api/activity/hell-board/admin",
 		middleware.Auth(), middleware.RequireRole("admin", "moderator"))
-	activityAdmin.GET("/reviews", handler.ListActivityReviewQueue)
-	activityAdmin.POST("/reviews/batch-approve", handler.BatchApproveActivityBooks)
-	activityAdmin.POST("/reviews/:bookId", handler.ReviewActivityBook)
-	// 管理员强制通过：越过队长投票直接通过审批池书目（审核池兜底）
-	activityAdmin.POST("/reviews/:bookId/force-approve", handler.ForceApproveActivityBook)
-	// 管理员代成员补打卡（审批台「补卡」入口）
-	activityAdmin.POST("/checkins", handler.AdminCreateActivityCheckIn)
-	// 反馈（bug / 需求）审批台：查看与标记已处理
-	activityAdmin.GET("/feedback", handler.ListActivityFeedback)
-	activityAdmin.PUT("/feedback/:id", handler.ResolveActivityFeedback)
-	activityAdmin.GET("/export", handler.ExportActivityResults)
+	activityAdmin.GET("/teams", handler.ListActivityTeams)
 	activityAdmin.POST("/teams", handler.CreateActivityTeam)
 	activityAdmin.PUT("/teams/:id", handler.UpdateActivityTeam)
 	activityAdmin.DELETE("/teams/:id", middleware.RequireRole("admin"), handler.DeleteActivityTeam)
 	activityAdmin.POST("/teams/:id/members", handler.AddActivityMember)
-	// 手工修正会直接改写队伍位置与点亮状态且不可逆，限定仅 admin（与社区破坏性操作分级一致）
+	// 手工修正直接改写队伍状态且不可逆，限定仅 admin
 	activityAdmin.POST("/teams/:id/manual-fix", middleware.RequireRole("admin"), handler.ManualFixActivityTeam)
 	activityAdmin.DELETE("/members/:memberId", handler.RemoveActivityMember)
 	activityAdmin.PUT("/members/:memberId/captain", handler.SetActivityCaptain)
 	activityAdmin.PUT("/tiles/:index", handler.UpdateActivityTile)
+	activityAdmin.GET("/export", handler.ExportActivityResults)
+	// 反馈（bug / 需求）：查看与标记已处理
+	activityAdmin.GET("/feedback", handler.ListActivityFeedback)
+	activityAdmin.PUT("/feedback/:id", handler.ResolveActivityFeedback)
 
 	// --- 文件上传路由 ---
 	// 静态文件服务（本地存储模式时使用）

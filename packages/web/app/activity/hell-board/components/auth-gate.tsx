@@ -7,9 +7,8 @@ import { fetchMe } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 /**
- * 活动相关页面必须登录才能访问（P1-9 / 验收标准 9）：
- * 未登录用户直接跳转登录页（登录成功后回跳当前页），不展示棋盘与榜单。
- * 棋盘页与人工终审台共用，回跳目标按所在路径自动生成。
+ * 活动页必须登录才能访问：未登录直接跳转登录页（登录成功后回跳当前页），
+ * 不展示棋盘与榜单。
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter()

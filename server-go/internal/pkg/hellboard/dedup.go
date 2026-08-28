@@ -1,6 +1,8 @@
 package hellboard
 
 import (
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,7 +30,7 @@ func DedupKey(memberID, title, author string) string {
 	return memberID + "::" + NormalizeBookField(title) + "::" + NormalizeBookField(author)
 }
 
-// 活动周期为 8 月整月，Asia/Shanghai（P1-7）
+// 活动周期为 9 月整月（九月彩虹桥），Asia/Shanghai
 var cycleLocation = func() *time.Location {
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
@@ -39,10 +41,21 @@ var cycleLocation = func() *time.Location {
 }()
 
 // CycleRange 返回指定年份的活动周期区间 [start, end]。
-// 结束时刻为 8 月 31 日 23:59:59，之后页面转为只读归档态。
+// 结束时刻为 9 月 30 日 23:59:59，之后页面转为只读归档态。
+// 支持通过环境变量 HELLBOARD_START_OFFSET_DAYS 提前开始（测试用），
+// 数值为正表示开始日期提前 N 天，默认 0 即 9 月 1 日开始。
 func CycleRange(year int) (start, end time.Time) {
-	start = time.Date(year, time.August, 1, 0, 0, 0, 0, cycleLocation)
-	end = time.Date(year, time.August, 31, 23, 59, 59, 0, cycleLocation)
+	start = time.Date(year, time.September, 1, 0, 0, 0, 0, cycleLocation)
+	offset := 0
+	if v := os.Getenv("HELLBOARD_START_OFFSET_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			offset = n
+		}
+	}
+	if offset > 0 {
+		start = start.AddDate(0, 0, -offset)
+	}
+	end = time.Date(year, time.September, 30, 23, 59, 59, 0, cycleLocation)
 	return start, end
 }
 
