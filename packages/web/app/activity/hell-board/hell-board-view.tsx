@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookHeart, CircleHelp, Loader2, LogOut, Map as MapIcon, RefreshCw, Trophy, Users } from 'lucide-react'
+import { BookHeart, CircleHelp, Loader2, LogOut, Map as MapIcon, RefreshCw, Settings2, Trophy, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
 import * as api from './lib/api'
 import { BoardMap } from './components/board-map'
 import { EnrollWizard } from './components/enroll-wizard'
 import { MapSkeleton } from './components/map-skeleton'
+import { MyTeamDialog } from './components/my-team-dialog'
 import { RankPanel } from './components/rank-panel'
 import { RainbowPanel } from './components/rainbow-panel'
 import { RollResultDialog } from './components/roll-result-dialog'
@@ -53,6 +54,7 @@ export function HellBoardView() {
   const [topView, setTopView] = useState<TopView>('board')
   const [showTimeline, setShowTimeline] = useState(false)
   const [showRules, setShowRules] = useState(false)
+  const [showMine, setShowMine] = useState(false)
   const [ranking, setRanking] = useState<RankingRow[]>([])
   const [rankingLoading, setRankingLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -175,6 +177,18 @@ export function HellBoardView() {
                 <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
                 <span className="hidden sm:inline">{lastUpdated ? formatTime(lastUpdated) : '刷新'}</span>
               </button>
+              {/* 我的队伍：改昵称 / 换彩虹色 / 退队 */}
+              {(enrolled || !!currentTeam) && (
+                <button
+                  type="button"
+                  onClick={() => setShowMine(true)}
+                  title="修改昵称、换彩虹色或退出队伍"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-amber-700 active:translate-x-px active:translate-y-px active:shadow-none"
+                >
+                  <Settings2 className="size-3.5" />
+                  <span className="hidden sm:inline">我的队伍</span>
+                </button>
+              )}
               {/* 玩法说明 */}
               <button
                 type="button"
@@ -278,6 +292,7 @@ export function HellBoardView() {
       {showTimeline && <TimelineDialog onClose={() => setShowTimeline(false)} />}
       {lastOutcome && <RollResultDialog outcome={lastOutcome} onClose={closeOutcome} />}
       {showRules && <RulesDialog open={showRules} onClose={() => setShowRules(false)} />}
+      {showMine && <MyTeamDialog onClose={() => setShowMine(false)} />}
 
       <ToastHost />
 

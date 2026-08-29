@@ -154,7 +154,9 @@ type ActivityEventDTO struct {
 
 // ActivityEnrollReq 报名活动请求
 type ActivityEnrollReq struct {
-	Nickname string `json:"nickname" vd:"len($)<=50"`
+	// Nickname 字节上限仅用于拦截异常超长输入；真实口径是 service 层按字符数限 50
+	// （vd 的 len() 按字节计，而库列为 varchar(50) 按字符计，中文昵称一多就会误拒）
+	Nickname string `json:"nickname" vd:"len($)<=150"`
 }
 
 // ActivityJoinTeamReq 自助选组入队请求

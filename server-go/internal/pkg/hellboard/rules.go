@@ -106,3 +106,48 @@ func ClaimedColorSet(members []model.ActivityMember) map[string]bool {
 	}
 	return out
 }
+
+// bookkeepingEvents 成员记账类事件：由入队、换色这类编排动作自身必然产生，
+// 不代表队伍真实对战进展。计入会导致「一入队就再也退不出」。
+var bookkeepingEvents = map[string]bool{
+	model.EventTypeColor: true,
+}
+
+// IsProgressEvent 时间线事件是否代表本队已开始对战。
+// 未知事件类型按进展处理（宁可拦住），避免新增记账类型时被误放行。
+func IsProgressEvent(eventType string) bool {
+	return !bookkeepingEvents[eventType]
+}
+
+// BookkeepingEventTypes 记账类事件类型列表，供 SQL `type NOT IN ?` 过滤复用，
+// 保证库内计数与 IsProgressEvent 同一口径。
+func BookkeepingEventTypes() []string {
+	out := make([]string, 0, len(bookkeepingEvents))
+	for t := range bookkeepingEvents {
+		out = append(out, t)
+	}
+	return out
+}
+
+// TeamHasProgress 队伍是否已产生真实对战进展（出发、积分、掷骰机会、色块、buff、冲线）。
+// 事件行是 best-effort 写入（调用处忽略错误），故以队伍状态为准做兜底口径。
+func TeamHasProgress(team *model.ActivityTeam) bool {
+	if team == nil {
+		return false
+	}
+	if team.Position != 0 || team.Points != 0 || team.UniversalDice != 0 ||
+		team.RollChances != 0 || team.RainbowCount != 0 || team.WeekMinDelta != 0 ||
+		team.ChampionAt != nil || team.Status != model.TeamStatusCollecting {
+		return true
+	}
+	st, err := TeamStateFromModel(team)
+	if err != nil {
+		return true // 状态 JSON 无法判定，按已进展处理避免误放行
+	}
+	for _, n := range st.ColorBlocks {
+		if n > 0 {
+			return true
+		}
+	}
+	return len(st.Buffs) > 0
+}

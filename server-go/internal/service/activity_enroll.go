@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"time"
+	"unicode/utf8"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
 	"github.com/abc-binary-star/ai-community/server-go/internal/model"
@@ -14,8 +15,17 @@ import (
 
 // 报名 / 入队 / 彩虹色认领。队伍固定 7 人，一人一色不重复。
 
+// validNickname 昵称是否合规：按字符数限 50，与库列 varchar(50) 同口径。
+// 请求层的 vd 只能按字节粗筛，中文字符需在此按 rune 判定。
+func validNickname(nickname string) bool {
+	return utf8.RuneCountInString(nickname) <= 50
+}
+
 // Enroll 报名活动（幂等）：报名是入队的前提。
 func (s *ActivityService) Enroll(ctx context.Context, userID string, req types.ActivityEnrollReq) (*types.EnrollmentDTO, error) {
+	if !validNickname(req.Nickname) {
+		return nil, ErrActivityInvalidInput
+	}
 	var existing model.ActivityEnrollment
 	err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&existing).Error
 	if err == nil {
@@ -235,35 +245,72 @@ func (s *ActivityService) ClaimColor(ctx context.Context, userID string, req typ
 	return &dto, nil
 }
 
-// UpdateNickname 修改活动内昵称
+// UpdateNickname 修改活动内昵称。
+// 昵称同时存在于报名表与成员表：前者供 /board 展示名与入队复制，后者供队伍成员名单，
+// 只写其一会出现「改完不生效」或「退队重加被旧名覆盖」。已报名但未入队者同样可改。
 func (s *ActivityService) UpdateNickname(ctx context.Context, userID string, nickname string) error {
+	if nickname == "" || !validNickname(nickname) {
+		return ErrActivityInvalidInput
+	}
+	if err := s.requireWritable(time.Now()); err != nil {
+		return err
+	}
 	me, err := s.memberOf(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if me == nil {
-		return ErrActivityNotMember
+	var en model.ActivityEnrollment
+	if err := dal.DB.WithContext(ctx).Where("user_id = ?", userID).First(&en).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrActivityNotEnrolled
+		}
+		return err
 	}
-	if nickname == "" || len(nickname) > 50 {
-		return ErrActivityInvalidInput
-	}
-	return dal.DB.WithContext(ctx).Model(&model.ActivityMember{}).
-		Where("id = ?", me.ID).Update("nickname", nickname).Error
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ActivityEnrollment{}).
+			Where("user_id = ?", userID).Update("nickname", nickname).Error; err != nil {
+			return err
+		}
+		if me == nil {
+			return nil
+		}
+		return tx.Model(&model.ActivityMember{}).
+			Where("id = ?", me.ID).Update("nickname", nickname).Error
+	})
 }
 
-// LeaveTeam 退出队伍（仅未产生任何记录时允许干净退出）
+// LeaveTeam 退出队伍，供选错队伍时重选。
+// 仅在全队开赛前允许干净退出：入队动作自身必写一条 color 事件，属成员记账而非对战进展，
+// 若一并统计会导致「一入队就永远退不出」；掷骰、彩虹集齐、格子、运营修正才算真实进展。
 func (s *ActivityService) LeaveTeam(ctx context.Context, userID string) error {
 	me, err := s.requireMember(ctx, userID)
 	if err != nil {
 		return err
 	}
-	var rollCount, eventCount int64
-	_ = dal.DB.WithContext(ctx).Model(&model.ActivityDiceRoll{}).Where("team_id = ?", me.TeamID).Count(&rollCount).Error
-	_ = dal.DB.WithContext(ctx).Model(&model.ActivityEvent{}).Where("team_id = ?", me.TeamID).Count(&eventCount).Error
-	if rollCount > 0 || eventCount > 0 {
-		return &ActivityError{Msg: "本队已有掷骰记录，无法退出队伍。如需调整请联系管理员", Code: 409}
+	if err := s.requireWritable(time.Now()); err != nil {
+		return err
 	}
-	return dal.DB.WithContext(ctx).Delete(&model.ActivityMember{}, "id = ?", me.ID).Error
+	return dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 与掷骰链路同一把队行锁，串行化「边掷边退」
+		team, err := s.getTeamTxLocked(tx, me.TeamID)
+		if err != nil {
+			return err
+		}
+		var rollCount, progressCount int64
+		if err := tx.Model(&model.ActivityDiceRoll{}).
+			Where("team_id = ?", team.ID).Count(&rollCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ActivityEvent{}).
+			Where("team_id = ? AND type NOT IN ?", team.ID, hellboard.BookkeepingEventTypes()).
+			Count(&progressCount).Error; err != nil {
+			return err
+		}
+		if rollCount > 0 || progressCount > 0 || hellboard.TeamHasProgress(team) {
+			return &ActivityError{Msg: "本队已开始对战（有掷骰 / 彩虹集齐 / 格子进展），无法退出队伍。如需调整请联系管理员", Code: 409}
+		}
+		return tx.Delete(&model.ActivityMember{}, "id = ?", me.ID).Error
+	})
 }
 
 // ClaimCaptain 队长位空缺时补选队长

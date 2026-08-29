@@ -103,3 +103,31 @@ export function colorLabel(key?: string): string {
 export function rainbowOrder(): { key: RainbowColor; label: string; hex: string }[] {
   return RAINBOW_ORDER.map((k) => ({ key: k, label: RAINBOW[k].label, hex: RAINBOW[k].hex }))
 }
+
+/**
+ * 当前用户可认领 / 可换的彩虹色：排除队友已占用的色。
+ * 自己当前色不算被占用，否则换色一次后就再也停不住原色。
+ */
+export function freeColorsForTeam(
+  team: Team | undefined,
+  myMemberId?: string | null,
+): RainbowColor[] {
+  const taken = new Set<string>()
+  team?.members.forEach((m) => {
+    if (m.color && m.id !== myMemberId) taken.add(m.color)
+  })
+  return RAINBOW_ORDER.filter((c) => !taken.has(c))
+}
+
+/**
+ * 本队是否还能干净退队：与后端 hellboard.TeamHasProgress 同口径。
+ * 仅作 UI 提前提示，放行与否仍以后端为准（后端另看掷骰记录与进展事件）。
+ */
+export function canLeaveTeam(team: Team | undefined): boolean {
+  if (!team) return false
+  if (team.status !== 'collecting') return false
+  if (team.position !== 0 || team.points !== 0 || team.universalDice !== 0) return false
+  if (team.rollChances !== 0 || team.rainbowCount !== 0 || team.weekMinDelta !== 0) return false
+  if (team.buffs.length > 0) return false
+  return Object.values(team.colorBlocks).every((n) => n <= 0)
+}

@@ -416,3 +416,57 @@ func TestDedupKeyNormalization(t *testing.T) {
 		t.Errorf("归一化后应相同:\n%s\n%s", a, b)
 	}
 }
+
+func TestIsProgressEvent(t *testing.T) {
+	// 回归：入队动作自身必写 color 事件，若计入进展则「一入队就永远退不出」
+	if IsProgressEvent(model.EventTypeColor) {
+		t.Error("color 属成员记账事件，不应计为对战进展")
+	}
+	for _, et := range []string{
+		model.EventTypeRoll, model.EventTypeDice, model.EventTypeCycle,
+		model.EventTypeTile, model.EventTypeWin, model.EventTypeManual,
+		model.EventTypeCheckIn, model.EventTypeReview,
+	} {
+		if !IsProgressEvent(et) {
+			t.Errorf("%s 应计为对战进展", et)
+		}
+	}
+	// 未知类型 fail-closed，宁可拦住
+	if !IsProgressEvent("brand-new-type") {
+		t.Error("未知事件类型应按进展处理")
+	}
+}
+
+func TestTeamHasProgress(t *testing.T) {
+	fresh := &model.ActivityTeam{Status: model.TeamStatusCollecting}
+	if TeamHasProgress(fresh) {
+		t.Error("新建/刚入队的队伍状态应全零，允许干净退出")
+	}
+	if TeamHasProgress(nil) {
+		t.Error("nil 不应判为有进展")
+	}
+	cases := map[string]*model.ActivityTeam{
+		"已出发":      {Status: model.TeamStatusCollecting, Position: 7},
+		"有积分":      {Status: model.TeamStatusCollecting, Points: 3},
+		"有掷骰机会":    {Status: model.TeamStatusReady},
+		"持有万能骰":    {Status: model.TeamStatusCollecting, UniversalDice: 1},
+		"完成过彩虹":    {Status: model.TeamStatusCollecting, RainbowCount: 1},
+		"保底被修正":    {Status: model.TeamStatusCollecting, WeekMinDelta: -1},
+		"已冲线":      {Status: model.TeamStatusCompleted},
+		"色块已累积":    {Status: model.TeamStatusCollecting, ColorBlocks: `{"red":2}`},
+		"buff生效中":  {Status: model.TeamStatusCollecting, Buffs: `[{"kind":"rainbow_bonus","uses":1}]`},
+		"状态JSON损坏": {Status: model.TeamStatusCollecting, ColorBlocks: `{`},
+	}
+	for name, team := range cases {
+		if !TeamHasProgress(team) {
+			t.Errorf("%s：应判为已产生进展，禁止退队", name)
+		}
+	}
+	// 空色块 / 空 buff 不算进展
+	if TeamHasProgress(&model.ActivityTeam{Status: model.TeamStatusCollecting, ColorBlocks: `{}`}) {
+		t.Error("空色块 JSON 且状态全零，不应判为有进展")
+	}
+	if TeamHasProgress(&model.ActivityTeam{Status: model.TeamStatusCollecting, ColorBlocks: `{"red":0}`, Buffs: `[]`}) {
+		t.Error("色块均为 0 且无 buff，不应判为有进展")
+	}
+}
