@@ -241,7 +241,7 @@ export function HellBoardView() {
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-5">
             {/* 大地图 */}
             <div className="min-w-0">
-              <div className="h-[48vh] min-h-[300px] w-full lg:h-[calc(100dvh-9.5rem)]">
+              <div className="h-[48vh] min-h-[300px] w-full xl:h-[calc(100dvh-9.5rem)]">
                 <BoardMap onSelectTile={selectTile} />
               </div>
             </div>

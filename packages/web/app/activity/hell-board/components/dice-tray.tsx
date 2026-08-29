@@ -86,6 +86,8 @@ export function DiceTray({
     }
   }
 
+  if (!canRoll && !canUniversal) return null
+
   return (
     <div className="rounded-lg border-2 border-stone-800 bg-gradient-to-b from-[#fffdf4] to-[#f6edd6] p-3 shadow-[3px_3px_0_#292524]">
       <p className="flex items-center gap-1.5 text-[11px] font-black text-[#6b4e15]">
@@ -94,12 +96,7 @@ export function DiceTray({
         <span className="ml-auto font-medium normal-case text-stone-500">{hint}</span>
       </p>
 
-      {!canRoll && !canUniversal ? (
-        <p className="mt-2.5 rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/70 px-2.5 py-2 text-[11px] font-medium leading-relaxed text-stone-500">
-          在群里读完打卡并集齐一轮彩虹后，即可获得掷骰机会；积分每满 10 分自动兑换万能骰子。
-        </p>
-      ) : (
-        <>
+      <>
           <div className="mt-2.5 flex items-center gap-1.5">
             {[1, 2, 3, 4, 5, 6].map((v) => (
               <DiceFace
@@ -163,7 +160,6 @@ export function DiceTray({
             </button>
           </div>
         </>
-      )}
     </div>
   )
 }
