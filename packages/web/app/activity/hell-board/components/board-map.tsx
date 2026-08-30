@@ -225,7 +225,7 @@ export function BoardMap({
       {/* 地图工具条 */}
       <div
         data-map-control
-        className="absolute bottom-3 left-3 z-50 flex max-w-[calc(100%-24px)] items-center gap-1 rounded-xl border-2 border-[#514337] bg-[#fffaf0]/95 p-1.5 shadow-[0_7px_20px_rgba(58,46,37,0.24)] backdrop-blur-sm"
+        className="absolute bottom-3 left-3 z-50 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-1 rounded-xl border-2 border-[#514337] bg-[#fffaf0]/95 p-1.5 shadow-[0_7px_20px_rgba(58,46,37,0.24)] backdrop-blur-sm"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <button
@@ -259,9 +259,10 @@ export function BoardMap({
             setFollow(false);
             map.fit();
           }}
-          className="map-control-button"
+          className="map-control-button w-auto gap-1 px-2"
         >
           <RotateCcw className="size-3.5" />
+          <span>全图</span>
         </button>
         <button
           type="button"
@@ -279,7 +280,7 @@ export function BoardMap({
           )}
         >
           <Crosshair className="size-3.5" />
-          <span className="hidden sm:inline">跟随</span>
+          <span>跟随</span>
         </button>
         {myTeam && myTeam.position >= 1 && (
           <button
@@ -287,9 +288,10 @@ export function BoardMap({
             title="回到本队"
             aria-label="回到本队"
             onClick={() => centerOnIndex(myTeam.position)}
-            className="map-control-button text-emerald-700"
+            className="map-control-button w-auto gap-1 px-2 text-emerald-700"
           >
             <Locate className="size-3.5" />
+            <span>回队</span>
           </button>
         )}
         <button
@@ -297,9 +299,10 @@ export function BoardMap({
           title="显示或隐藏缩略图"
           aria-pressed={showMiniMap}
           onClick={() => setShowMiniMap((value) => !value)}
-          className="map-control-button"
+          className="map-control-button w-auto gap-1 px-2"
         >
           <MapIcon className="size-3.5" />
+          <span>小地图</span>
         </button>
       </div>
 

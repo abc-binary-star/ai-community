@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookHeart, CircleHelp, Loader2, LogOut, Map as MapIcon, RefreshCw, Settings2, Trophy, Users } from 'lucide-react'
+import { BookHeart, CircleHelp, Loader2, LogOut, Map as MapIcon, Rainbow, RefreshCw, Settings2, Trophy, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
 import * as api from './lib/api'
@@ -10,6 +10,7 @@ import { EnrollWizard } from './components/enroll-wizard'
 import { MapSkeleton } from './components/map-skeleton'
 import { MyTeamDialog } from './components/my-team-dialog'
 import { RankPanel } from './components/rank-panel'
+import { RainbowBridgeDialog } from './components/rainbow-bridge-dialog'
 import { RainbowPanel } from './components/rainbow-panel'
 import { RollResultDialog } from './components/roll-result-dialog'
 import { RulesDialog } from './components/rules-dialog'
@@ -55,6 +56,7 @@ export function HellBoardView() {
   const [showTimeline, setShowTimeline] = useState(false)
   const [showRules, setShowRules] = useState(false)
   const [showMine, setShowMine] = useState(false)
+  const [showBridge, setShowBridge] = useState(false)
   const [ranking, setRanking] = useState<RankingRow[]>([])
   const [rankingLoading, setRankingLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -175,7 +177,10 @@ export function HellBoardView() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-2.5 text-[10px] font-bold text-stone-500 shadow-[2px_2px_0_#292524] transition-all hover:text-stone-800 active:translate-x-px active:translate-y-px active:shadow-none disabled:opacity-60"
               >
                 <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
-                <span className="hidden sm:inline">{lastUpdated ? formatTime(lastUpdated) : '刷新'}</span>
+                <span>刷新</span>
+                {lastUpdated && (
+                  <span className="hidden tabular-nums text-stone-400 sm:inline">{formatTime(lastUpdated)}</span>
+                )}
               </button>
               {/* 我的队伍：改昵称 / 换彩虹色 / 退队 */}
               {(enrolled || !!currentTeam) && (
@@ -186,7 +191,7 @@ export function HellBoardView() {
                   className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-amber-700 active:translate-x-px active:translate-y-px active:shadow-none"
                 >
                   <Settings2 className="size-3.5" />
-                  <span className="hidden sm:inline">我的队伍</span>
+                  <span>我的队伍</span>
                 </button>
               )}
               {/* 玩法说明 */}
@@ -196,7 +201,7 @@ export function HellBoardView() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-amber-700 active:translate-x-px active:translate-y-px active:shadow-none"
               >
                 <CircleHelp className="size-3.5" />
-                <span className="hidden sm:inline">玩法</span>
+                <span>玩法</span>
               </button>
               <button
                 type="button"
@@ -206,7 +211,7 @@ export function HellBoardView() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-md border-2 border-stone-800 bg-white px-3 text-xs font-bold text-stone-600 shadow-[2px_2px_0_#292524] transition-all hover:text-rose-600 active:translate-x-px active:translate-y-px active:shadow-none"
               >
                 <LogOut className="size-3.5" />
-                <span className="hidden sm:inline">退出</span>
+                <span>退出</span>
               </button>
             </div>
           </div>
@@ -270,6 +275,21 @@ export function HellBoardView() {
                     <EnrollWizard />
                   </div>
                 )}
+
+                {/* 彩虹桥晒图入口 */}
+                <button
+                  type="button"
+                  onClick={() => setShowBridge(true)}
+                  className="mt-3 flex w-full items-center gap-2.5 rounded-lg border-2 border-stone-800 bg-white px-3 py-2.5 text-left shadow-[3px_3px_0_#292524] transition-transform hover:-translate-y-0.5 active:translate-x-px active:translate-y-px active:shadow-none"
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md border-2 border-stone-800 bg-[#f4ecff]">
+                    <Rainbow className="size-4 text-violet-700" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-black text-stone-900">彩虹桥晒图</span>
+                    <span className="block truncate text-[10px] font-medium text-stone-500">上传封面 · 自动排成七色桥</span>
+                  </span>
+                </button>
               </div>
             </aside>
           </div>
@@ -293,6 +313,7 @@ export function HellBoardView() {
       {lastOutcome && <RollResultDialog outcome={lastOutcome} onClose={closeOutcome} />}
       {showRules && <RulesDialog open={showRules} onClose={() => setShowRules(false)} />}
       {showMine && <MyTeamDialog onClose={() => setShowMine(false)} />}
+      {showBridge && <RainbowBridgeDialog onClose={() => setShowBridge(false)} />}
 
       <ToastHost />
 

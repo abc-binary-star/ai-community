@@ -30,7 +30,6 @@ export function RainbowPanel({
   const rollDice = useActivityStore((s) => s.rollDice)
   const doUseDice = useActivityStore((s) => s.useUniversalDice)
   const completeCycle = useActivityStore((s) => s.completeCycle)
-  const timeline = useActivityStore((s) => s.timeline)
 
   const meta = tileMeta(tile)
   const reason = blockedReason(team, isCaptain, archived)
@@ -189,21 +188,6 @@ export function RainbowPanel({
               {reason}（请队长操作）
             </p>
           )}
-        </section>
-      )}
-
-      {/* 本队动态（最近） */}
-      {timeline.length > 0 && (
-        <section className="rounded-lg border-2 border-stone-800 bg-white p-3 shadow-[3px_3px_0_#292524]">
-          <p className="text-[10px] font-black text-[#6b4e15]">本队最近动态</p>
-          <ul className="mt-1.5 space-y-1">
-            {timeline.slice(0, 5).map((e) => (
-              <li key={e.id} className="flex gap-1.5 text-[10px] leading-snug text-stone-600">
-                <span aria-hidden className="mt-1 size-1 shrink-0 rounded-full bg-amber-500" />
-                <span>{e.text}</span>
-              </li>
-            ))}
-          </ul>
         </section>
       )}
 
