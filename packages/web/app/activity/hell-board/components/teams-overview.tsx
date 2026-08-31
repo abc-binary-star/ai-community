@@ -7,7 +7,15 @@ import { statusMeta } from '../lib/rules'
 import type { Team } from '../lib/types'
 import { TeamEmblem } from './team-emblem'
 
-/** 全部队伍：每队展示当前格子、核心资产、7 色成员与 buff 概览 */
+/** 名次徽章配色：金 / 银 / 铜 / 常规（口径同进度排序：位置 > 彩虹轮 > 积分） */
+function rankChipCls(rank: number): string {
+  if (rank === 1) return 'border-amber-700 bg-[#ffd166] text-amber-950'
+  if (rank === 2) return 'border-stone-400 bg-stone-200 text-stone-700'
+  if (rank === 3) return 'border-orange-400 bg-orange-200 text-orange-900'
+  return 'border-stone-300 bg-white text-stone-500'
+}
+
+/** 全部队伍：名次 + 每队当前格子、核心资产、7 色成员与 buff 概览 */
 export function TeamsOverview({ teams, myTeamId }: { teams: Team[]; myTeamId: string | null }) {
   if (teams.length === 0) {
     return (
@@ -17,11 +25,16 @@ export function TeamsOverview({ teams, myTeamId }: { teams: Team[]; myTeamId: st
       </div>
     )
   }
+  const ranked = [...teams].sort(
+    (a, b) => b.position - a.position || b.rainbowCount - a.rainbowCount || b.points - a.points,
+  )
+  const rankById = new Map(ranked.map((t, i) => [t.id, i + 1]))
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 lg:gap-5">
-      {teams.map((team) => {
+      {ranked.map((team) => {
         const isMine = team.id === myTeamId
         const st = statusMeta(team.status)
+        const rank = rankById.get(team.id) ?? 0
         const memberByColor = new Map<string, string>()
         team.members.forEach((m) => {
           if (m.color) memberByColor.set(m.color, m.name)
@@ -39,6 +52,9 @@ export function TeamsOverview({ teams, myTeamId }: { teams: Team[]; myTeamId: st
               <TeamEmblem emblem={team.emblem} accent={team.color} size={48} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className={cn('shrink-0 rounded border px-1.5 py-px text-[10px] font-black', rankChipCls(rank))}>
+                    No.{rank}
+                  </span>
                   <h2 className="text-[15px] font-black leading-snug break-words text-stone-900 sm:text-base">
                     {team.name}
                   </h2>

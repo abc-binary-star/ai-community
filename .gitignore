@@ -22,6 +22,7 @@ out/
 .vscode/
 .idea/
 .trae/
+.qoder/
 *.swp
 .DS_Store
 

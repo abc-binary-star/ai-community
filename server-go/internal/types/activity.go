@@ -150,6 +150,22 @@ type ActivityEventDTO struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+// ActivityBigEventDTO 全局大事件：最近一次掷骰动态（跨队伍），供「大事件」视图展示
+type ActivityBigEventDTO struct {
+	ID         string `json:"id"`
+	TeamID     string `json:"teamId"`
+	TeamName   string `json:"teamName"`
+	TeamColor  string `json:"teamColor"`
+	TeamEmblem string `json:"teamEmblem,omitempty"`
+	// DiceValue 骰子面值 1–6
+	DiceValue     int    `json:"diceValue"`
+	FromTile      int    `json:"fromTile"`
+	ToTile        int    `json:"toTile"`
+	LandedTile    int    `json:"landedTile,omitempty"`
+	ResultSummary string `json:"resultSummary,omitempty"`
+	CreatedAt     string `json:"createdAt"`
+}
+
 // --- 请求 DTO ---
 
 // ActivityEnrollReq 报名活动请求

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/abc-binary-star/ai-community/server-go/internal/dal"
@@ -232,14 +233,20 @@ func (s *ActivityService) persistRollTx(ctx context.Context, tx *gorm.DB, team *
 		_ = s.addEvent(tx, team.ID, model.EventTypeDice, fmt.Sprintf("积分满额自动兑换万能骰子 +%d（持有 %d）", outcome.DiceExchanged, st.UniversalDice))
 	}
 
-	// 骰子记录留痕
+	// 骰子记录留痕；同时保存真实落点和权威结算结果，供全局大事件准确播报。
+	landedTile := 0
+	if outcome.Landed != nil {
+		landedTile = outcome.Landed.Index
+	}
 	if err := tx.Create(&model.ActivityDiceRoll{
-		TeamID:   team.ID,
-		RollerID: me.ID,
-		Value:    outcome.DiceValue,
-		FromTile: outcome.From,
-		ToTile:   outcome.To,
-		Lap:      1,
+		TeamID:        team.ID,
+		RollerID:      me.ID,
+		Value:         outcome.DiceValue,
+		FromTile:      outcome.From,
+		ToTile:        outcome.To,
+		LandedTile:    landedTile,
+		ResultSummary: strings.Join(outcome.Results, "；"),
+		Lap:           1,
 	}).Error; err != nil {
 		return err
 	}

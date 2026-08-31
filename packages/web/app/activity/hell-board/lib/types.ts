@@ -108,24 +108,29 @@ export interface RollResult {
   team: Team
 }
 
-/** 榜单行 */
-export interface RankingRow {
-  id: string
-  rank: number
-  name: string
-  color: string
-  position: number
-  points: number
-  universalDice: number
-  rainbowCount: number
-  isSelf: boolean
-}
-
 /** 时间线事件 */
 export interface TimelineEvent {
   id: string
   type: string
   text: string
+  createdAt: string
+}
+
+/** 全局大事件：某队最近一次掷骰动态 */
+export interface BigEvent {
+  id: string
+  teamId: string
+  teamName: string
+  teamColor: string
+  teamEmblem?: string
+  /** 骰子面值 1–6 */
+  diceValue: number
+  fromTile: number
+  toTile: number
+  /** 骰子基础移动后实际踩中的格子；旧记录可能没有 */
+  landedTile?: number
+  /** 服务端本次结算产生的实际效果；旧记录可能没有 */
+  resultSummary?: string
   createdAt: string
 }
 

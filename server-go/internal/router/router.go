@@ -246,6 +246,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.POST("/cycle", handler.CompleteActivityCycle)
 	activity.GET("/ranking", handler.GetActivityRanking)
 	activity.GET("/timeline", handler.ListActivityTimeline)
+	activity.GET("/big-events", handler.ListActivityBigEvents)
 	activity.POST("/enroll", handler.EnrollActivity)
 	// 反馈（bug / 需求）：登录用户即可提交，管理员查看并标记
 	activity.POST("/feedback", handler.CreateActivityFeedback)

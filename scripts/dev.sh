@@ -5,6 +5,7 @@
 # 用法：
 #   ./scripts/dev.sh                启动（若 3000/3001 已被占用会自动停掉旧进程再启动）
 #   ./scripts/dev.sh --early        启动，并让「读书大富翁」活动提前开始（测试用）
+#   ./scripts/dev.sh --backend      仅重启后端（前端保持不变，适合后端小改动快速重启）
 #   ./scripts/dev.sh --restart      显式重启（与默认行为一致）
 #   ./scripts/dev.sh --stop         停掉正在运行的 dev 服务（3000/3001）
 #   ./scripts/dev.sh --logs         查看最新日志
@@ -23,6 +24,10 @@ cd "$ROOT"
 DEV_DIR="$ROOT/.dev"
 mkdir -p "$DEV_DIR"
 
+# PID 文件，用于跨进程追踪
+BACKEND_PID_FILE="$DEV_DIR/backend.pid"
+FRONTEND_PID_FILE="$DEV_DIR/frontend.pid"
+
 log()  { printf '\033[1;34m[dev]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[dev]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[dev]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -30,11 +35,42 @@ die()  { printf '\033[1;31m[dev]\033[0m %s\n' "$*" >&2; exit 1; }
 port_open() { (echo > "/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1; }
 port_pids() { lsof -ti tcp:"$1" 2>/dev/null || true; }
 
+# 杀掉 PID 文件记录的进程及其子进程树
+kill_pid_file() {
+  local pidfile="$1"
+  [ -f "$pidfile" ] || return 0
+  local pid
+  pid="$(cat "$pidfile" 2>/dev/null || true)"
+  [ -n "$pid" ] || { rm -f "$pidfile"; return 0; }
+  if kill -0 "$pid" 2>/dev/null; then
+    log "停止进程 (PID=$pid) 及其子进程…"
+    # 先杀掉所有子孙进程（pkill -P 递归杀子进程）
+    pkill -P "$pid" 2>/dev/null || true
+    # 再杀主进程
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+    # 仍存活则强制杀
+    if kill -0 "$pid" 2>/dev/null; then
+      pkill -9 -P "$pid" 2>/dev/null || true
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+  fi
+  rm -f "$pidfile"
+}
+
 stop_port() {
   local pids
+  # 先尝试 PID 文件
+  if [ "$1" = "3001" ] && [ -f "$BACKEND_PID_FILE" ]; then
+    kill_pid_file "$BACKEND_PID_FILE"
+  fi
+  if [ "$1" = "3000" ] && [ -f "$FRONTEND_PID_FILE" ]; then
+    kill_pid_file "$FRONTEND_PID_FILE"
+  fi
+  # 再用端口兜底清理残留
   pids="$(port_pids "$1")"
   if [ -n "$pids" ]; then
-    log "停止占用端口 $1 的进程: $pids"
+    log "清理端口 $1 残留进程: $pids"
     # shellcheck disable=SC2086
     kill $pids 2>/dev/null || true
     sleep 1
@@ -45,8 +81,10 @@ stop_port() {
 
 # ---------- 参数解析 ----------
 EARLY=0
+BACKEND_ONLY=0
 case "${1:-}" in
   --early|-e) EARLY=1 ;;
+  --backend|-b) BACKEND_ONLY=1 ;;
   --restart|-r) : ;; # 默认行为即重启，保留兼容入口
   --stop)
     stop_port 3000
@@ -61,13 +99,66 @@ case "${1:-}" in
     exit 0
     ;;
   --help|-h)
-    sed -n '2,17p' "$0"
+    sed -n '2,18p' "$0"
     exit 0
     ;;
   "") ;;
-  *) die "未知参数: $1（支持 --early / --restart / --stop / --logs / --help）" ;;
+  *) die "未知参数: $1（支持 --early / --backend / --restart / --stop / --logs / --help）" ;;
 esac
 
+# ---------- 模式分支：仅重启后端 ----------
+if [ "$BACKEND_ONLY" = "1" ]; then
+  log "仅重启后端模式（前端保持不变）…"
+  stop_port 3001
+  if port_open 3001; then stop_port 3001; fi
+
+  log "启动后端 (http://localhost:3001)…"
+  (
+    cd server-go
+    if [ "$EARLY" = "1" ]; then
+      HELLBOARD_START_OFFSET_DAYS=4 GOCACHE="$DEV_DIR/go-build-cache" go run ./cmd/server
+    else
+      GOCACHE="$DEV_DIR/go-build-cache" go run ./cmd/server
+    fi
+  ) >"$DEV_DIR/backend.log" 2>&1 &
+  BACKEND_PID=$!
+  echo "$BACKEND_PID" > "$BACKEND_PID_FILE"
+
+  # 等待后端健康检查
+  for _ in $(seq 1 90); do
+    if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then
+      break
+    fi
+    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+      echo ""
+      echo "❌ 后端启动失败，最近日志："
+      tail -30 "$DEV_DIR/backend.log" || true
+      exit 1
+    fi
+    sleep 1
+  done
+
+  if ! curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then
+    echo ""
+    echo "❌ 后端健康检查超时，最近日志："
+    tail -30 "$DEV_DIR/backend.log" || true
+    exit 1
+  fi
+
+  echo ""
+  echo "=============================================="
+  echo "  ✅ 后端已重启"
+  echo "     后端    http://localhost:3001"
+  echo "     日志: $DEV_DIR/backend.log"
+  echo "=============================================="
+  echo ""
+  # 后端模式下不阻塞，直接退出（前端仍在另一个进程跑着）
+  # 解除 trap 以免退出时误杀前端
+  trap - EXIT INT TERM
+  exit 0
+fi
+
+# ---------- 全量重启模式 ----------
 # 端口已被占用时一律先停掉再启动（等同 --restart）
 if port_open 3000 || port_open 3001; then
   log "检测到 3000/3001 已有进程，先停止旧进程再启动…"
@@ -142,8 +233,17 @@ BACKEND_PID=""
 FRONTEND_PID=""
 
 cleanup() {
-  [ -n "$BACKEND_PID" ] && kill "$BACKEND_PID" 2>/dev/null || true
-  [ -n "$FRONTEND_PID" ] && kill "$FRONTEND_PID" 2>/dev/null || true
+  kill_pid_file "$BACKEND_PID_FILE"
+  kill_pid_file "$FRONTEND_PID_FILE"
+  # 兜底：若 PID 文件已被删除但进程仍在，用变量中的 PID 再杀一次
+  if [ -n "$BACKEND_PID" ]; then
+    pkill -P "$BACKEND_PID" 2>/dev/null || true
+    kill "$BACKEND_PID" 2>/dev/null || true
+  fi
+  if [ -n "$FRONTEND_PID" ]; then
+    pkill -P "$FRONTEND_PID" 2>/dev/null || true
+    kill "$FRONTEND_PID" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -163,6 +263,7 @@ log "启动后端 (http://localhost:3001)…"
   fi
 ) >"$DEV_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
+echo "$BACKEND_PID" > "$BACKEND_PID_FILE"
 
 log "启动前端 (http://localhost:3000)…"
 (
@@ -170,6 +271,7 @@ log "启动前端 (http://localhost:3000)…"
   pnpm dev
 ) >"$DEV_DIR/frontend.log" 2>&1 &
 FRONTEND_PID=$!
+echo "$FRONTEND_PID" > "$FRONTEND_PID_FILE"
 
 # 等待后端健康检查
 for _ in $(seq 1 90); do

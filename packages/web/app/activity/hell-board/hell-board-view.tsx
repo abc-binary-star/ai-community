@@ -1,15 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookHeart, CircleHelp, Loader2, LogOut, Map as MapIcon, Rainbow, RefreshCw, Settings2, Trophy, Users } from 'lucide-react'
+import { BookHeart, CircleHelp, LogOut, Map as MapIcon, PartyPopper, Rainbow, RefreshCw, Settings2, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
-import * as api from './lib/api'
+import { BigEventsPanel } from './components/big-events'
 import { BoardMap } from './components/board-map'
 import { EnrollWizard } from './components/enroll-wizard'
 import { MapSkeleton } from './components/map-skeleton'
 import { MyTeamDialog } from './components/my-team-dialog'
-import { RankPanel } from './components/rank-panel'
 import { RainbowBridgeDialog } from './components/rainbow-bridge-dialog'
 import { RainbowPanel } from './components/rainbow-panel'
 import { RollResultDialog } from './components/roll-result-dialog'
@@ -19,11 +18,10 @@ import { TileInfoDialog } from './components/tile-info-dialog'
 import { TimelineDialog } from './components/timeline-dialog'
 import { ToastHost } from './components/toast'
 import { useActivityStore, useCurrentTeam, useIsCaptain } from './lib/store'
-import type { RankingRow } from './lib/types'
 
 const POLL_INTERVAL_MS = 10_000
 
-type TopView = 'board' | 'ranking' | 'teams'
+type TopView = 'board' | 'events' | 'teams'
 
 function formatTime(d: Date) {
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -57,8 +55,6 @@ export function HellBoardView() {
   const [showRules, setShowRules] = useState(false)
   const [showMine, setShowMine] = useState(false)
   const [showBridge, setShowBridge] = useState(false)
-  const [ranking, setRanking] = useState<RankingRow[]>([])
-  const [rankingLoading, setRankingLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -93,18 +89,6 @@ export function HellBoardView() {
       // error already set in store
     }
   }
-
-  // 榜单数据按需加载
-  useEffect(() => {
-    if (topView !== 'ranking') return
-    let cancelled = false
-    setRankingLoading(true)
-    api.fetchRanking()
-      .then((rows) => { if (!cancelled) setRanking(rows) })
-      .catch(() => { if (!cancelled) setRanking([]) })
-      .finally(() => { if (!cancelled) setRankingLoading(false) })
-    return () => { cancelled = true }
-  }, [topView])
 
   if (loading) {
     return (
@@ -222,7 +206,7 @@ export function HellBoardView() {
           {(
             [
               ['board', '棋盘', MapIcon],
-              ['ranking', '进度榜', Trophy],
+              ['events', '大事件', PartyPopper],
               ['teams', '全部队伍', Users],
             ] as const
           ).map(([key, label, Icon]) => (
@@ -293,15 +277,9 @@ export function HellBoardView() {
               </div>
             </aside>
           </div>
-        ) : topView === 'ranking' ? (
-          <div className="mx-auto max-w-3xl">
-            {rankingLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="size-6 animate-spin text-amber-600" />
-              </div>
-            ) : (
-              <RankPanel rows={ranking} />
-            )}
+        ) : topView === 'events' ? (
+          <div className="mx-auto w-full max-w-6xl">
+            <BigEventsPanel />
           </div>
         ) : (
           <TeamsOverview teams={teams} myTeamId={currentTeam?.id ?? null} />

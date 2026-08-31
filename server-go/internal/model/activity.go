@@ -272,6 +272,10 @@ type ActivityDiceRoll struct {
 	Value    int    `gorm:"not null" json:"value"`
 	FromTile int    `gorm:"not null" json:"fromTile"`
 	ToTile   int    `gorm:"not null" json:"toTile"`
+	// LandedTile 骰子基础移动后实际踩中的格子；ToTile 是全部格子效果结算后的最终位置。
+	LandedTile int `gorm:"default:0" json:"landedTile,omitempty"`
+	// ResultSummary 保存本次权威结算结果，供全局大事件准确播报。
+	ResultSummary string `gorm:"type:text" json:"resultSummary,omitempty"`
 	// Lap 掷骰时队伍所在圈数。判定记录按圈隔离，避免跨圈回到同一判定格时状态被旧记录污染
 	Lap int `gorm:"not null" json:"lap"`
 	// IsJudgement 为 true 时是特殊判定掷骰，不产生移动

@@ -96,6 +96,17 @@ func ListActivityTimeline(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, map[string]any{"items": events})
 }
 
+// ListActivityBigEvents 全局大事件（最近各队掷骰动态）
+// GET /api/activity/hell-board/big-events
+func ListActivityBigEvents(ctx context.Context, c *app.RequestContext) {
+	events, err := activityService.ListBigEvents(ctx)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, map[string]any{"items": events})
+}
+
 // EnrollActivity 报名活动（入队的前提），可携带活动内昵称
 // POST /api/activity/hell-board/enroll
 func EnrollActivity(ctx context.Context, c *app.RequestContext) {

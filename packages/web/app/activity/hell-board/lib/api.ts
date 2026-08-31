@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api'
-import type { BoardSnapshot, EnrollmentItem, RankingRow, RollResult, Team, TimelineEvent } from './types'
+import type { BigEvent, BoardSnapshot, EnrollmentItem, RollResult, Team, TimelineEvent } from './types'
 
 // 活动接口：读书/打卡/投骰在群内完成，App 负责棋盘可视化与程序化结算
 const BASE = '/activity/hell-board'
@@ -24,15 +24,15 @@ export function completeCycle(): Promise<Team> {
   return apiFetch<Team>(`${BASE}/cycle`, { method: 'POST' })
 }
 
-/** 进度榜 */
-export async function fetchRanking(): Promise<RankingRow[]> {
-  const res = await apiFetch<{ items: RankingRow[] }>(`${BASE}/ranking`)
-  return res.items ?? []
-}
-
 /** 本队时间线 */
 export async function fetchTimeline(): Promise<TimelineEvent[]> {
   const res = await apiFetch<{ items: TimelineEvent[] }>(`${BASE}/timeline`)
+  return res.items ?? []
+}
+
+/** 全局大事件：最近各队掷骰动态 */
+export async function fetchBigEvents(): Promise<BigEvent[]> {
+  const res = await apiFetch<{ items: BigEvent[] }>(`${BASE}/big-events`)
   return res.items ?? []
 }
 
