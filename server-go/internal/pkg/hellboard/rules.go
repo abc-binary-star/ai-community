@@ -107,11 +107,11 @@ type LegacyRollFacts struct {
 
 // buffRefundByConsumedText 消耗回补：结果文案 → 本次掷骰用掉的 buff，撤回应补回。
 var buffRefundByConsumedText = map[string]EffectKey{
-	"步数翻倍 ×2":                      EffectRollDouble,
-	"全队加速 +2 步":                    EffectTeamAccel,
-	"步数折半":                          EffectRollHalve,
-	"无损通行：后退格失效":              EffectImmunity,
-	"惩罚免疫：本后退格失效":            EffectImmunityBuff,
+	"步数翻倍 ×2":             EffectRollDouble,
+	"全队加速 +2 步":           EffectTeamAccel,
+	"步数折半":                EffectRollHalve,
+	"无损通行：后退格失效":          EffectImmunity,
+	"惩罚免疫：本后退格失效":         EffectImmunityBuff,
 	"运势走低：前进格额外效果失效":      EffectFateBackward,
 	"冷却停滞：本次掷骰无效，原地停留一回合": EffectStall,
 }
