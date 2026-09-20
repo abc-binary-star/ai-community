@@ -19,6 +19,11 @@ export function useUniversalDice(value: number): Promise<RollResult> {
   return apiFetch<RollResult>(`${BASE}/universal-dice`, { method: 'POST', body: JSON.stringify({ value }) })
 }
 
+/** 队长撤回最近一次掷骰（队伍状态还原为掷骰前快照） */
+export function undoRoll(): Promise<Team> {
+  return apiFetch<Team>(`${BASE}/undo-roll`, { method: 'POST' })
+}
+
 /** 队长登记本轮彩虹集齐（+1 掷骰机会） */
 export function completeCycle(): Promise<Team> {
   return apiFetch<Team>(`${BASE}/cycle`, { method: 'POST' })

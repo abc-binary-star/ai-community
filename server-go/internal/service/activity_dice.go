@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,11 +46,16 @@ func (s *ActivityService) RecordRoll(ctx context.Context, userID string, req typ
 		if err != nil {
 			return err
 		}
+		// 掷骰前快照：供队长撤回时完整还原（含即将消耗的掷骰机会）
+		snapshot, err := hellboard.MarshalTeamState(st)
+		if err != nil {
+			return err
+		}
 		if !st.ConsumeRollChance() {
 			return ErrActivityNotRollable
 		}
 		outcome := st.Roll(req.Value, false, tiles, hellboard.RandStep, hellboard.RandLucky)
-		if err := s.persistRollTx(ctx, tx, team, me, st, outcome, false); err != nil {
+		if err := s.persistRollTx(ctx, tx, team, me, st, outcome, false, snapshot); err != nil {
 			return err
 		}
 		out, err = s.rollResultDTO(ctx, team, me, outcome)
@@ -88,6 +94,10 @@ func (s *ActivityService) UseUniversalDice(ctx context.Context, userID string, r
 		if err != nil {
 			return err
 		}
+		snapshot, err := hellboard.MarshalTeamState(st)
+		if err != nil {
+			return err
+		}
 		outcome := st.UseUniversalDice(req.Value, tiles, hellboard.RandStep, hellboard.RandLucky)
 		if len(outcome.Results) > 0 && contains(outcome.Results, "道具封印") {
 			if err := s.applyStateTx(tx, team, st); err != nil {
@@ -97,7 +107,7 @@ func (s *ActivityService) UseUniversalDice(ctx context.Context, userID string, r
 			out, err = s.rollResultDTO(ctx, team, me, outcome)
 			return err
 		}
-		if err := s.persistRollTx(ctx, tx, team, me, st, outcome, true); err != nil {
+		if err := s.persistRollTx(ctx, tx, team, me, st, outcome, true, snapshot); err != nil {
 			return err
 		}
 		out, err = s.rollResultDTO(ctx, team, me, outcome)
@@ -107,6 +117,143 @@ func (s *ActivityService) UseUniversalDice(ctx context.Context, userID string, r
 		return nil, err
 	}
 	return out, nil
+}
+
+// UndoRoll 队长撤回最近一次掷骰：队伍状态还原为掷骰前快照（位置/积分/万能
+// 骰子/掷骰机会/buff 一并回滚），误录导致的冲线随之撤销。仅可撤回最新一次
+// 且未被撤回的掷骰。
+func (s *ActivityService) UndoRoll(ctx context.Context, userID string) (*types.ActivityTeamDTO, error) {
+	me, err := s.requireMember(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !me.IsCaptain {
+		return nil, ErrActivityNotCaptain
+	}
+	if err := s.requireWritable(time.Now()); err != nil {
+		return nil, err
+	}
+
+	var teamDTO *types.ActivityTeamDTO
+	err = dal.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		team, err := s.getTeamTxLocked(tx, me.TeamID)
+		if err != nil {
+			return err
+		}
+		var last model.ActivityDiceRoll
+		err = tx.Where("team_id = ? AND undone = ?", team.ID, false).
+			Order("created_at desc").First(&last).Error
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return ErrActivityNothingToUndo
+			}
+			return err
+		}
+		var st hellboard.TeamGameState
+		if st, err = hellboard.TeamStateFromJSON(last.PrevState); err != nil {
+			// 旧记录没有快照：从当前状态 + 结算文案尽力还原
+			st, err = hellboard.TeamStateFromModel(team)
+			if err != nil {
+				return err
+			}
+			facts := s.legacyRollFacts(tx, team.ID, last.CreatedAt)
+			isUniversal := strings.HasPrefix(last.ResultSummary, "万能骰子")
+			hellboard.RevertLegacyRoll(&st, last.Value, isUniversal, last.ResultSummary, facts)
+			st.Position = last.FromTile
+		}
+		// 快照/旧记录还原后都应处于未冲线状态；误录冲线的冠军时间随状态一并撤销
+		if !hellboard.HasWon(st.Position) {
+			team.ChampionAt = nil
+		}
+		if err := s.applyStateTx(tx, team, st); err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ActivityDiceRoll{}).Where("id = ?", last.ID).Update("undone", true).Error; err != nil {
+			return err
+		}
+		undoText := fmt.Sprintf("撤回掷骰：%d 点（%d → %d 格）已还原，队伍状态回到掷骰前", last.Value, last.FromTile, last.ToTile)
+		if last.PrevState == "" {
+			undoText += "（旧记录无快照，已尽力还原；积分/buff 如有偏差请管理员手工修正）"
+		}
+		_ = s.addEvent(tx, team.ID, model.EventTypeUndo, undoText)
+		members, err := s.loadTeamMembersTx(tx, team.ID)
+		if err != nil {
+			return err
+		}
+		team.Members = members
+		dto := s.teamToDTO(ctx, team)
+		teamDTO = &dto
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return teamDTO, nil
+}
+
+// legacyRollFacts 从时间线事件解析旧掷骰的积分结算要素。事件与骰子记录由
+// 同一事务先后写入，created_at 仅有微秒级差，取记录时间前后 2 秒窗口内的
+// 第一条积分/兑换事件（人工操作间隔远大于此，不会串批）。
+func (s *ActivityService) legacyRollFacts(tx *gorm.DB, teamID string, at time.Time) hellboard.LegacyRollFacts {
+	var evs []model.ActivityEvent
+	err := tx.Where("team_id = ? AND created_at >= ? AND created_at <= ?",
+		teamID, at.Add(-2*time.Second), at.Add(2*time.Second)).
+		Find(&evs).Error
+	if err != nil {
+		return hellboard.LegacyRollFacts{}
+	}
+	var facts hellboard.LegacyRollFacts
+	for _, e := range evs {
+		if !facts.HasPoints {
+			if earned, after, ok := parsePointEvent(e.Text); ok {
+				facts.Earned, facts.PointsAfter, facts.HasPoints = earned, after, true
+				continue
+			}
+		}
+		if facts.Exchanged == 0 {
+			if n, ok := parseExchangeEvent(e.Text); ok {
+				facts.Exchanged = n
+			}
+		}
+	}
+	return facts
+}
+
+// parsePointEvent 解析「团队积分 +X（当前 Y）」
+func parsePointEvent(text string) (earned, after int, ok bool) {
+	const prefix = "团队积分 +"
+	if !strings.HasPrefix(text, prefix) {
+		return 0, 0, false
+	}
+	rest := strings.TrimPrefix(text, prefix)
+	mid := strings.Index(rest, "（当前 ")
+	if mid < 0 {
+		return 0, 0, false
+	}
+	earned, err := strconv.Atoi(rest[:mid])
+	if err != nil {
+		return 0, 0, false
+	}
+	after, err = strconv.Atoi(strings.TrimSuffix(rest[mid+len("（当前 "):], "）"))
+	if err != nil {
+		return 0, 0, false
+	}
+	return earned, after, true
+}
+
+// parseExchangeEvent 解析「积分满额自动兑换万能骰子 +N（持有 M）」
+func parseExchangeEvent(text string) (int, bool) {
+	const prefix = "积分满额自动兑换万能骰子 +"
+	if !strings.HasPrefix(text, prefix) {
+		return 0, false
+	}
+	rest := strings.TrimPrefix(text, prefix)
+	if i := strings.Index(rest, "（持有"); i >= 0 {
+		if n, err := strconv.Atoi(rest[:i]); err == nil {
+			return n, true
+		}
+	}
+	return 0, false
 }
 
 // CompleteCycle 声明本轮彩虹集齐：群里 7 色色块集齐后由队长在 App 内登记，
@@ -147,7 +294,7 @@ func (s *ActivityService) CompleteCycle(ctx context.Context, userID string) (*ty
 			return err
 		}
 		team.Members = members
-		dto := s.teamToDTO(team)
+		dto := s.teamToDTO(ctx, team)
 		teamDTO = &dto
 		return nil
 	})
@@ -207,8 +354,9 @@ func (s *ActivityService) applyStateTx(tx *gorm.DB, team *model.ActivityTeam, st
 	).Updates(team).Error
 }
 
-// persistRollTx 落库一次掷骰/万能骰子结算（含事件、冲线）
-func (s *ActivityService) persistRollTx(ctx context.Context, tx *gorm.DB, team *model.ActivityTeam, me *model.ActivityMember, st hellboard.TeamGameState, outcome *hellboard.RollOutcome, isUniversal bool) error {
+// persistRollTx 落库一次掷骰/万能骰子结算（含事件、冲线）。snapshot 为掷骰前
+// 队伍状态快照，随记录保存供撤回还原。
+func (s *ActivityService) persistRollTx(ctx context.Context, tx *gorm.DB, team *model.ActivityTeam, me *model.ActivityMember, st hellboard.TeamGameState, outcome *hellboard.RollOutcome, isUniversal bool, snapshot string) error {
 	if err := s.applyStateTx(tx, team, st); err != nil {
 		return err
 	}
@@ -246,6 +394,7 @@ func (s *ActivityService) persistRollTx(ctx context.Context, tx *gorm.DB, team *
 		ToTile:        outcome.To,
 		LandedTile:    landedTile,
 		ResultSummary: strings.Join(outcome.Results, "；"),
+		PrevState:     snapshot,
 		Lap:           1,
 	}).Error; err != nil {
 		return err
@@ -271,7 +420,7 @@ func (s *ActivityService) rollResultDTO(ctx context.Context, team *model.Activit
 		return nil, err
 	}
 	team.Members = members
-	teamDTO := s.teamToDTO(team)
+	teamDTO := s.teamToDTO(ctx, team)
 	return &types.ActivityRollResultDTO{
 		Value:         outcome.DiceValue,
 		FromTile:      outcome.From,

@@ -41,6 +41,7 @@ interface ActivityState {
   dismissToast: (id: number) => void
   rollDice: (value: number) => Promise<void>
   useUniversalDice: (value: number) => Promise<void>
+  undoRoll: () => Promise<void>
   completeCycle: () => Promise<void>
   enroll: (nickname?: string) => Promise<void>
   joinTeam: (teamId: string, isCaptain: boolean, color: string) => Promise<void>
@@ -172,6 +173,20 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       await get().refresh()
     } catch (err) {
       set({ error: errMessage(err, '万能骰子使用失败') })
+    } finally {
+      set({ rolling: false })
+    }
+  },
+
+  undoRoll: async () => {
+    if (get().rolling) return
+    set({ rolling: true, error: null })
+    try {
+      await api.undoRoll()
+      await get().refresh()
+      get().pushToast({ message: '已撤回最近一次掷骰，队伍状态已还原', tone: 'success' })
+    } catch (err) {
+      set({ error: errMessage(err, '撤回失败') })
     } finally {
       set({ rolling: false })
     }

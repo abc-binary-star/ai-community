@@ -24,7 +24,7 @@ func (s *ActivityService) CreateTeam(ctx context.Context, req types.ActivityTeam
 	if err := dal.DB.WithContext(ctx).Create(team).Error; err != nil {
 		return nil, err
 	}
-	dto := s.teamToDTO(team)
+	dto := s.teamToDTO(ctx, team)
 	return &dto, nil
 }
 
@@ -51,7 +51,7 @@ func (s *ActivityService) UpdateTeam(ctx context.Context, teamID string, req typ
 		return nil, err
 	}
 	team.Members = members
-	dto := s.teamToDTO(team)
+	dto := s.teamToDTO(ctx, team)
 	return &dto, nil
 }
 
@@ -242,7 +242,7 @@ func (s *ActivityService) ManualFix(ctx context.Context, teamID string, req type
 		return nil, err
 	}
 	team.Members = members
-	dto := s.teamToDTO(team)
+	dto := s.teamToDTO(ctx, team)
 	return &dto, nil
 }
 

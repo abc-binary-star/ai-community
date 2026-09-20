@@ -47,6 +47,7 @@ var (
 	ErrActivityColorInvalid     = &ActivityError{Msg: "请认领七彩虹色之一（红/橙/黄/绿/青/蓝/紫）", Code: 400}
 	ErrActivityColorLocked      = &ActivityError{Msg: "本轮彩虹周期内不可中途换色，集齐后可重新分配", Code: 409}
 	ErrActivityWinLocked        = &ActivityError{Msg: "已有队伍冲线获胜，活动进入冠军锁定", Code: 409}
+	ErrActivityNothingToUndo    = &ActivityError{Msg: "没有可撤回的掷骰记录", Code: 409}
 	ErrActivityFeedbackNotFound = &ActivityError{Msg: "反馈记录不存在", Code: 404}
 )
 
@@ -241,8 +242,19 @@ func memberToDTO(m model.ActivityMember) types.ActivityMemberDTO {
 	}
 }
 
+// canUndoLatestRoll 还有未撤回的掷骰记录时，队长可继续撤回（每次撤最新一条，
+// 可连撤；旧记录无快照走尽力还原）
+func (s *ActivityService) canUndoLatestRoll(ctx context.Context, teamID string) bool {
+	var last model.ActivityDiceRoll
+	err := dal.DB.WithContext(ctx).
+		Select("id").
+		Where("team_id = ? AND undone = ?", teamID, false).
+		Order("created_at desc").First(&last).Error
+	return err == nil
+}
+
 // teamToDTO 队伍模型转 DTO（内部解析色块与 buff，失败时以空态兜底）
-func (s *ActivityService) teamToDTO(t *model.ActivityTeam) types.ActivityTeamDTO {
+func (s *ActivityService) teamToDTO(ctx context.Context, t *model.ActivityTeam) types.ActivityTeamDTO {
 	st, err := hellboard.TeamStateFromModel(t)
 	if err != nil {
 		st = hellboard.TeamGameState{Position: t.Position}
@@ -278,5 +290,6 @@ func (s *ActivityService) teamToDTO(t *model.ActivityTeam) types.ActivityTeamDTO
 	if t.Status == model.TeamStatusCompleted {
 		out.Status = model.TeamStatusCompleted
 	}
+	out.CanUndoRoll = s.canUndoLatestRoll(ctx, t.ID)
 	return out
 }

@@ -68,6 +68,8 @@ type ActivityTeamDTO struct {
 	Buffs []BuffDTO `json:"buffs"`
 	// Status: collecting / ready / completed
 	Status string `json:"status"`
+	// CanUndoRoll 队长可撤回最近一次掷骰（最新记录未撤回且带状态快照）
+	CanUndoRoll bool `json:"canUndoRoll"`
 }
 
 // ActivityBoardDTO 棋盘全局快照，前端轮询该接口刷新

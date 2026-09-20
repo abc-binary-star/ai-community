@@ -14,6 +14,7 @@ const TYPE_META: Record<string, { label: string; cls: string }> = {
   win: { label: '冲线', cls: 'bg-amber-200 text-amber-900' },
   color: { label: '颜色', cls: 'bg-emerald-100 text-emerald-800' },
   manual: { label: '运营修正', cls: 'bg-stone-200 text-stone-700' },
+  undo: { label: '撤回', cls: 'bg-rose-100 text-rose-800' },
 }
 
 const FILTERS = [
@@ -31,6 +32,7 @@ export function TimelineDialog({ onClose }: { onClose: () => void }) {
 
   const filtered = useMemo(() => {
     if (filter === 'all') return timeline
+    if (filter === 'roll') return timeline.filter((e) => e.type === 'roll' || e.type === 'undo')
     if (filter === 'dice') return timeline.filter((e) => e.type === 'dice' || e.type === 'manual')
     return timeline.filter((e) => e.type === filter)
   }, [timeline, filter])

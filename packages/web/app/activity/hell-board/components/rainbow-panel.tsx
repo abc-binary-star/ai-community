@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
-import { BookMarked, Crown, Dices, History, Sparkles, Zap } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { BookMarked, Crown, Dices, History, Sparkles, Undo2, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RAINBOW, RAINBOW_ORDER } from '../lib/board'
 import { blockedReason, colorLabel, tileDetailText, tileMeta } from '../lib/rules'
@@ -29,7 +29,9 @@ export function RainbowPanel({
   const rolling = useActivityStore((s) => s.rolling)
   const rollDice = useActivityStore((s) => s.rollDice)
   const doUseDice = useActivityStore((s) => s.useUniversalDice)
+  const undoRoll = useActivityStore((s) => s.undoRoll)
   const completeCycle = useActivityStore((s) => s.completeCycle)
+  const [confirmingUndo, setConfirmingUndo] = useState(false)
 
   const meta = tileMeta(tile)
   const reason = blockedReason(team, isCaptain, archived)
@@ -183,6 +185,44 @@ export function RainbowPanel({
             onUniversal={(v) => void doUseDice(v)}
             hint="群里掷几点就点哪个"
           />
+          {team.canUndoRoll && (
+            confirmingUndo ? (
+              <div className="flex items-center gap-2 rounded-lg border-2 border-rose-400 bg-rose-50 px-2.5 py-2">
+                <p className="min-w-0 flex-1 text-[10px] font-bold leading-snug text-rose-800">
+                  确认撤回最近一次掷骰？位置、积分、道具、掷骰机会都将还原到掷骰前
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingUndo(false)}
+                  className="shrink-0 rounded border border-rose-300 px-1.5 py-1 text-[10px] font-black text-rose-700 hover:bg-rose-100"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={rolling}
+                  onClick={() => {
+                    setConfirmingUndo(false)
+                    void undoRoll()
+                  }}
+                  className="shrink-0 rounded border-2 border-stone-800 bg-rose-600 px-2 py-1 text-[10px] font-black text-white shadow-[2px_2px_0_#292524] disabled:opacity-50"
+                >
+                  确认撤回
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={rolling}
+                onClick={() => setConfirmingUndo(true)}
+                title="录错点数？撤回最近一次掷骰，队伍状态还原到掷骰前"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-stone-800 bg-white px-3 py-1.5 text-[11px] font-black text-rose-700 shadow-[2px_2px_0_#292524] transition-transform hover:-translate-y-0.5 active:translate-x-px active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Undo2 className="size-3.5" />
+                撤回上次掷骰
+              </button>
+            )
+          )}
           {reason && !isCaptain && team.status !== 'completed' && (
             <p className="rounded-md border border-dashed border-[#c9b98f] bg-[#f9f3e2]/70 px-2.5 py-2 text-[10px] font-medium text-stone-500">
               {reason}（请队长操作）

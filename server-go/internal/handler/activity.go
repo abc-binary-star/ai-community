@@ -60,6 +60,18 @@ func UseActivityUniversalDice(ctx context.Context, c *app.RequestContext) {
 	response.JSON(c, result)
 }
 
+// UndoActivityRoll 队长撤回最近一次掷骰（队伍状态还原为掷骰前快照）
+// POST /api/activity/hell-board/undo-roll
+func UndoActivityRoll(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetCurrentUserID(c)
+	team, err := activityService.UndoRoll(ctx, userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.JSON(c, team)
+}
+
 // CompleteActivityCycle 队长声明本轮彩虹集齐（群里集齐后在 App 内登记，+1 掷骰机会）
 // POST /api/activity/hell-board/cycle
 func CompleteActivityCycle(ctx context.Context, c *app.RequestContext) {

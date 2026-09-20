@@ -1,6 +1,7 @@
 package hellboard
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -468,5 +469,108 @@ func TestTeamHasProgress(t *testing.T) {
 	}
 	if TeamHasProgress(&model.ActivityTeam{Status: model.TeamStatusCollecting, ColorBlocks: `{"red":0}`, Buffs: `[]`}) {
 		t.Error("色块均为 0 且无 buff，不应判为有进展")
+	}
+}
+
+func TestTeamStateSnapshotRoundtrip(t *testing.T) {
+	st := TeamGameState{
+		Position: 42, Points: 7, UniversalDice: 2, RollChances: 1,
+		RainbowCount: 3, WeekMinDelta: -1,
+		ColorBlocks: map[string]int{"red": 1, "blue": 2},
+		Buffs:       []Buff{{Kind: EffectRollDouble, Uses: 1}},
+	}
+	snapshot, err := MarshalTeamState(st)
+	if err != nil {
+		t.Fatalf("序列化快照失败: %v", err)
+	}
+	got, err := TeamStateFromJSON(snapshot)
+	if err != nil {
+		t.Fatalf("还原快照失败: %v", err)
+	}
+	if got.Position != st.Position || got.Points != st.Points || got.UniversalDice != st.UniversalDice ||
+		got.RollChances != st.RollChances || got.RainbowCount != st.RainbowCount || got.WeekMinDelta != st.WeekMinDelta {
+		t.Errorf("快照数值字段往返不一致: got %+v, want %+v", got, st)
+	}
+	if got.ColorBlocks["red"] != 1 || got.ColorBlocks["blue"] != 2 {
+		t.Errorf("色块未正确还原: %v", got.ColorBlocks)
+	}
+	if len(got.Buffs) != 1 || got.Buffs[0].Kind != EffectRollDouble || got.Buffs[0].Uses != 1 {
+		t.Errorf("buff 未正确还原: %v", got.Buffs)
+	}
+	if _, err := TeamStateFromJSON(""); err == nil {
+		t.Error("空快照应返回错误")
+	}
+}
+
+// 用引擎正演一次掷骰再用 RevertLegacyRoll 逆演，断言状态回到掷骰前（旧记录无快照路径）。
+func TestRevertLegacyRollMatchesRoll(t *testing.T) {
+	cases := []struct {
+		name        string
+		before      func() TeamGameState
+		dice        int
+		tile        *TileDef
+		isUniversal bool
+	}{
+		{"普通掷骰空白格", func() TeamGameState { return TeamGameState{Position: 10, Points: 3, RollChances: 2} }, 3, nil, false},
+		{"万能骰子", func() TeamGameState { return TeamGameState{Position: 10, Points: 3, UniversalDice: 2} }, 5, nil, true},
+		{"掷骰消耗步数翻倍buff", func() TeamGameState {
+			return TeamGameState{Position: 10, Points: 3, RollChances: 1, Buffs: []Buff{{Kind: EffectRollDouble, Uses: 1}}}
+		}, 2, nil, false},
+		{"踩特殊格获得步数翻倍", func() TeamGameState { return TeamGameState{Position: 10, Points: 3, RollChances: 1} }, 2,
+			&TileDef{Index: 12, Kind: TileSpecial, Effect: EffectRollDouble}, false},
+		{"踩道具掉落格", func() TeamGameState { return TeamGameState{Position: 10, Points: 8, RollChances: 1} }, 4,
+			&TileDef{Index: 14, Kind: TileSpecial, Effect: EffectDropDice}, false},
+		{"踩后退格触发无损通行", func() TeamGameState {
+			return TeamGameState{Position: 20, Points: 3, RollChances: 1, Buffs: []Buff{{Kind: EffectImmunity, Uses: 1}}}
+		}, 3, &TileDef{Index: 23, Kind: TileBackward, Param: 2}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want := tc.before()
+			actor := tc.before() // 正演副本：Roll 会原地修改入参
+			tileAt := func(int) *TileDef { return tc.tile }
+			// 正演：与 service 同序——万能骰子先扣道具再结算，普通掷骰先扣机会再结算
+			var outcome *RollOutcome
+			if tc.isUniversal {
+				outcome = actor.UseUniversalDice(tc.dice, tileAt, fixedRand, fixedRand)
+			} else {
+				actor.ConsumeRollChance()
+				outcome = actor.Roll(tc.dice, false, tileAt, fixedRand, fixedRand)
+			}
+			after := outcome.Team
+			facts := LegacyRollFacts{Earned: outcome.Points, PointsAfter: after.Points, Exchanged: outcome.DiceExchanged, HasPoints: true}
+			summary := strings.Join(outcome.Results, "；")
+
+			// 逆演：从掷骰后状态还原（位置按记录 FromTile）
+			RevertLegacyRoll(&after, tc.dice, tc.isUniversal, summary, facts)
+			after.Position = outcome.From
+
+			if after.Position != want.Position || after.Points != want.Points ||
+				after.UniversalDice != want.UniversalDice || after.RollChances != want.RollChances {
+				t.Errorf("数值字段未还原: got %+v, want %+v", after, want)
+			}
+			if len(after.Buffs) != len(want.Buffs) {
+				t.Errorf("buff 未还原: got %v, want %v", after.Buffs, want.Buffs)
+			}
+			for i, b := range want.Buffs {
+				if i >= len(after.Buffs) || after.Buffs[i].Kind != b.Kind || after.Buffs[i].Uses != b.Uses {
+					t.Errorf("buff 未还原: got %v, want %v", after.Buffs, want.Buffs)
+					break
+				}
+			}
+		})
+	}
+}
+
+// 积分事件缺失时的兜底路径：只扣基础分。
+func TestRevertLegacyRollWithoutPointsEvent(t *testing.T) {
+	st := TeamGameState{Position: 5, Points: 7, RollChances: 1}
+	before := st
+	RevertLegacyRoll(&st, 4, false, "", LegacyRollFacts{})
+	if st.Points != before.Points-PointsForRoll(4) {
+		t.Errorf("应只回退基础分: got %d, want %d", st.Points, before.Points-PointsForRoll(4))
+	}
+	if st.RollChances != before.RollChances+1 {
+		t.Errorf("普通掷骰应返还 1 次机会")
 	}
 }

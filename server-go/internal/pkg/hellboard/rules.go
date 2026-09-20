@@ -69,6 +69,130 @@ func ApplyTeamState(team *model.ActivityTeam, st TeamGameState) error {
 	return nil
 }
 
+// MarshalTeamState 序列化引擎状态为 JSON 快照，掷骰落库前保存，供撤回时还原。
+func MarshalTeamState(st TeamGameState) (string, error) {
+	b, err := json.Marshal(st)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// TeamStateFromJSON 从 JSON 快照还原引擎状态，与 TeamStateFromModel 同口径兜底。
+func TeamStateFromJSON(s string) (TeamGameState, error) {
+	var st TeamGameState
+	if strings.TrimSpace(s) == "" {
+		return st, ErrBadState
+	}
+	if err := json.Unmarshal([]byte(s), &st); err != nil {
+		return st, ErrBadState
+	}
+	if st.ColorBlocks == nil {
+		st.ColorBlocks = map[string]int{}
+	}
+	return st, nil
+}
+
+// LegacyRollFacts 从时间线事件解析出的旧掷骰结算要素（解析不到时为零值/false）
+type LegacyRollFacts struct {
+	// Earned 本次净得分（来自「团队积分 +X」事件）
+	Earned int
+	// PointsAfter 兑换后积分余数（同一事件里的「当前 Y」）
+	PointsAfter int
+	// Exchanged 本次自动兑换的万能骰子数
+	Exchanged int
+	// HasPoints 是否解析到积分事件；false 时只能按基础分近似回退
+	HasPoints bool
+}
+
+// buffRefundByConsumedText 消耗回补：结果文案 → 本次掷骰用掉的 buff，撤回应补回。
+var buffRefundByConsumedText = map[string]EffectKey{
+	"步数翻倍 ×2":                      EffectRollDouble,
+	"全队加速 +2 步":                    EffectTeamAccel,
+	"步数折半":                          EffectRollHalve,
+	"无损通行：后退格失效":              EffectImmunity,
+	"惩罚免疫：本后退格失效":            EffectImmunityBuff,
+	"运势走低：前进格额外效果失效":      EffectFateBackward,
+	"冷却停滞：本次掷骰无效，原地停留一回合": EffectStall,
+}
+
+// buffRefundByGrantedText 获得回收：结果文案 → 本次掷骰发出的 buff，撤回应收回。
+var buffRefundByGrantedText = map[string]EffectKey{
+	EffectLabels[EffectRollDouble]:   EffectRollDouble,
+	EffectLabels[EffectRollHalve]:    EffectRollHalve,
+	EffectLabels[EffectTeamAccel]:    EffectTeamAccel,
+	EffectLabels[EffectImmunity]:     EffectImmunity,
+	EffectLabels[EffectImmunityBuff]: EffectImmunityBuff,
+	EffectLabels[EffectSealDice]:     EffectSealDice,
+	EffectLabels[EffectColorOrphan]:  EffectColorOrphan,
+	EffectLabels[EffectRainbowStall]: EffectRainbowStall,
+	EffectLabels[EffectRainbowBonus]: EffectRainbowBonus,
+	EffectLabels[EffectFateBackward]: EffectFateBackward,
+	EffectLabels[EffectBottomQuota]:  EffectBottomQuota,
+}
+
+// revertBuff 收回 buff：次数减一，减到 0 移除；不存在则忽略。
+func (g *TeamGameState) revertBuff(kind EffectKey) {
+	i := g.FindBuff(kind)
+	if i < 0 {
+		return
+	}
+	g.Buffs[i].Uses--
+	if g.Buffs[i].Uses <= 0 {
+		g.Buffs = append(g.Buffs[:i], g.Buffs[i+1:]...)
+	}
+}
+
+// RevertLegacyRoll 对没有状态快照的旧掷骰记录做尽力还原：从记录的结算文案与
+// 时间线积分事件反推各项变化并回退。位置由调用方按记录 FromTile 直接还原。
+// 已知盲区：解析不到的事件与历史 buff 叠加只能近似，偏差由运营手工修正兜底。
+func RevertLegacyRoll(g *TeamGameState, diceValue int, isUniversal bool, resultSummary string, facts LegacyRollFacts) {
+	// 积分：解析到事件时 = 兑换前积分 − 本次得分；否则只扣基础分（格效修正近似）
+	if facts.HasPoints {
+		g.Points = max(0, facts.PointsAfter+PointsPerUniversalDice*facts.Exchanged-facts.Earned)
+	} else {
+		g.Points = max(0, g.Points-PointsForRoll(diceValue))
+	}
+	// 万能骰子与道具：使用返还，兑换/掉落/幸运获得收回
+	if isUniversal {
+		g.UniversalDice++
+	}
+	g.UniversalDice = max(0, g.UniversalDice-facts.Exchanged)
+	if strings.Contains(resultSummary, "道具掉落") {
+		g.UniversalDice = max(0, g.UniversalDice-1)
+	}
+	if strings.Contains(resultSummary, "幸运三选一：获得万能骰子") {
+		g.UniversalDice = max(0, g.UniversalDice-1)
+	}
+	// 免费彩虹：机会与轮数一并回退
+	if strings.Contains(resultSummary, "获得免费彩虹") {
+		g.RollChances = max(0, g.RollChances-1)
+		g.RainbowCount = max(0, g.RainbowCount-1)
+	}
+	// 普通掷骰消耗过 1 次掷骰机会，返还
+	if !isUniversal {
+		g.RollChances++
+	}
+	// buff 与保底修正逐条回退
+	for _, part := range strings.Split(resultSummary, "；") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if kind, ok := buffRefundByConsumedText[part]; ok {
+			g.giveBuff(kind, 1)
+			continue
+		}
+		if kind, ok := buffRefundByGrantedText[part]; ok {
+			if kind == EffectBottomQuota {
+				g.WeekMinDelta++
+				continue
+			}
+			g.revertBuff(kind)
+		}
+	}
+}
+
 // DerivedStatus 按引擎状态推导队伍状态：
 // 冲线获胜 / 有掷骰机会待前进 / 集彩虹进行中。
 func DerivedStatus(st TeamGameState) string {

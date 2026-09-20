@@ -13,7 +13,7 @@ import (
 func (s *ActivityService) ListBigEvents(ctx context.Context) ([]types.ActivityBigEventDTO, error) {
 	var rolls []model.ActivityDiceRoll
 	if err := dal.DB.WithContext(ctx).
-		Where("is_judgement = ?", false).
+		Where("is_judgement = ? AND undone = ?", false, false).
 		Order("created_at desc").Limit(12).Find(&rolls).Error; err != nil {
 		return nil, err
 	}

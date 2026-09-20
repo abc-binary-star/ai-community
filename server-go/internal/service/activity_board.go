@@ -52,7 +52,7 @@ func (s *ActivityService) GetBoard(ctx context.Context, userID string) (*types.A
 		}
 		teams[i].Members = members
 		teamIDToIndex[teams[i].ID] = i
-		teamsDTO = append(teamsDTO, s.teamToDTO(&teams[i]))
+		teamsDTO = append(teamsDTO, s.teamToDTO(ctx, &teams[i]))
 	}
 
 	out := &types.ActivityBoardDTO{

@@ -242,6 +242,7 @@ func Register(h *server.Hertz, cfg *conf.Config) {
 	activity.POST("/roll", handler.RollActivityDice)
 	// 使用万能骰子（无视当前格子效果，不消耗掷骰机会）
 	activity.POST("/universal-dice", handler.UseActivityUniversalDice)
+	activity.POST("/undo-roll", handler.UndoActivityRoll)
 	// 队长登记本轮彩虹集齐（+1 掷骰机会）
 	activity.POST("/cycle", handler.CompleteActivityCycle)
 	activity.GET("/ranking", handler.GetActivityRanking)

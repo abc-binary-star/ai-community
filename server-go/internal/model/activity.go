@@ -61,6 +61,7 @@ const (
 	EventTypeTile    = "tile"   // 格子效果
 	EventTypeWin     = "win"    // 冲线获胜
 	EventTypeManual  = "manual" // 运营修正
+	EventTypeUndo    = "undo"   // 撤回掷骰
 )
 
 // ActivityTile 格子静态定义，100 格均分五类；运营可调整文案与效果参数
@@ -276,6 +277,10 @@ type ActivityDiceRoll struct {
 	LandedTile int `gorm:"default:0" json:"landedTile,omitempty"`
 	// ResultSummary 保存本次权威结算结果，供全局大事件准确播报。
 	ResultSummary string `gorm:"type:text" json:"resultSummary,omitempty"`
+	// PrevState 掷骰前队伍状态快照（JSON），队长撤回掷骰时据此还原
+	PrevState string `gorm:"type:text" json:"prevState,omitempty"`
+	// Undone 已被撤回的掷骰：状态已还原为快照，记录保留仅作留痕
+	Undone bool `gorm:"default:false;index" json:"undone"`
 	// Lap 掷骰时队伍所在圈数。判定记录按圈隔离，避免跨圈回到同一判定格时状态被旧记录污染
 	Lap int `gorm:"not null" json:"lap"`
 	// IsJudgement 为 true 时是特殊判定掷骰，不产生移动

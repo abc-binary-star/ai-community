@@ -358,7 +358,7 @@ func (s *ActivityService) CaptainUpdateTeam(ctx context.Context, userID string, 
 		return nil, err
 	}
 	team.Members = members
-	dto := s.teamToDTO(team)
+	dto := s.teamToDTO(ctx, team)
 	return &dto, nil
 }
 

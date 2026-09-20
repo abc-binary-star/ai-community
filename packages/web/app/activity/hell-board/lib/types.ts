@@ -70,6 +70,8 @@ export interface Team {
   /** 生效中的 buff/debuff */
   buffs: Buff[]
   status: TeamStatus
+  /** 队长可撤回最近一次掷骰（服务端判定：最新记录未撤回且带快照） */
+  canUndoRoll?: boolean
 }
 
 /** 棋盘全局快照 */
